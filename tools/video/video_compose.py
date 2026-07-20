@@ -32,7 +32,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -812,7 +814,7 @@ class VideoCompose(BaseTool):
             if not pp.exists():
                 return ToolResult(success=False, error=f"atelier props_path not found: {pp}")
             # Equals form is required for cross-platform path parsing (see _remotion_render).
-            cmd.append(f"--props={pp}")
+            cmd.append(f'--props="{pp}"')
 
         public_dir = bespoke.get("public_dir")
         if public_dir:
@@ -1692,6 +1694,7 @@ class VideoCompose(BaseTool):
                 error="edit_decisions or composition_data required for remotion_render",
             )
 
+        import os as _os
         output_path = Path(inputs.get("output_path", "renders/remotion_output.mp4"))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         # Absolutise so the CLI can resolve the output regardless of cwd.
@@ -1700,15 +1703,27 @@ class VideoCompose(BaseTool):
         # Deep-copy props so we don't mutate the original
         props = json.loads(json.dumps(composition_data))
 
-        # Convert absolute file paths to file:// URIs for Remotion's
-        # Img and OffthreadVideo components
+        # remotion-composer lives at project root
+        composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
+        repo_root = composer_dir.parent
+        public_dir = composer_dir / "public"
+        staged_dir = public_dir / "staged_assets"
+        staged_dir.mkdir(parents=True, exist_ok=True)
+        import shutil
+
         for cut in props.get("cuts", []):
             source = cut.get("source", "")
-            if source and not source.startswith(("http://", "https://", "file://")):
+            if source and not source.startswith(("http://", "https://")):
                 resolved = Path(source).resolve()
                 if resolved.exists():
-                    posix = resolved.as_posix()
-                    cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
+                    try:
+                        staged_file = staged_dir / resolved.name
+                        if not staged_file.exists() or staged_file.stat().st_mtime < resolved.stat().st_mtime:
+                            shutil.copy2(resolved, staged_file)
+                        cut["source"] = f"staged_assets/{resolved.name}"
+                    except Exception:
+                        posix = resolved.as_posix()
+                        cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
 
         # Build a custom themeConfig from the playbook's actual colors.
         # This ensures every video gets a unique visual identity derived
@@ -1723,13 +1738,14 @@ class VideoCompose(BaseTool):
             if theme_config:
                 props["themeConfig"] = theme_config
 
-        # Write props to temp file for Remotion CLI
-        props_path = output_path.parent / ".remotion_props.json"
+        # Write props to temp file inside composer_dir so --props path is simple and safe on Windows
+        out_dir = composer_dir / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        props_path = out_dir / f"props_{output_path.stem}.json"
         with open(props_path, "w", encoding="utf-8") as f:
             json.dump(props, f)
 
         # remotion-composer lives at project root
-        composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
         if not composer_dir.exists():
             return ToolResult(
                 success=False,
@@ -1741,18 +1757,25 @@ class VideoCompose(BaseTool):
         renderer_family = (composition_data or {}).get("renderer_family", "explainer-data")
         composition_id = self._get_composition_id(renderer_family)
 
+        remotion_bin = composer_dir / "node_modules" / ".bin" / ("remotion.cmd" if sys.platform == "win32" else "remotion")
+        bin_cmd = str(remotion_bin) if remotion_bin.exists() else "npx"
+        props_abs = str(props_path.resolve())
+
         cmd = [
-            "npx", "remotion", "render",
+            bin_cmd,
+        ]
+        if bin_cmd == "npx":
+            cmd.append("remotion")
+        cmd.extend([
+            "render",
             str(composer_dir / "src" / "index.tsx"),
             composition_id,
             str(output_path),
-            # Use the `--props=<path>` equals form rather than two separate
-            # args. On Windows, passing `--props` and the path separately makes
-            # Remotion mis-parse the value (quote escaping differs), failing
-            # with "neither valid JSON nor a file path". The equals form is the
-            # API Remotion recommends for file paths and is cross-platform safe.
-            f"--props={props_path}",
-        ]
+            f"--props={props_abs}",
+            "--public-dir=public",
+            "--gl=angle",
+            "--concurrency=8",
+        ])
 
         # Apply media profile dimensions
         profile_name = inputs.get("profile")
