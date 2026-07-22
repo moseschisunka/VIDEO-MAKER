@@ -1415,6 +1415,10 @@ class VideoCompose(BaseTool):
             }
             if profile:
                 remotion_inputs["profile"] = profile
+            if inputs.get("audio_path") is not None:
+                remotion_inputs["audio_path"] = inputs["audio_path"]
+            if inputs.get("audio") is not None:
+                remotion_inputs["audio"] = inputs["audio"]
             # Forward the creator-facing render timeout through the high-level
             # render path (execute(operation="render") -> _render), otherwise it
             # would only take effect on a direct _remotion_render() call.
@@ -1724,6 +1728,23 @@ class VideoCompose(BaseTool):
                     except Exception:
                         posix = resolved.as_posix()
                         cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
+
+        # Handle narration audio staging
+        audio_input = inputs.get("audio_path") or inputs.get("audio")
+        if audio_input and isinstance(audio_input, str):
+            audio_resolved = Path(audio_input).resolve()
+            if audio_resolved.exists():
+                staged_audio = staged_dir / audio_resolved.name
+                if not staged_audio.exists() or staged_audio.stat().st_mtime < audio_resolved.stat().st_mtime:
+                    shutil.copy2(audio_resolved, staged_audio)
+                props.setdefault("audio", {})
+                if not isinstance(props["audio"], dict):
+                    props["audio"] = {}
+                props["audio"].setdefault("narration", {})
+                if not isinstance(props["audio"]["narration"], dict):
+                    props["audio"]["narration"] = {}
+                props["audio"]["narration"]["src"] = f"staged_assets/{audio_resolved.name}"
+                props["audio"]["narration"]["volume"] = props["audio"]["narration"].get("volume", 1.0)
 
         # Build a custom themeConfig from the playbook's actual colors.
         # This ensures every video gets a unique visual identity derived
