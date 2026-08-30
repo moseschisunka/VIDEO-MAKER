@@ -553,7 +553,7 @@ aside .panel:nth-of-type(1) { animation-delay: .32s } aside .panel:nth-of-type(2
   letter-spacing: 0.04em; margin: 18px 0 6px;
 }
 .script-card .sp-slug .tc { color: var(--cream-ink-2); font-weight: 400; float: right; font-size: calc(11px * var(--fs-scale)); }
-.script-card .sp-action { font-size: calc(13px * var(--fs-scale)); line-height: 1.62; }
+.script-card .sp-action { font-size: calc(13px * var(--fs-scale)); line-height: 1.62; white-space: pre-wrap; }
 .script-card .sp-paren { font-size: calc(11.5px * var(--fs-scale)); font-style: italic; color: var(--cream-ink-2); margin: 4px 0 0 42px; }
 .script-card .sp-cue {
   display: inline-block; font-family: var(--mono); font-size: calc(9.5px * var(--fs-scale)); font-style: normal;
@@ -679,7 +679,7 @@ aside .panel:nth-of-type(1) { animation-delay: .32s } aside .panel:nth-of-type(2
 /* ---------- filmstrip ---------- */
 .strip-outer { position: relative; }
 .filmstrip {
-  display: flex; gap: 12px; overflow-x: auto; padding: 26px 4px;
+  display: flex; gap: 12px; overflow-x: auto; padding: 26px 4px; overscroll-behavior-x: contain;
   /* sprocket holes */
   background:
     radial-gradient(circle 3.5px, #2e2e36 97%, transparent) 0 6px / 26px 10px repeat-x,
@@ -1498,6 +1498,9 @@ body:not(.first) .approval-review { animation: none; }
   font-weight: 700;
   color: #f1f5f9;
   line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-meta-chips {

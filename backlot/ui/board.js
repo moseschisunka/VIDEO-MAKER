@@ -105,6 +105,10 @@ function renderSlate(s) {
           });
         } catch (e) {
           console.error("Approve failed:", e);
+          alert('Failed to approve stage. Please try again.');
+        } finally {
+          approveBtn.disabled = false;
+          approveBtn.textContent = '✓ Approve Stage';
         }
       }
     }, `✓ Approve ${awaiting.name}`);
@@ -858,23 +862,30 @@ function renderStoryboard(s) {
 // renders + degraded media
 // ---------------------------------------------------------------------------
 
-function renderRenders(s) {
+function renderRenders(s, container) {
   const renders = s.media.renders;
   if (!renders.length) return null;
   if (activeRender >= renders.length) activeRender = 0;
   const current = renders[activeRender];
+  const src = mediaURL(s.project_id, current.path);
+
+  let existingVideo = container ? container.querySelector('video') : null;
+  if (existingVideo && existingVideo.getAttribute('data-src') === src) {
+    return container; // Video already showing correct source, skip rebuild
+  }
+
   // Full re-renders (every SSE refresh) must not reset an in-progress
   // watch: carry playback position/state over to the recreated element.
-  const prev = document.querySelector(".render-hero video");
-  const src = mediaURL(s.project_id, current.path);
+  const prev = existingVideo;
+  
   // preload="metadata" gives the element its intrinsic aspect ratio (and a
   // poster frame) before playback — without it a portrait 9:16 render sits
   // in a letterboxed 100%-wide black box that reads as landscape.
-  const video = el("video", { src, controls: "", preload: "metadata" });
+  const video = el("video", { src, controls: "", preload: "metadata", "data-src": src });
   // Click the frame to start playback (controls handle pause/scrub) — the
   // big player was inert to a click on the picture itself.
   video.addEventListener("click", () => { if (video.paused) video.play().catch(() => {}); });
-  if (prev && prev.getAttribute("src") === src && (prev.currentTime > 0 || !prev.paused)) {
+  if (prev && prev.getAttribute("data-src") === src && (prev.currentTime > 0 || !prev.paused)) {
     const t = prev.currentTime;
     const wasPlaying = !prev.paused && !prev.ended;
     video.addEventListener("loadedmetadata", () => { video.currentTime = t; }, { once: true });
@@ -1099,6 +1110,24 @@ function render() {
   document.title = `Backlot — ${s.title}`;
   document.body.classList.toggle("first", firstPaint);
   firstPaint = false;
+
+  // During replay tick, only update the timeline and activity, not the whole page
+  if (replay && replay.playing) {
+    const rail = app.querySelector(".rail");
+    if (rail) rail.replaceWith(renderRail(s));
+    const aside = app.querySelector("aside");
+    if (aside) {
+      aside.innerHTML = "";
+      const decisions = renderDecisions(s);
+      const activity = renderActivity(s);
+      if (decisions) aside.append(decisions);
+      if (activity) aside.append(activity);
+    }
+    return;
+  }
+
+  const oldRenders = document.querySelector(".render-hero")?.parentElement;
+
   app.innerHTML = "";
   app.append(renderSlate(s));
   app.append(renderRail(s));
@@ -1126,7 +1155,7 @@ function render() {
   // never pushes them below the fold — the column flows beside the rail.
   const storyboard = renderStoryboard(s);
   const found = renderFoundMedia(s);
-  const renders = renderRenders(s);
+  const renders = renderRenders(s, oldRenders);
 
   if (approvalReview || script || decisions || activity) {
     for (const section of [storyboard, found, renders]) {

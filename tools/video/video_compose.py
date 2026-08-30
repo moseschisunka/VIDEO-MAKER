@@ -463,6 +463,7 @@ class VideoCompose(BaseTool):
         concat_out: Path | None = None
 
         try:
+            segment_commands = []
             for i, cut in enumerate(cuts):
                 source = Path(cut["source"])
                 if not source.exists():
@@ -502,6 +503,7 @@ class VideoCompose(BaseTool):
                     cmd = [
                         "ffmpeg", "-y",
                         "-ss", str(in_s),
+                        "-async", "1",
                         "-t", str(duration),
                         "-i", str(source),
                     ]
@@ -561,6 +563,7 @@ class VideoCompose(BaseTool):
                         cmd = [
                             "ffmpeg", "-y",
                             "-ss", str(in_s),
+                            "-async", "1",
                             "-t", str(duration),
                             "-i", str(source),
                             "-f", "lavfi",
@@ -585,15 +588,22 @@ class VideoCompose(BaseTool):
                         ])
 
                     cmd.append(str(seg_path))
-                    self.run_command(cmd)
+                    segment_commands.append((cmd, i))
 
                 temp_segments.append(seg_path)
+            
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=min(4, len(cuts))) as pool:
+                futures = {pool.submit(self.run_command, cmd, timeout=600): cut_id for cmd, cut_id in segment_commands}
+                for f in as_completed(futures):
+                    f.result()  # raises if failed
 
             # Step 2: Concat segments
             concat_path = temp_dir / "concat_list.txt"
             with open(concat_path, "w", encoding="utf-8") as f:
                 for seg in temp_segments:
                     safe = str(seg.resolve()).replace("\\", "/")
+                    safe = safe.replace("'", "'\\''")
                     f.write(f"file '{safe}'\n")
 
             concat_out = temp_dir / "concat.mp4"
@@ -604,7 +614,7 @@ class VideoCompose(BaseTool):
                 "-c", "copy",
                 str(concat_out),
             ]
-            self.run_command(cmd)
+            self.run_command(cmd, timeout=600)
 
             # Step 3: Apply subtitles and/or replace audio
             final_input = concat_out
@@ -647,12 +657,12 @@ class VideoCompose(BaseTool):
                 # Use type-based selectors (0:v, 1:a) instead of index-based
                 # (0:v:0) because source videos may have audio as stream 0
                 # and video as stream 1 (e.g. Kling-generated clips).
-                cmd.extend(["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"])
+                cmd.extend(["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-ar", "48000", "-shortest"])
             else:
                 cmd.extend(["-c:a", "copy"])
 
             cmd.append(str(output_path))
-            self.run_command(cmd)
+            self.run_command(cmd, timeout=600)
 
             return ToolResult(
                 success=True,
@@ -814,7 +824,7 @@ class VideoCompose(BaseTool):
             if not pp.exists():
                 return ToolResult(success=False, error=f"atelier props_path not found: {pp}")
             # Equals form is required for cross-platform path parsing (see _remotion_render).
-            cmd.append(f'--props="{pp}"')
+            cmd.append(f'--props={pp}')
 
         public_dir = bespoke.get("public_dir")
         if public_dir:
@@ -943,8 +953,8 @@ class VideoCompose(BaseTool):
                 staging_dir.unlink()
             except (OSError, PermissionError):
                 # Some Windows junctions need rmdir
-                import subprocess as _sp
-                _sp.run(["cmd", "/c", "rmdir", str(staging_dir)], check=True)
+                import shutil
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
         staging_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1852,6 +1862,9 @@ class VideoCompose(BaseTool):
         finally:
             if props_path.exists():
                 props_path.unlink()
+            if staged_dir.exists():
+                import shutil
+                shutil.rmtree(staged_dir, ignore_errors=True)
 
         if not output_path.exists():
             return ToolResult(
@@ -2466,7 +2479,7 @@ class VideoCompose(BaseTool):
             str(output_path),
         ]
 
-        self.run_command(cmd)
+        self.run_command(cmd, timeout=600)
 
         return ToolResult(
             success=True,
@@ -2535,7 +2548,7 @@ class VideoCompose(BaseTool):
         cmd.extend(["-c:v", codec, "-crf", str(crf), "-c:a", "copy"])
         cmd.append(str(output_path))
 
-        self.run_command(cmd)
+        self.run_command(cmd, timeout=600)
 
         return ToolResult(
             success=True,
@@ -2577,7 +2590,7 @@ class VideoCompose(BaseTool):
                 pass  # proceed without profile
 
         cmd.append(str(output_path))
-        self.run_command(cmd)
+        self.run_command(cmd, timeout=600)
 
         return ToolResult(
             success=True,

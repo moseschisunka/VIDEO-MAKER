@@ -124,7 +124,7 @@ def _validate_artifacts_for_stage(
 
     for artifact_name, artifact_data in artifacts.items():
         if artifact_name not in ARTIFACT_NAMES:
-            continue
+            raise CheckpointValidationError(f"Unknown artifact type: '{artifact_name}'. Valid types: {list(ARTIFACT_NAMES)}")
         if not isinstance(artifact_data, dict):
             raise CheckpointValidationError(
                 f"Artifact {artifact_name!r} must be a JSON object matching its schema"
@@ -312,25 +312,38 @@ def _merge_decision_log(
     single cumulative file so reviewers and the bench can inspect the
     full audit trail.
     """
+    try:
+        from filelock import FileLock
+    except ImportError:
+        FileLock = None
+
     path = _decision_log_path(pipeline_dir, project_id)
-    if path.exists():
-        with open(path) as f:
-            existing = json.load(f)
-    else:
-        existing = {
-            "version": "1.0",
-            "project_id": project_id,
-            "decisions": [],
-        }
-
-    existing_ids = {d["decision_id"] for d in existing.get("decisions", [])}
-    for decision in new_log.get("decisions", []):
-        if decision.get("decision_id") not in existing_ids:
-            existing["decisions"].append(decision)
-
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(existing, f, indent=2)
+    
+    def _read_modify_write():
+        if path.exists():
+            with open(path) as f:
+                existing = json.load(f)
+        else:
+            existing = {
+                "version": "1.0",
+                "project_id": project_id,
+                "decisions": [],
+            }
+
+        existing_ids = {d["decision_id"] for d in existing.get("decisions", [])}
+        for decision in new_log.get("decisions", []):
+            if decision.get("decision_id") not in existing_ids:
+                existing["decisions"].append(decision)
+
+        with open(path, "w") as f:
+            json.dump(existing, f, indent=2)
+
+    if FileLock:
+        with FileLock(str(path) + '.lock'):
+            _read_modify_write()
+    else:
+        _read_modify_write()
 
 
 def write_checkpoint(
@@ -455,14 +468,21 @@ def write_checkpoint(
     # unserializable metadata) can never leave the stage with a truncated
     # current checkpoint; then archive the superseded file and swap in the
     # new one atomically.
-    tmp_path = path.with_suffix(".json.tmp")
-    with open(tmp_path, "w") as f:
-        json.dump(checkpoint, f, indent=2)
+    import os
+    import tempfile
+
     # Preserve run history: a superseded completed/awaiting_human checkpoint
     # is copied to history/ (stage versioning, gate audit trail, replay).
     _archive_superseded_checkpoint(path, stage)
-    import os
-    os.replace(tmp_path, path)
+
+    fd, tmp_path = tempfile.mkstemp(suffix='.json.tmp', dir=str(path.parent))
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(checkpoint, f, indent=2)
+        os.replace(tmp_path, str(path))
+    except:
+        os.unlink(tmp_path)
+        raise
 
     return path
 

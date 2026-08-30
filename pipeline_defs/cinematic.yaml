@@ -102,8 +102,11 @@ stages:
       - Cost estimate includes per-item breakdown
     sub_stages:
       - name: sample
+        skill: pipelines/cinematic/sample-preview
         description: "10-15 second cinematic preview for reference-driven productions"
         condition: "video_analysis_brief_exists"
+        produces:
+          - sample_preview
         human_approval_default: true
         tools_available: [tts_selector, image_selector, video_selector, video_compose, audio_mixer, color_grade]
         review_focus:
@@ -163,7 +166,6 @@ stages:
       - scene_plan
     optional_artifacts_in:
       - script
-      - brief
     produces:
       - asset_manifest
     optional_tools:

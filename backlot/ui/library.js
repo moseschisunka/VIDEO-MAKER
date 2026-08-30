@@ -172,6 +172,8 @@ async function openWizard() {
   // Load pipelines, playbooks, voices if not loaded
   if (availablePipelines.length === 0) {
     try {
+      document.getElementById('pipelineSelectionGrid').innerHTML = '<div class="loading-spinner">Loading pipelines...</div>';
+      document.getElementById('playbookSelectionGrid').innerHTML = '<div class="loading-spinner">Loading playbooks...</div>';
       [availablePipelines, availablePlaybooks, availableVoices] = await Promise.all([
         getJSON("/api/pipelines"),
         getJSON("/api/playbooks"),

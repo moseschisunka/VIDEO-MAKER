@@ -27,6 +27,10 @@ EVENTS_FILENAME = "events.jsonl"
 # by design: single-line O_APPEND writes rarely tear, and read_events skips
 # malformed lines, so a torn line degrades to one missing activity entry.
 _write_lock = threading.Lock()
+try:
+    from filelock import FileLock
+except ImportError:
+    FileLock = None
 
 # Input keys checked (in order) when inferring the project a tool call
 # belongs to. Explicit project keys win over path inference.
@@ -85,12 +89,18 @@ def emit_event(project_dir: Path | str, payload: dict[str, Any]) -> None:
         if not project_dir.is_dir():
             return
         entry = {"ts": datetime.now(timezone.utc).isoformat()}
+        payload.pop('ts', None)  # prevent caller from overwriting system timestamp
         entry.update({k: v for k, v in payload.items() if v is not None})
         path = project_dir / EVENTS_FILENAME
         line = json.dumps(entry, default=str)
         with _write_lock:
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            if FileLock:
+                with FileLock(str(path) + '.lock'):
+                    with open(path, "a", encoding="utf-8") as f:
+                        f.write(line + "\n")
+            else:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
     except Exception:
         pass
 
