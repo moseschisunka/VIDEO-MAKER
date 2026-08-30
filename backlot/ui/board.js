@@ -89,14 +89,56 @@ function renderSlate(s) {
     cost.append(el("div", { class: "label" }, "generation spend"));
   }
 
+  const actionsGroup = el("div", { class: "header-actions-group" });
+
+  if (awaiting) {
+    const approveBtn = el("button", {
+      class: "btn btn-primary glow-button",
+      onclick: async () => {
+        approveBtn.disabled = true;
+        approveBtn.textContent = "Approving...";
+        try {
+          await fetch(`/api/project/${encodedProjectId}/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ stage: awaiting.name })
+          });
+        } catch (e) {
+          console.error("Approve failed:", e);
+        }
+      }
+    }, `✓ Approve ${awaiting.name}`);
+    actionsGroup.append(approveBtn);
+  }
+
+  const runBtn = el("button", {
+    class: "btn btn-secondary",
+    title: "Run automated video production",
+    onclick: async () => {
+      runBtn.disabled = true;
+      runBtn.innerHTML = "<span>▶ Launching...</span>";
+      try {
+        await fetch(`/api/project/${encodedProjectId}/run`, { method: "POST" });
+      } catch (e) {
+        console.error("Run pipeline failed:", e);
+      }
+      setTimeout(() => {
+        runBtn.disabled = false;
+        runBtn.innerHTML = "<span>▶ Run Pipeline</span>";
+      }, 3000);
+    }
+  }, "▶ Run Pipeline");
+  actionsGroup.append(runBtn);
+
   return el("header", { class: "slate" },
     el("div", { class: "clapper" }),
     el("div", {},
-      el("a", { class: "wordmark", href: "/", style: "text-decoration:none" }, "Backlot"),
+      el("a", { class: "wordmark", href: "/", style: "text-decoration:none" }, "← Backlot Studio"),
       el("h1", {}, s.title),
     ),
     ...chips,
     el("div", { class: "spacer" }),
+    actionsGroup,
     renderThemeToggle(),
     liveEl,
     cost,

@@ -1,26 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Backlot — Library</title>
-<link rel="stylesheet" href="/ui/board.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenMontage Studio — Video Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/board.css">
 </head>
-<body>
-<div class="wrap">
-  <header class="slate">
-    <div class="clapper"></div>
-    <div>
-      <span class="wordmark">Backlot</span>
-      <h1>Library</h1>
+<body class="studio-body">
+  <div class="studio-wrap">
+    <!-- Top Navigation Bar -->
+    <header class="studio-header">
+      <div class="brand-group">
+        <a href="/" class="brand-link">
+          <div class="brand-clapper">
+            <span class="clapper-stripes"></span>
+          </div>
+          <div class="brand-text">
+            <span class="brand-title">OpenMontage</span>
+            <span class="brand-sub">AI Video Studio</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="header-search-bar">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="projectSearch" placeholder="Search productions, topics, pipelines..." autocomplete="off">
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="refreshBtn" title="Refresh projects">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh</span>
+        </button>
+        <button class="btn btn-primary glow-button" id="createVideoBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Create New Video</span>
+        </button>
+        <div class="status-indicator-pill" id="livePill">
+          <span class="pulse-dot"></span>
+          <span id="liveStatusText">Live SSE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Studio Metrics / Quick Stats -->
+    <div class="metrics-banner">
+      <div class="metric-card">
+        <div class="metric-icon purple">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
+        </div>
+        <div class="metric-data">
+          <span class="metric-value" id="statTotalProjects">-</span>
+          <span class="metric-label">Total Productions</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon cyan">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        </div>
+        <div class="metric-data">
+          <span class="metric-value" id="statLivePipelines">-</span>
+          <span class="metric-label">Active / Rendering</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon emerald">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        </div>
+        <div class="metric-data">
+          <span class="metric-value" id="statCompletedVideos">-</span>
+          <span class="metric-label">Final Deliverables</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon amber">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+        </div>
+        <div class="metric-data">
+          <span class="metric-value">EdgeTTS (Neural)</span>
+          <span class="metric-label">Primary Voice Engine</span>
+        </div>
+      </div>
     </div>
-    <span class="chip" id="count"></span>
-    <div class="spacer"></div>
-    <span class="live idle" id="liveBadge"><span class="dot"></span><span id="liveText">IDLE</span></span>
-  </header>
-  <div class="lib-grid" id="grid"></div>
-  <p class="hint" id="empty" style="display:none">No projects yet — run a production and it will appear here.</p>
-</div>
-<script type="module" src="/ui/library.js"></script>
+
+    <!-- Filter Tabs & Controls -->
+    <div class="library-toolbar">
+      <div class="filter-tabs" id="filterTabs">
+        <button class="tab-btn active" data-filter="all">All Productions <span class="tab-badge" id="badgeAll">0</span></button>
+        <button class="tab-btn" data-filter="live">Active / In Progress <span class="tab-badge" id="badgeLive">0</span></button>
+        <button class="tab-btn" data-filter="completed">Ready Deliverables <span class="tab-badge" id="badgeCompleted">0</span></button>
+        <button class="tab-btn" data-filter="awaiting">Needs Approval <span class="tab-badge" id="badgeAwaiting">0</span></button>
+      </div>
+
+      <div class="view-options">
+        <span class="text-muted" id="resultsCount">Showing 0 projects</span>
+      </div>
+    </div>
+
+    <!-- Project Cards Grid -->
+    <main class="productions-grid" id="grid"></main>
+
+    <!-- Empty State Fallback -->
+    <div class="empty-studio-state" id="emptyState" style="display:none">
+      <div class="empty-icon-wrap">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+      </div>
+      <h3>No video productions found</h3>
+      <p>Start your first AI video generation with the OpenMontage creative wizard.</p>
+      <button class="btn btn-primary glow-button" id="emptyCreateBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <span>Create Your First Video</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Create New Video Modal Wizard -->
+  <div class="modal-backdrop" id="wizardModal" style="display:none">
+    <div class="modal-card wizard-dialog">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="wizard-step-tag">Production Studio Wizard</div>
+          <h2>Create New AI Video</h2>
+        </div>
+        <button class="btn-close-modal" id="closeWizardBtn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="createProjectForm">
+          <!-- Step 1: Prompt & Topic -->
+          <div class="form-section">
+            <label class="form-label">
+              <span>Video Title & Concept Prompt</span>
+              <span class="required">*</span>
+            </label>
+            <input type="text" id="projectTitle" class="form-input" placeholder="e.g., Explainer: What is Photosynthesis?" required>
+            <textarea id="projectTopic" class="form-textarea" rows="3" placeholder="Describe key topics, narrative angle, target audience, and key takeaways..." required></textarea>
+          </div>
+
+          <!-- Step 2: Pipeline Selection -->
+          <div class="form-section">
+            <label class="form-label">Production Pipeline</label>
+            <div class="selection-grid" id="pipelineSelectionGrid">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Step 3: Style Playbook Selection -->
+          <div class="form-section">
+            <label class="form-label">Visual Style Playbook</label>
+            <div class="playbooks-grid" id="playbookSelectionGrid">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Step 4: Voice Synthesis & Duration -->
+          <div class="form-row">
+            <div class="form-col">
+              <label class="form-label">Narration Voice (Microsoft Neural)</label>
+              <select id="voiceSelect" class="form-select">
+                <!-- Dynamically populated -->
+              </select>
+            </div>
+
+            <div class="form-col">
+              <label class="form-label">Target Duration</label>
+              <select id="durationSelect" class="form-select">
+                <option value="15">15 Seconds (Short / Hook)</option>
+                <option value="30" selected>30 Seconds (Explainer Standard)</option>
+                <option value="60">60 Seconds (Deep Dive)</option>
+                <option value="90">90 Seconds (Full Lesson)</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelWizardBtn">Cancel</button>
+        <button class="btn btn-primary glow-button" id="submitCreateBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span>Initialize & Launch Video</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/ui/library.js"></script>
 </body>
 </html>

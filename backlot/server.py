@@ -147,6 +147,65 @@ async def _watch_projects() -> None:
             hub.publish(pid)
 
 
+import yaml
+
+def _load_playbooks_data() -> list[dict]:
+    styles_dir = REPO_ROOT / "styles"
+    if not styles_dir.is_dir():
+        return []
+    playbooks = []
+    for f in sorted(styles_dir.glob("*.yaml")):
+        try:
+            content = yaml.safe_load(f.read_text(encoding="utf-8"))
+            if content and isinstance(content, dict):
+                playbooks.append({
+                    "id": f.stem,
+                    "name": content.get("identity", {}).get("name", f.stem.replace("-", " ").title()),
+                    "category": content.get("identity", {}).get("category", "General"),
+                    "mood": content.get("identity", {}).get("mood", ""),
+                    "best_for": content.get("identity", {}).get("best_for", ""),
+                    "color_palette": content.get("visual_language", {}).get("color_palette", {}),
+                    "typography": content.get("typography", {}),
+                    "motion": content.get("motion", {}),
+                })
+        except Exception:
+            pass
+    return playbooks
+
+def _load_pipelines_data() -> list[dict]:
+    defs_dir = REPO_ROOT / "pipeline_defs"
+    if not defs_dir.is_dir():
+        return []
+    pipelines = []
+    for f in sorted(defs_dir.glob("*.yaml")):
+        try:
+            content = yaml.safe_load(f.read_text(encoding="utf-8"))
+            if content and isinstance(content, dict):
+                pipelines.append({
+                    "id": f.stem,
+                    "name": content.get("name", f.stem.replace("-", " ").title()),
+                    "type": content.get("type", f.stem),
+                    "description": content.get("description", ""),
+                    "default_playbook": content.get("default_playbook", "premium-minimalist"),
+                    "stages": content.get("stages", []),
+                })
+        except Exception:
+            pass
+    return pipelines
+
+def _load_voices_data() -> list[dict]:
+    return [
+        {"id": "en-US-ChristopherNeural", "name": "Christopher (US Male - Authoritative & Warm)", "gender": "Male", "locale": "en-US", "tone": "Expert Explainer"},
+        {"id": "en-US-AriaNeural", "name": "Aria (US Female - Clear & Dynamic)", "gender": "Female", "locale": "en-US", "tone": "Narrative & Commercial"},
+        {"id": "en-US-GuyNeural", "name": "Guy (US Male - Casual & Conversational)", "gender": "Male", "locale": "en-US", "tone": "Podcast & Casual"},
+        {"id": "en-US-JennyNeural", "name": "Jenny (US Female - Natural & Friendly)", "gender": "Female", "locale": "en-US", "tone": "Friendly Explainer"},
+        {"id": "en-US-EricNeural", "name": "Eric (US Male - Energetic & Youthful)", "gender": "Male", "locale": "en-US", "tone": "Product Launch"},
+        {"id": "en-US-AnaNeural", "name": "Ana (US Female - Soft & Thoughtful)", "gender": "Female", "locale": "en-US", "tone": "Documentary"},
+        {"id": "en-GB-RyanNeural", "name": "Ryan (UK Male - Polished British)", "gender": "Male", "locale": "en-GB", "tone": "Documentary & Tech"},
+        {"id": "en-GB-SoniaNeural", "name": "Sonia (UK Female - Professional British)", "gender": "Female", "locale": "en-GB", "tone": "Corporate & Insight"},
+    ]
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Backlot", docs_url=None, redoc_url=None)
 
@@ -229,10 +288,107 @@ def create_app() -> FastAPI:
             finally:
                 hub.unsubscribe(q)
 
-        return StreamingResponse(stream(), media_type="text/event-stream", headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        })
+    @app.get("/api/playbooks")
+    async def playbooks_endpoint() -> list:
+        return await asyncio.to_thread(_load_playbooks_data)
+
+    @app.get("/api/pipelines")
+    async def pipelines_endpoint() -> list:
+        return await asyncio.to_thread(_load_pipelines_data)
+
+    @app.get("/api/voices")
+    async def voices_endpoint() -> list:
+        return _load_voices_data()
+
+    @app.post("/api/project/create")
+    async def create_project_endpoint(request: Request) -> dict:
+        from datetime import datetime, timezone
+        payload = await request.json()
+        raw_id = payload.get("project_id") or payload.get("title", "new-video")
+        clean_id = "".join(c if c.isalnum() or c in "-_" else "-" for c in raw_id.lower()).strip("-")
+        if not clean_id:
+            clean_id = f"video-{int(time.time())}"
+        
+        project_dir = PROJECTS_DIR / clean_id
+        if project_dir.exists():
+            clean_id = f"{clean_id}-{int(time.time())}"
+            project_dir = PROJECTS_DIR / clean_id
+
+        project_dir.mkdir(parents=True, exist_ok=True)
+        (project_dir / "artifacts").mkdir(exist_ok=True)
+        (project_dir / "assets" / "images").mkdir(parents=True, exist_ok=True)
+        (project_dir / "assets" / "audio").mkdir(parents=True, exist_ok=True)
+        (project_dir / "renders").mkdir(exist_ok=True)
+
+        proposal = {
+            "version": "1.0",
+            "project_id": clean_id,
+            "title": payload.get("title", clean_id.replace("-", " ").title()),
+            "topic_prompt": payload.get("topic_prompt", ""),
+            "pipeline_type": payload.get("pipeline_type", "animated-explainer"),
+            "playbook": payload.get("playbook", "premium-minimalist"),
+            "voice": payload.get("voice", "en-US-ChristopherNeural"),
+            "target_duration_seconds": payload.get("target_duration_seconds", 30),
+            "created_at": time.time()
+        }
+        with open(project_dir / "artifacts" / "proposal_packet.json", "w", encoding="utf-8") as f:
+            json.dump(proposal, f, indent=2)
+
+        # Write initial events.jsonl
+        with open(project_dir / "events.jsonl", "w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "event": "created",
+                "project_id": clean_id,
+                "title": proposal["title"]
+            }) + "\n")
+
+        # Copy boiler plate production script
+        sample_prod = PROJECTS_DIR / "explainer-what-is-biology" / "run_production.py"
+        if sample_prod.is_file():
+            content = sample_prod.read_text(encoding="utf-8")
+            content = content.replace("explainer-what-is-biology", clean_id)
+            (project_dir / "run_production.py").write_text(content, encoding="utf-8")
+
+        _invalidate_summary(clean_id)
+        hub.publish(clean_id)
+        return {"ok": True, "project_id": clean_id, "proposal": proposal}
+
+    @app.post("/api/project/{project_id}/run")
+    async def run_project_endpoint(project_id: str) -> dict:
+        import subprocess, sys
+        project_dir = _safe_project_dir(project_id)
+        prod_script = project_dir / "run_production.py"
+        if not prod_script.is_file():
+            sample_prod = PROJECTS_DIR / "explainer-what-is-biology" / "run_production.py"
+            if sample_prod.is_file():
+                content = sample_prod.read_text(encoding="utf-8")
+                content = content.replace("explainer-what-is-biology", project_id)
+                prod_script.write_text(content, encoding="utf-8")
+            else:
+                raise HTTPException(status_code=400, detail="run_production.py not found in project")
+
+        env = dict(_os.environ)
+        env["PYTHONPATH"] = str(REPO_ROOT)
+        proc = subprocess.Popen([sys.executable, str(prod_script)], cwd=str(REPO_ROOT), env=env)
+        return {"ok": True, "pid": proc.pid, "project_id": project_id}
+
+    @app.post("/api/project/{project_id}/approve")
+    async def approve_stage_endpoint(project_id: str, request: Request) -> dict:
+        project_dir = _safe_project_dir(project_id)
+        payload = await request.json()
+        stage = payload.get("stage")
+        if not stage:
+            raise HTTPException(status_code=400, detail="stage is required")
+        chk_file = project_dir / f"checkpoint_{stage}.json"
+        if chk_file.is_file():
+            data = json.loads(chk_file.read_text(encoding="utf-8"))
+            data["human_approved"] = True
+            chk_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            _invalidate_summary(project_id)
+            hub.publish(project_id)
+            return {"ok": True, "stage": stage, "checkpoint": data}
+        return {"ok": False, "error": f"checkpoint_{stage}.json not found"}
 
     # ---- Thumbnails (downscaled, cached on disk) ------------------------
 
