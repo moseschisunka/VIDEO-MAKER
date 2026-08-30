@@ -118,6 +118,7 @@ Key capability families to look for in the output:
 | Lip Sync | `creative/lip-sync-usage.md` | Wav2Lip model selection, dubbing workflows, input requirements | `faceswap` |
 | Talking Head Gen | `creative/talking-head-gen-usage.md` | SadTalker/MuseTalk, photo-to-video, expression tuning | `avatar-video` |
 | Video Understanding | `creative/video-understand-usage.md` | Visual QA, quality gating, scene classification | `video-understand` |
+| African Trending Education | `creative/african-trending-education.md` | Zambia/pan-African curriculum-grounded edutainment: topic breakdown methodology, regional platform mix (YouTube/Instagram/Facebook), local visual/language context | â€" |
 
 ## Pipeline Type Skills
 
