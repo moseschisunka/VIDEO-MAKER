@@ -131,8 +131,8 @@
         <button class="btn-close-modal" id="closeWizardBtn">&times;</button>
       </div>
 
-      <div class="modal-body">
-        <form id="createProjectForm">
+      <form id="createProjectForm">
+        <div class="modal-body">
           <!-- Step 1: Prompt & Topic -->
           <div class="form-section">
             <label class="form-label">
@@ -178,16 +178,16 @@
               </select>
             </div>
           </div>
-        </form>
-      </div>
+        </div>
 
-      <div class="modal-footer">
-        <button class="btn btn-secondary" id="cancelWizardBtn">Cancel</button>
-        <button class="btn btn-primary glow-button" id="submitCreateBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          <span>Initialize & Launch Video</span>
-        </button>
-      </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelWizardBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary glow-button" id="submitCreateBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span>Initialize & Launch Video</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

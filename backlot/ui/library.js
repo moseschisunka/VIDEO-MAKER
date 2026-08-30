@@ -276,16 +276,22 @@ function renderVoiceOptions() {
 }
 
 async function handleCreateProject(e) {
-  e.preventDefault();
-  const title = document.getElementById("projectTitle").value.trim();
-  const topic = document.getElementById("projectTopic").value.trim();
-  const voice = document.getElementById("voiceSelect").value;
-  const duration = parseInt(document.getElementById("durationSelect").value, 10);
+  if (e && e.preventDefault) e.preventDefault();
+  const title = (document.getElementById("projectTitle")?.value || "").trim();
+  const topic = (document.getElementById("projectTopic")?.value || "").trim();
+  const voiceSelect = document.getElementById("voiceSelect");
+  const voice = voiceSelect?.value || "en-US-ChristopherNeural";
+  const durationSelect = document.getElementById("durationSelect");
+  const duration = parseInt(durationSelect?.value || "30", 10);
 
-  if (!title) return;
+  if (!title) {
+    alert("Please enter a video title.");
+    document.getElementById("projectTitle")?.focus();
+    return;
+  }
 
   submitCreateBtn.disabled = true;
-  submitCreateBtn.innerHTML = `<span>Initializing Studio...</span>`;
+  submitCreateBtn.innerHTML = `<span>Initializing Studio & Pipeline...</span>`;
 
   try {
     const res = await fetch("/api/project/create", {
@@ -294,14 +300,20 @@ async function handleCreateProject(e) {
       body: JSON.stringify({
         title: title,
         topic_prompt: topic,
-        pipeline_type: selectedPipeline,
-        playbook: selectedPlaybook,
+        pipeline_type: selectedPipeline || "animated-explainer",
+        playbook: selectedPlaybook || "premium-minimalist",
         voice: voice,
         target_duration_seconds: duration
       })
     });
     const data = await res.json();
     if (data.ok && data.project_id) {
+      // Trigger background pipeline run immediately
+      try {
+        await fetch(`/api/project/${data.project_id}/run`, { method: "POST" });
+      } catch (runErr) {
+        console.warn("Auto-run trigger:", runErr);
+      }
       window.location.href = `/p/${data.project_id}`;
     } else {
       alert("Error creating project: " + (data.error || "Unknown error"));
@@ -322,6 +334,13 @@ if (emptyCreateBtn) emptyCreateBtn.addEventListener("click", openWizard);
 closeWizardBtn.addEventListener("click", closeWizard);
 cancelWizardBtn.addEventListener("click", closeWizard);
 createProjectForm.addEventListener("submit", handleCreateProject);
+submitCreateBtn.addEventListener("click", (e) => {
+  if (createProjectForm.checkValidity && !createProjectForm.checkValidity()) {
+    createProjectForm.reportValidity();
+    return;
+  }
+  handleCreateProject(e);
+});
 
 document.getElementById("refreshBtn").addEventListener("click", refreshLibrary);
 
