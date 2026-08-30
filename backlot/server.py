@@ -240,7 +240,6 @@ import json
 import asyncio
 import edge_tts
 from pathlib import Path
-from PIL import Image, ImageDraw
 
 from schemas.artifacts import validate_artifact
 from lib.checkpoint import write_checkpoint, PROJECTS_DIR
@@ -360,7 +359,7 @@ scene_plan = {
     "scenes": [
         {
             "id": "scene_1",
-            "type": "text_card",
+            "type": "hero_title",
             "description": f"Opening title card: {TITLE}",
             "start_seconds": 0.0,
             "end_seconds": 7.5,
@@ -368,7 +367,7 @@ scene_plan = {
         },
         {
             "id": "scene_2",
-            "type": "diagram",
+            "type": "text_card",
             "description": "Core Principles & Architecture",
             "start_seconds": 7.5,
             "end_seconds": 15.0,
@@ -376,16 +375,16 @@ scene_plan = {
         },
         {
             "id": "scene_3",
-            "type": "diagram",
-            "description": "Real-world applications and workflows",
+            "type": "kpi_grid",
+            "description": "Impact Overview Dashboard",
             "start_seconds": 15.0,
             "end_seconds": 22.5,
             "script_section_id": "sec_3"
         },
         {
             "id": "scene_4",
-            "type": "text_card",
-            "description": f"Conclusion: The future of {TITLE}",
+            "type": "callout",
+            "description": f"Conclusion Insight on {TITLE}",
             "start_seconds": 22.5,
             "end_seconds": 30.0,
             "script_section_id": "sec_4"
@@ -398,33 +397,11 @@ with open(ARTIFACTS_DIR / "scene_plan.json", "w", encoding="utf-8") as f:
 write_checkpoint(PROJECTS_DIR, PROJECT_ID, "scene_plan", "completed", {"scene_plan": scene_plan}, human_approved=True)
 print("Stage 2 (Scene Plan): COMPLETE")
 
-# 5. Create High-res Graphic Cards
-def create_image_card(filename, title_text, subtitle_text, bg_color, accent_color):
-    img = Image.new('RGB', (1920, 1080), color=bg_color)
-    d = ImageDraw.Draw(img)
-    d.rectangle([80, 80, 1840, 1000], outline=accent_color, width=8)
-    d.rectangle([120, 120, 1800, 240], fill=accent_color)
-    d.text((960, 180), "OPENMONTAGE STUDIO EXPLAINER", fill=(15, 23, 42), anchor="mm", font_size=40)
-    d.text((960, 520), title_text[:35].upper(), fill=(255, 255, 255), anchor="mm", font_size=75)
-    d.text((960, 680), subtitle_text[:50], fill=accent_color, anchor="mm", font_size=40)
-    out_path = IMAGES_DIR / filename
-    img.save(out_path)
-    return str(out_path)
-
-img1 = create_image_card("scene1.png", TITLE, "Concept & Fundamentals", (15, 23, 42), (0, 229, 255))
-img2 = create_image_card("scene2.png", "CORE PRINCIPLES", "Key Mechanisms & Frameworks", (15, 23, 42), (99, 102, 241))
-img3 = create_image_card("scene3.png", "APPLICATIONS", "Practical Implementation", (15, 23, 42), (16, 185, 129))
-img4 = create_image_card("scene4.png", "LOOKING FORWARD", "Innovate & Build the Future", (15, 23, 42), (245, 158, 11))
-
-# 6. Asset Manifest
+# 5. Asset Manifest (No more static images)
 asset_manifest = {
     "version": "1.0",
     "assets": [
-        {"id": "asset_audio_narration", "type": "narration", "path": "assets/audio/narration.mp3", "source_tool": "edge_tts", "scene_id": "scene_1"},
-        {"id": "asset_img_1", "type": "image", "path": "assets/images/scene1.png", "source_tool": "pillow", "scene_id": "scene_1"},
-        {"id": "asset_img_2", "type": "image", "path": "assets/images/scene2.png", "source_tool": "pillow", "scene_id": "scene_2"},
-        {"id": "asset_img_3", "type": "image", "path": "assets/images/scene3.png", "source_tool": "pillow", "scene_id": "scene_3"},
-        {"id": "asset_img_4", "type": "image", "path": "assets/images/scene4.png", "source_tool": "pillow", "scene_id": "scene_4"}
+        {"id": "asset_audio_narration", "type": "narration", "path": "assets/audio/narration.mp3", "source_tool": "edge_tts", "scene_id": "scene_1"}
     ]
 }
 validate_artifact("asset_manifest", asset_manifest)
@@ -433,17 +410,59 @@ with open(ARTIFACTS_DIR / "asset_manifest.json", "w") as f:
 write_checkpoint(PROJECTS_DIR, PROJECT_ID, "assets", "completed", {"asset_manifest": asset_manifest}, human_approved=True)
 print("Stage 3 (Assets): COMPLETE")
 
-# 7. Edit Decisions
+# 6. Edit Decisions (Rich Motion Graphics)
 edit_decisions = {
     "version": "1.0",
     "render_runtime": "remotion",
     "renderer_family": "explainer-teacher",
     "composition_mode": "templated",
+    "theme": PLAYBOOK,
     "cuts": [
-        {"id": "cut_1", "source": img1, "in_seconds": 0.0, "out_seconds": 7.5, "layer": "primary", "transform": {"animation": "ken-burns-slow-zoom"}},
-        {"id": "cut_2", "source": img2, "in_seconds": 7.5, "out_seconds": 15.0, "layer": "primary", "transform": {"animation": "ken-burns-slow-zoom"}},
-        {"id": "cut_3", "source": img3, "in_seconds": 15.0, "out_seconds": 22.5, "layer": "primary", "transform": {"animation": "ken-burns-slow-zoom"}},
-        {"id": "cut_4", "source": img4, "in_seconds": 22.5, "out_seconds": 30.0, "layer": "primary", "transform": {"animation": "ken-burns-slow-zoom"}}
+        {
+            "id": "cut_1", "type": "hero_title",
+            "text": TITLE, "heroSubtitle": "An OpenMontage Explainer",
+            "in_seconds": 0.0, "out_seconds": 7.5,
+            "transition_out": "fade"
+        },
+        {
+            "id": "cut_2", "type": "text_card",
+            "text": "Core Principles & Architecture",
+            "in_seconds": 7.5, "out_seconds": 15.0,
+            "animation": "slide-up"
+        },
+        {
+            "id": "cut_3", "type": "kpi_grid",
+            "title": "Impact Overview",
+            "chartData": [
+                {"label": "Efficiency", "value": "85%"},
+                {"label": "Adoption", "value": "2.4x"},
+                {"label": "Accuracy", "value": "99.9%"}
+            ],
+            "in_seconds": 15.0, "out_seconds": 22.5
+        },
+        {
+            "id": "cut_4", "type": "callout",
+            "text": "The future is defined by those who master these concepts today.",
+            "callout_type": "tip",
+            "title": "Key Insight",
+            "in_seconds": 22.5, "out_seconds": 30.0,
+            "transition_out": "fade"
+        }
+    ],
+    "overlays": [
+        {
+            "type": "section_title",
+            "text": "INTRODUCTION",
+            "in_seconds": 0.0, "out_seconds": 7.5,
+            "position": "top-left"
+        },
+        {
+            "type": "stat_reveal",
+            "text": "90%",
+            "subtitle": "Global Usage",
+            "in_seconds": 16.0, "out_seconds": 21.0,
+            "position": "bottom-right"
+        }
     ]
 }
 validate_artifact("edit_decisions", edit_decisions)
