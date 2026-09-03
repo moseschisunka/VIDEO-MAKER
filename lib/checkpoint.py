@@ -435,6 +435,15 @@ def write_checkpoint(
     metadata: Optional[dict] = None,
 ) -> Path:
     """Write a checkpoint file for a pipeline stage."""
+    # Approval controls are security/governance inputs, not presentation
+    # values. Reject truthy strings/integers at the persistence boundary so a
+    # direct caller cannot turn ``\"false\"`` or ``1`` into an approved (or
+    # unexpectedly gated) checkpoint through Python truthiness.
+    if not isinstance(human_approval_required, bool):
+        raise CheckpointValidationError("human_approval_required must be boolean")
+    if not isinstance(human_approved, bool):
+        raise CheckpointValidationError("human_approved must be boolean")
+
     # Backfill a missing pipeline_type from the project marker so that
     # omitting the kwarg doesn't quietly bypass gate enforcement.
     if not pipeline_type:

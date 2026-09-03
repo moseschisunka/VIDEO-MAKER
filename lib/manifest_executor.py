@@ -713,6 +713,12 @@ def submit_manifest_stage(
     :func:`lib.work_order.advance_work_order`, which enforces lease ownership,
     manifest order, checkpoint identity, and human gates.
     """
+    # This value is an approval boundary. Validate it before loading or
+    # mutating any stage state; Python truthiness must never turn a transport
+    # value such as ``\"false\"`` or ``1`` into an approval bit.
+    if not isinstance(human_approved, bool):
+        raise ManifestExecutionError("human_approved must be boolean")
+
     root = Path(project_dir)
     context = load_manifest_stage_context(root)
     if context.stage is None:

@@ -26,7 +26,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 from lib.approval_contracts import ApprovalValidationError
 from lib.checkpoint import CheckpointValidationError, init_project, read_checkpoint, write_checkpoint
@@ -140,7 +140,9 @@ class SubmitManifestStageRequest(BaseModel):
     stage: str
     artifacts: dict[str, Any] = Field(default_factory=dict)
     status: str = "completed"
-    human_approved: bool = False
+    # Do not let Pydantic coerce JSON strings/integers at the approval
+    # boundary. The manifest executor repeats this check for direct callers.
+    human_approved: StrictBool = False
     checkpoint_policy: str = "guided"
     review: dict[str, Any] | None = None
     cost_snapshot: dict[str, Any] | None = None
