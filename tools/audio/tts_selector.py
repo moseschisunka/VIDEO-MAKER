@@ -210,6 +210,36 @@ class TTSSelector(BaseTool):
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         from lib.scoring import rank_providers
+        from lib.media_contracts import MediaContractError, strict_bool
+
+        # Batch/sample controls are approval gates.  Parse them before voice
+        # identity normalization, provider discovery, or ranking so malformed
+        # values cannot bypass the sample gate or trigger provider work.
+        try:
+            requested_batch = (
+                strict_bool(inputs["batch"], "batch")
+                if "batch" in inputs else False
+            )
+            sample_mode = (
+                strict_bool(inputs["sample_mode"], "sample_mode")
+                if "sample_mode" in inputs else False
+            )
+            requested_timestamps = (
+                strict_bool(inputs["timestamps"], "timestamps")
+                if "timestamps" in inputs else None
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid voice batch control: {exc}")
+
+        operation = inputs.get("operation", "generate")
+        if operation not in {"generate", "rank", "batch_generate"}:
+            return ToolResult(success=False, error=f"Unknown operation: {operation}")
+        segments = inputs.get("segments")
+        if segments is not None and not isinstance(segments, list):
+            return ToolResult(success=False, error="segments must be an array")
+        if requested_timestamps is not None:
+            inputs = dict(inputs)
+            inputs["timestamps"] = requested_timestamps
 
         # A selected voice is a hard production contract.  A provider may not
         # silently substitute a nominally similar default, and a batch run may
@@ -270,12 +300,12 @@ class TTSSelector(BaseTool):
             inputs.setdefault("voice", selected_identity.voice_id)
             inputs.setdefault("voice_id", selected_identity.voice_id)
             inputs.setdefault("language_code", selected_identity.locale)
-        batch = bool(inputs.get("batch") or inputs.get("segments") or inputs.get("operation") == "batch_generate")
+        batch = requested_batch or bool(segments) or operation == "batch_generate"
         try:
             require_voice_sample_approval(
                 selection,
                 sample=inputs.get("sample_approval") if isinstance(inputs.get("sample_approval"), dict) else None,
-                batch=batch and not bool(inputs.get("sample_mode")),
+                batch=batch and not sample_mode,
             )
         except Exception as exc:
             return ToolResult(success=False, error=str(exc))
