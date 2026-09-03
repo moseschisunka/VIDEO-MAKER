@@ -91,6 +91,8 @@ def test_creation_wizard_controls_are_accessible_and_keyboard_selectable() -> No
     assert 'aria-labelledby="createWizardTitle"' in html
     assert 'for="projectTitle"' in html
     assert 'for="projectTopic"' in html
+    assert 'id="projectTitle" class="form-input" maxlength="240"' in html
+    assert 'id="projectTopic" class="form-textarea" rows="3" maxlength="20000"' in html
     assert 'aria-label="Close video creation wizard"' in html
     assert 'wizardModal.setAttribute("aria-hidden", "false")' in library_js
     assert 'wizardModal.setAttribute("aria-hidden", "true")' in library_js
