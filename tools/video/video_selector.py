@@ -267,6 +267,12 @@ class VideoSelector(BaseTool):
         operation = inputs.get("operation", "text_to_video")
         if operation in self.MOTION_REQUIRED_OPERATIONS:
             return tools
+        # A caller-supplied motion requirement must also suppress the still
+        # image fallback for text-to-video briefs.  Treat malformed truthy
+        # values conservatively here; execute() returns the actionable type
+        # error before any provider call.
+        if "motion_required" in inputs and inputs.get("motion_required") is not False:
+            return tools
         return tools + ["image_selector"]
 
     @property
@@ -328,6 +334,14 @@ class VideoSelector(BaseTool):
                 },
             )
 
+        allowed_operations = {"text_to_video", "image_to_video", "reference_to_video"}
+        raw_operation = inputs.get("operation", "text_to_video")
+        if not isinstance(raw_operation, str) or raw_operation not in allowed_operations:
+            return ToolResult(
+                success=False,
+                error=f"Unsupported video operation: {raw_operation}",
+            )
+
         # Normal generation — use scored selection
         task_context = self._prepare_task_context(inputs)
         tool, score = self._select_best_tool(inputs, candidates, task_context)
@@ -337,7 +351,7 @@ class VideoSelector(BaseTool):
         from lib.media_contracts import AssetRequest, MediaContractError, build_asset_request, strict_bool
         from lib.media_generation import build_generation_plan, collect_output_paths, require_sample_approval, validate_generation_output
 
-        operation = str(inputs.get("operation") or "text_to_video")
+        operation = raw_operation
         try:
             requested_sample = (
                 strict_bool(inputs["sample_required"], "sample_required")
@@ -346,6 +360,18 @@ class VideoSelector(BaseTool):
             requested_batch = (
                 strict_bool(inputs["batch"], "batch")
                 if "batch" in inputs else False
+            )
+            requested_motion = (
+                strict_bool(inputs["motion_required"], "motion_required")
+                if "motion_required" in inputs else False
+            )
+            requested_strict = (
+                strict_bool(inputs["strict_media_validation"], "strict_media_validation")
+                if "strict_media_validation" in inputs else False
+            )
+            requested_production = (
+                strict_bool(inputs["production_mode"], "production_mode")
+                if "production_mode" in inputs else False
             )
         except MediaContractError as exc:
             return ToolResult(success=False, error=f"Invalid media gate control: {exc}")
@@ -443,19 +469,19 @@ class VideoSelector(BaseTool):
         if result.success:
             # A motion-required brief must never be satisfied by an image-only
             # downgrade, even if a provider reports success.
-            if operation in self.MOTION_REQUIRED_OPERATIONS:
+            if operation in self.MOTION_REQUIRED_OPERATIONS or requested_motion:
                 data = result.data if isinstance(result.data, dict) else {}
                 declared_type = str(data.get("media_type") or data.get("output_type") or "").lower()
                 if tool.name == "image_selector" or declared_type in {"image", "still", "photo"}:
                     return ToolResult(success=False, data={"generation_plan": plan, "sample_approval": approval}, error="Motion-required video request was downgraded to a still image")
-            strict = bool(inputs.get("strict_media_validation") or inputs.get("production_mode"))
+            strict = requested_strict or requested_production
             if strict:
                 try:
                     validation = validate_generation_output(
                         result,
                         media_type="video",
                         constraints=asset_request.constraints,
-                        motion_required=operation in self.MOTION_REQUIRED_OPERATIONS or bool(inputs.get("motion_required")),
+                        motion_required=operation in self.MOTION_REQUIRED_OPERATIONS or requested_motion,
                         strict=True,
                     )
                 except Exception as exc:
