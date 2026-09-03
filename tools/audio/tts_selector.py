@@ -126,6 +126,27 @@ class TTSSelector(BaseTool):
                 "type": "object",
                 "description": "Structured voice-performance plan or section delivery cues from the script artifact.",
             },
+            "voice_identity": {
+                "type": "object",
+                "description": "Immutable provider/model/voice/locale selection for production narration.",
+            },
+            "voice_selection": {
+                "type": "object",
+                "description": "Proposal-stage voice selection; used to enforce provider identity and sample approval.",
+            },
+            "sample_approval": {
+                "type": "object",
+                "description": "Explicit approval record for the selected voice sample.",
+            },
+            "batch": {
+                "type": "boolean",
+                "default": False,
+                "description": "True when this call is part of batch narration and sample approval is required.",
+            },
+            "segments": {
+                "type": "array",
+                "description": "Deterministic narration segments for a resumable batch run.",
+            },
             "sample_mode": {
                 "type": "boolean",
                 "default": False,
@@ -190,16 +211,96 @@ class TTSSelector(BaseTool):
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         from lib.scoring import rank_providers
 
+        # A selected voice is a hard production contract.  A provider may not
+        # silently substitute a nominally similar default, and a batch run may
+        # not start before its required sample is explicitly approved.
+        from lib.voice_contracts import (
+            VoiceContractError,
+            normalize_voice_identity,
+            require_voice_sample_approval,
+        )
+
+        selection = inputs.get("voice_selection")
+        if not isinstance(selection, dict):
+            selection = {}
+        identity_payload = inputs.get("voice_identity")
+        if identity_payload is None and any(
+            selection.get(field) not in (None, "")
+            for field in ("provider", "model", "model_id", "voice_id", "voice", "locale", "language_code")
+        ):
+            identity_payload = selection
+        selected_identity = None
+        if identity_payload is not None:
+            try:
+                selected_identity = normalize_voice_identity(identity_payload)
+            except VoiceContractError as exc:
+                return ToolResult(success=False, error=f"voice identity contract failed: {exc}")
+            # Identity-bearing calls are pinned to the declared provider.  The
+            # selector may rank alternatives for display, but cannot execute a
+            # different provider without a new approved decision.
+            inputs = dict(inputs)
+            requested_provider = str(inputs.get("preferred_provider") or "auto").strip().lower()
+            requested_provider = {"edge": "edge_tts", "microsoft_edge": "edge_tts", "open-ai": "openai"}.get(requested_provider, requested_provider)
+            if requested_provider not in {"auto", selected_identity.provider}:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        f"preferred_provider {requested_provider!r} conflicts with locked voice provider "
+                        f"{selected_identity.provider!r}"
+                    ),
+                )
+            requested_allowed = inputs.get("allowed_providers")
+            if requested_allowed:
+                allowed = {
+                    {"edge": "edge_tts", "microsoft_edge": "edge_tts", "open-ai": "openai"}.get(str(item).strip().lower(), str(item).strip().lower())
+                    for item in requested_allowed
+                }
+                if selected_identity.provider not in allowed:
+                    return ToolResult(
+                        success=False,
+                        error=(
+                            f"allowed_providers {sorted(allowed)!r} exclude locked voice provider "
+                            f"{selected_identity.provider!r}"
+                        ),
+                    )
+            inputs["preferred_provider"] = selected_identity.provider
+            inputs["allowed_providers"] = [selected_identity.provider]
+            inputs.setdefault("model", selected_identity.model)
+            inputs.setdefault("model_id", selected_identity.model)
+            inputs.setdefault("voice", selected_identity.voice_id)
+            inputs.setdefault("voice_id", selected_identity.voice_id)
+            inputs.setdefault("language_code", selected_identity.locale)
+        batch = bool(inputs.get("batch") or inputs.get("segments") or inputs.get("operation") == "batch_generate")
+        try:
+            require_voice_sample_approval(
+                selection,
+                sample=inputs.get("sample_approval") if isinstance(inputs.get("sample_approval"), dict) else None,
+                batch=batch and not bool(inputs.get("sample_mode")),
+            )
+        except Exception as exc:
+            return ToolResult(success=False, error=str(exc))
+
         task_context = self._prepare_task_context(inputs)
         candidates = self._providers()
 
         # Rank mode — return scored provider rankings without generating
         if inputs.get("operation") == "rank":
             rankings = rank_providers(candidates, task_context)
+            serialized = self._serialize_rankings(candidates, rankings)
+            from lib.providers.plans import build_ranked_plan
+
+            plan = build_ranked_plan(
+                capability=self.capability,
+                operation="generate",
+                inputs=inputs,
+                rankings=serialized,
+                providers=candidates,
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "rankings": self._serialize_rankings(candidates, rankings),
+                    "rankings": serialized,
+                    "dry_run_plan": plan,
                     "explanation": "\n".join(r.explain() for r in rankings[:5]),
                     "normalized_task_context": task_context,
                 },
@@ -210,10 +311,31 @@ class TTSSelector(BaseTool):
         if tool is None:
             return ToolResult(success=False, error="No TTS provider available.")
 
-        result = tool.execute(self._adapt_inputs(tool, inputs))
+        if selected_identity is not None:
+            provider = str(getattr(tool, "provider", "")).strip().lower()
+            canonical_provider = {"edge": "edge_tts", "microsoft_edge": "edge_tts", "open-ai": "openai"}.get(provider, provider)
+            if canonical_provider != selected_identity.provider:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        f"voice identity provider {selected_identity.provider!r} is unavailable; "
+                        f"selected provider {canonical_provider!r} would change the approved voice"
+                    ),
+                )
+
+        adapted_inputs = self._adapt_inputs(tool, inputs)
+        from lib.providers.bridge import execute_with_provider_executor
+
+        # All selector executions use the common kernel.  Legacy direct
+        # selector callers remain compatible through the bridge's explicit
+        # non-production context; project/run identity callers must provide
+        # approval before a paid operation can proceed.
+        result = execute_with_provider_executor(tool, adapted_inputs)
         if result.success:
             result.data.setdefault("selected_tool", tool.name)
             result.data["selected_provider"] = tool.provider
+            if selected_identity is not None:
+                result.data["voice_identity"] = selected_identity.contract()
             result.data["selection_reason"] = score.explain() if score else f"Selected {tool.provider} ({tool.name})"
             if score:
                 result.data["provider_score"] = score.to_dict()

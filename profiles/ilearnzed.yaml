@@ -1,0 +1,159 @@
+version: "1.0"
+id: ilearnzed
+
+brand:
+  name: iLearnZed
+  operator: Primetutor Education Limited
+  website: https://ilearnzed.org
+  positioning: "Africa-first learning platform grounded in Zambian curriculum and built for wider African access"
+  promise: "If a learner does not understand a topic or exam question, iLearnZed explains it clearly."
+  identity_source: "Use the existing iLearnZed visual identity; do not introduce an unapproved brand system."
+
+audience:
+  primary: secondary_school_learners
+  secondary:
+    - school_leavers
+    - teachers_and_course_creators
+    - schools_and_institutions
+  learner_levels:
+    - Form 1
+    - Form 2
+    - Form 3
+    - Form 4
+    - Form 5
+    - Form 6
+  primary_outcomes:
+    - understand_difficult_topics
+    - prepare_for_examinations
+    - practise_with_worked_examples
+    - build_practical_and_career_skills
+
+content_strategy:
+  channel_goal: exam_preparation_reach_to_learner_enrollment
+  content_priority:
+    - curriculum_and_exam_preparation
+    - study_methods_and_exam_technique
+    - practical_skills_and_school_leaver_pathways
+    - teacher_onboarding_and_platform_demonstrations
+  starting_mix:
+    curriculum_exam_preparation: 0.60
+    study_methods: 0.20
+    practical_skills: 0.10
+    teacher_and_platform: 0.10
+  subject_priorities:
+    - subject: Mathematics
+      priority: 1
+      emphasis:
+        - past_paper_walkthroughs
+        - exam_techniques
+        - worked_examples
+        - difficult_topic_explainers
+    - subject: Biology
+      priority: 2
+      emphasis:
+        - concept_explainers
+        - labelled_diagrams
+        - exam_questions
+    - subject: Chemistry
+      priority: 3
+      emphasis:
+        - difficult_concepts
+        - safe_demonstrations
+        - worked_questions
+    - subject: Physics
+      priority: 4
+      emphasis:
+        - worked_problems
+        - diagrams
+        - exam_reasoning
+    - subject: English
+      priority: 5
+      emphasis:
+        - comprehension
+        - writing
+        - examination_technique
+
+language:
+  primary: en
+  localized:
+    - bem
+    - nya
+  localization_order:
+    - Mathematics
+    - Biology
+    - general_study_and_exam_preparation
+  policy: "English is the canonical instructional version; localize when it materially improves comprehension."
+  review_required: true
+
+cta:
+  default_text: "Join iLearnZed and start learning"
+  temporary_destination: https://ilearnzed.org
+  preferred_destination: "Replace with a verified direct registration or learner-onboarding route when one exists."
+  subject_override: "Link to the relevant course when the destination is verified."
+  ai_tutor_override: "Link to the AI Tutor when the destination is verified."
+
+production:
+  default_format: teacher_led
+  supporting_formats:
+    - presenter_led
+    - faceless_animation
+    - founder_led_announcements
+  founder_led_scope:
+    - mission
+    - product_announcements
+    - partnerships
+    - major_platform_updates
+  cadence:
+    initial_long_form_per_week: 1
+    initial_shorts_per_week_min: 3
+  initial_shorts_per_week_max: 5
+  scale_long_form_per_week_target: 2
+  long_form_target_seconds_min: 300
+  long_form_target_seconds_max: null
+  long_form_duration_policy: "content-led; no internal studio maximum"
+  long_form_render_profile: ilearnzed_long_form
+  visual_beat_cadence_seconds: 2.0
+  visual_beat_rule: "At least one purposeful visual beat every two seconds: 15 beats for 30 seconds, 30 beats for 60 seconds, and proportional thereafter."
+  transition_rule: "Every beat boundary uses a deterministic transition; transition duration must not exceed half of the adjacent beat."
+  narration_sync_rule: "Narration is continuous or segmented, but any declared segments must cover the visual timeline without overlap or unplanned gaps."
+  long_form_assembly_strategy: "Build content-led long-form videos from teacher footage, narration, stock images/video, short generated clips, Remotion, HyperFrames, and FFmpeg."
+  long_form_editing_rule: "Use chapters and purposeful visual changes; never stretch one generated clip to fill a lesson."
+  derivative_rule: "One strong long-form lesson may produce several self-contained Shorts with their own hooks and payoffs."
+  quality_priority: "Usefulness and teaching quality take priority over volume."
+
+consent:
+  teacher_recording_allowed: true
+  teacher_consent_required: true
+  teacher_consent_scope:
+    - youtube
+    - shorts
+    - social_media_repurposing
+    - thumbnails
+    - promotional_clips
+    - ilearnzed_platform_use
+  identifiable_students_allowed_by_default: false
+  minor_appearance_requires_appropriate_consent: true
+  consent_evidence_required_before_publish: true
+
+thumbnail:
+  logo_asset: "assets/brand/ilearnzed-logo.jpg"
+  logo_source: "Verified against the supplied logo image and the existing YouTube workspace asset."
+  logo_treatment: "Small, recognizable, bottom-right, padded, never covering the subject or primary text."
+  visual_identity: "Existing dark green and green technology-oriented identity with strong contrast and yellow/blue instructional accents where already present."
+  title_thumbnail_rule: "One truthful promise: the thumbnail creates immediate visual understanding; the title adds context, consequence, or the unanswered question."
+  on_image_word_target: "2-5 important words"
+  required_variants: 3
+  required_checks:
+    - readable_at_mobile_size
+    - clear_without_title
+    - one_dominant_focal_subject
+    - truthful_claim
+    - no_small_dense_copy
+    - logo_does_not_obscure_content
+
+editorial_guardrails:
+  - "Use curriculum and exam-board labels only when verified."
+  - "Do not promise grades, outcomes, or platform capabilities without evidence."
+  - "Open with the learner problem, misconception, question, or worked result."
+  - "Use but/therefore cause-and-effect beats instead of disconnected facts."
+  - "End with the promised resolution and a relevant next-video or registration bridge."

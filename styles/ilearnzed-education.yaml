@@ -1,0 +1,106 @@
+identity:
+  name: "iLearnZed Education"
+  category: custom
+  mood: clear, encouraging, trustworthy, Africa-first
+  pace: moderate
+  best_for: "Teacher-led lessons, exam preparation, worked examples, science diagrams, and learning-platform demonstrations"
+
+visual_language:
+  color_palette:
+    primary: ["#0B3D2E", "#1B7F3A"]
+    accent: ["#F4D03F", "#1565C0"]
+    background: "#F7FAF7"
+    text: "#10231A"
+    muted: "#5C6B63"
+  composition: "One focal subject, strong hierarchy, clear exam or concept evidence, generous safe margins for mobile crops"
+  texture: "Clean modern instructional design with restrained technology cues; no decorative clutter"
+
+typography:
+  headings:
+    font: "Existing iLearnZed brand heading font"
+    weight: 800
+    tracking: "-0.02em"
+  body:
+    font: "Existing iLearnZed brand body font"
+    weight: 400
+    line_height: 1.5
+  code:
+    font: "Existing iLearnZed brand body font"
+    weight: 400
+  stat_card:
+    font: "Existing iLearnZed brand heading font"
+    weight: 800
+    size_multiplier: 2.8
+  scale_system: "major_third"
+  weight_matrix:
+    title: 800
+    heading: 700
+    body: 400
+    caption: 400
+
+motion:
+  transitions: [fade, dissolve, slide-left]
+  animation_style: "purposeful, clear, teacher-led, no distracting bounce"
+  pacing_rules:
+    min_scene_hold_seconds: 1.5
+    max_scene_hold_seconds: 10
+    text_card_hold_seconds: 2.5
+    stat_card_hold_seconds: 2.5
+    transition_duration_seconds: 0.3
+  entrance: "clean fade-up or diagram reveal"
+  exit: "clean fade-out or direct cut to the next learning beat"
+
+audio:
+  voice_style: "warm, clear, confident teacher; conversational and easy to follow"
+  music_mood: "light instructional ambience, low distraction"
+  music_volume: 0.05
+  sfx_style: "subtle pen, click, or reveal cues only when they clarify a learning transition"
+  ducking_threshold_db: -3
+
+asset_generation:
+  image_prompt_prefix: "iLearnZed educational visual, clear African classroom context where relevant, clean modern instructional graphic, dark green and green technology accents, high legibility, "
+  image_negative_prompt: "generic stock-photo classroom, tiny text, clutter, unsupported claims, distorted diagrams, low contrast, excessive decoration"
+  diagram_style: "large labelled shapes, clear arrows, limited palette, progressive reveal, legible on mobile"
+  consistency_anchors:
+    - "Existing iLearnZed dark-green and green technology identity"
+    - "Yellow and blue accents only where they support instructional hierarchy"
+    - "One concept or worked step per visual beat"
+    - "Approved iLearnZed logo remains recognizable and unobstructed"
+
+overlays:
+  stat_card:
+    bg: "#FFFFFF"
+    border: "#1B7F3A"
+    text: "#10231A"
+    radius: 8
+    shadow: "0 2px 8px rgba(11,61,46,0.12)"
+  key_term:
+    bg: "#E6F4EA"
+    text: "#0B3D2E"
+    radius: 5
+  code_block:
+    bg: "#10231A"
+    text: "#F7FAF7"
+    highlight: "#F4D03F"
+
+quality_rules:
+  - "All instructional text must remain legible at mobile size."
+  - "Use one dominant focal subject and avoid dense competing panels."
+  - "Every major claim or exam label must be traceable to approved source material."
+  - "Do not introduce unapproved fonts, colors, logos, or brand treatments."
+  - "Teacher and student likenesses require the applicable consent evidence before publish."
+  - "Thumbnail concepts use two to five important on-image words and include the approved padded logo treatment."
+  - "The opening visual must show the topic, question, result, or misconception named by the package."
+  - "The final beat must resolve the learner question before the registration CTA."
+
+chart_palette:
+  - "#1B7F3A"
+  - "#1565C0"
+  - "#F4D03F"
+  - "#0B3D2E"
+  - "#6A1B9A"
+
+color_rules:
+  harmony_type: analogous
+  contrast_validation: true
+  colorblind_safe: true

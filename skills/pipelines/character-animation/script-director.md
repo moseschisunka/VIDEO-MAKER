@@ -2,6 +2,12 @@
 
 ## Goal
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Distinguish invented character action
+from factual claims about bodies, movement, history, or risk, and retain
+uncertain or unsupported statuses for review.
+
 Write scripts as performable animation beats, not just narration.
 
 ## Process

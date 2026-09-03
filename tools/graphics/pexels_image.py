@@ -39,7 +39,7 @@ class PexelsImage(BaseTool):
     )
     agent_skills = []
 
-    capabilities = ["search_image", "download_image", "stock_image"]
+    capabilities = ["search_image", "download_image", "stock_image", "multi_result_search"]
     supports = {
         "orientation_filter": True,
         "size_filter": True,
@@ -78,6 +78,14 @@ class PexelsImage(BaseTool):
             },
             "per_page": {"type": "integer", "default": 5, "minimum": 1, "maximum": 80},
             "page": {"type": "integer", "default": 1},
+            "select_index": {
+                "type": "integer", "minimum": 0, "default": 0,
+                "description": "Zero-based result to download after reviewing returned options.",
+            },
+            "download": {
+                "type": "boolean", "default": True,
+                "description": "When false, return search options without downloading a file.",
+            },
             "download_size": {
                 "type": "string",
                 "enum": ["original", "large2x", "large", "medium"],
@@ -91,8 +99,8 @@ class PexelsImage(BaseTool):
         cpu_cores=1, ram_mb=256, vram_mb=0, disk_mb=50, network_required=True
     )
     retry_policy = RetryPolicy(max_retries=2, retryable_errors=["rate_limit", "timeout"])
-    idempotency_key_fields = ["query", "orientation", "size", "color", "page"]
-    side_effects = ["writes image file to output_path", "calls Pexels API"]
+    idempotency_key_fields = ["query", "orientation", "size", "color", "page", "select_index", "download"]
+    side_effects = ["optionally writes the selected image to output_path", "calls Pexels API"]
     user_visible_verification = ["Check that downloaded image matches the intended scene"]
 
     def get_status(self) -> ToolStatus:
@@ -146,17 +154,43 @@ class PexelsImage(BaseTool):
                     data={"total_results": data.get("total_results", 0)},
                 )
 
-            # Pick the first result (agent can refine query if needed)
-            photo = photos[0]
-            download_size = inputs.get("download_size", "large2x")
-            image_url = photo["src"].get(download_size, photo["src"]["large2x"])
+            options = [
+                {
+                    "index": index,
+                    "photo_id": photo.get("id"),
+                    "photographer": photo.get("photographer", "Unknown"),
+                    "photographer_url": photo.get("photographer_url", ""),
+                    "alt": photo.get("alt", ""),
+                    "width": photo.get("width"),
+                    "height": photo.get("height"),
+                    "preview_url": (photo.get("src") or {}).get("medium", ""),
+                    "download_urls": photo.get("src") or {},
+                    "pexels_url": photo.get("url", ""),
+                }
+                for index, photo in enumerate(photos)
+            ]
+            select_index = int(inputs.get("select_index", 0))
+            if select_index < 0 or select_index >= len(photos):
+                return ToolResult(
+                    success=False,
+                    error=f"select_index must be between 0 and {len(photos) - 1}",
+                    data={"options": options, "total_results": data.get("total_results", 0)},
+                )
 
-            image_response = requests.get(image_url, timeout=60)
-            image_response.raise_for_status()
+            photo = photos[select_index]
+            output_path = None
+            if inputs.get("download", True):
+                download_size = inputs.get("download_size", "large2x")
+                sources = photo.get("src") or {}
+                image_url = sources.get(download_size) or sources.get("large2x") or sources.get("original")
+                if not image_url:
+                    return ToolResult(success=False, error="Selected Pexels photo has no downloadable image URL.", data={"options": options})
+                image_response = requests.get(image_url, timeout=60)
+                image_response.raise_for_status()
 
-            output_path = Path(inputs.get("output_path", f"pexels_{photo['id']}.jpg"))
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(image_response.content)
+                output_path = Path(inputs.get("output_path", f"pexels_{photo['id']}.jpg"))
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_bytes(image_response.content)
 
         except Exception as e:
             return ToolResult(success=False, error=f"Pexels image search failed: {e}")
@@ -172,13 +206,15 @@ class PexelsImage(BaseTool):
                 "width": photo.get("width"),
                 "height": photo.get("height"),
                 "query": query,
-                "output": str(output_path),
+                "output": str(output_path) if output_path else None,
                 "total_results": data.get("total_results", 0),
                 "results_returned": len(photos),
+                "selected_index": select_index,
+                "options": options,
                 "license": "Pexels License (free, no attribution required)",
                 "pexels_url": photo.get("url", ""),
             },
-            artifacts=[str(output_path)],
+            artifacts=[str(output_path)] if output_path else [],
             cost_usd=0.0,
             duration_seconds=round(time.time() - start, 2),
         )

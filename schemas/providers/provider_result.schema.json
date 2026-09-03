@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/providers/provider_result",
+  "title": "OpenMontage Provider Result",
+  "type": "object",
+  "required": ["status", "provider", "operation", "idempotency_key", "attempt_count", "latency_ms", "estimated_cost_usd", "reserved_cost_usd", "actual_cost_usd", "refunded_cost_usd", "artifacts", "metadata", "provenance"],
+  "properties": {
+    "status": { "type": "string", "enum": ["success", "cached", "failed", "blocked"] },
+    "provider": { "type": "string", "minLength": 1 },
+    "operation": { "type": "string", "minLength": 1 },
+    "idempotency_key": { "type": "string", "minLength": 16 },
+    "model": { "type": ["string", "null"] },
+    "attempt_count": { "type": "integer", "minimum": 0 },
+    "latency_ms": { "type": "number", "minimum": 0 },
+    "estimated_cost_usd": { "type": "number", "minimum": 0 },
+    "reserved_cost_usd": { "type": "number", "minimum": 0 },
+    "actual_cost_usd": { "type": "number", "minimum": 0 },
+    "refunded_cost_usd": { "type": "number", "minimum": 0 },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "artifact_type"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "artifact_type": { "type": "string", "minLength": 1 },
+          "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "media_probe": { "type": ["object", "null"] },
+          "metadata": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "error": {
+      "type": ["object", "null"],
+      "required": ["code", "message", "kind", "retryable", "status_code", "details"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string" },
+        "retryable": { "type": "boolean" },
+        "status_code": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "details": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": { "type": "object" },
+    "provenance": { "type": "object" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["failed", "blocked"] } } },
+      "then": { "required": ["error"] }
+    }
+  ]
+}

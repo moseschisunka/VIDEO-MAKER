@@ -1,0 +1,230 @@
+version: "1.0"
+status: release_candidate_contract
+owner: openmontage-operations
+
+# Measurements are comparable only when the environment and sample policy are
+# recorded with the evidence.  The CI reference is deliberately offline: live
+# provider latency and quota are separate launch checks.
+reference_environment:
+  id: openmontage-ci-linux
+  os: ubuntu-24.04
+  python: "3.11"
+  node: "22.13.1"
+  ffmpeg: apt-supported-pair
+  hardware: 2-vCPU / 7-GB CI runner minimum
+  providers: local-and-fake-only
+  measurement:
+    clock: monotonic_wall_clock
+    warmups: 2
+    samples: 11
+    percentile: p95
+    isolation: disposable-temporary-directory
+    network: disabled-for-benchmark
+    paid_provider_calls: forbidden
+
+window:
+  release_candidate:
+    type: frozen-build
+    minimum_samples: 11
+    comparison: same-reference-environment
+  production:
+    type: rolling
+    duration: 30d
+    aggregation: external-log-and-metrics-sink
+
+# Performance gates are release-candidate measurements.  PERF-08--PERF-10
+# remain owned by the bounded load/soak work package (PR-1009), but their
+# targets are fixed here so that a later test cannot silently choose a looser
+# threshold.
+performance_gates:
+  - id: PERF-01
+    name: warm_provider_menu_summary
+    category: preflight
+    indicator: provider_menu_summary_duration_seconds
+    target:
+      operator: "<="
+      value: 2.0
+      unit: seconds
+      percentile: p95
+    measurement: warm registry.provider_menu_summary() after discovery; no live provider probes
+    owner_task: PR-1007
+
+  - id: PERF-02
+    name: cold_local_preflight
+    category: preflight
+    indicator: fast_preflight_duration_seconds
+    target:
+      operator: "<="
+      value: 5.0
+      unit: seconds
+      percentile: p95
+    measurement: local dependency inspection with fake tools; get_status and sockets are forbidden
+    owner_task: PR-1007
+
+  - id: PERF-03
+    name: create_request_validation
+    category: queue_start
+    indicator: create_validation_duration_seconds
+    target:
+      operator: "<="
+      value: 0.5
+      unit: seconds
+      percentile: p95
+    measurement: _validate_create_request() only; disk mutation and provider calls are excluded
+    owner_task: PR-1007
+
+  - id: PERF-04
+    name: duplicate_run_idempotent_response
+    category: queue_start
+    indicator: duplicate_run_response_duration_seconds
+    target:
+      operator: "<="
+      value: 0.5
+      unit: seconds
+      percentile: p95
+    measurement: repeated POST /api/project/{id}/run against one live lease; no subprocess launch
+    owner_task: PR-1007
+
+  - id: PERF-05
+    name: backlot_state_refresh
+    category: availability
+    indicator: backlot_state_refresh_duration_seconds
+    target:
+      operator: "<="
+      value: 0.4
+      unit: seconds
+      percentile: p95
+    measurement: GET /api/project/{id}/state for an active temporary project
+    owner_task: PR-1007
+
+  - id: PERF-06
+    name: local_render_throughput
+    category: render
+    indicator: local_render_wall_seconds_per_output_second
+    target:
+      operator: "<="
+      value: 2.0
+      unit: wall_seconds_per_output_second
+      percentile: p95
+    measurement: one-second 320x180 FFmpeg fixture, ffprobe-validated, ultrafast preset
+    owner_task: PR-1007
+
+  - id: PERF-07
+    name: restart_to_resume_detection
+    category: failure_recovery
+    indicator: restart_resume_detection_duration_seconds
+    target:
+      operator: "<="
+      value: 0.5
+      unit: seconds
+      percentile: p95
+    measurement: restart_work_order() followed by durable read of queued resume pointer
+    owner_task: PR-1007
+
+  - id: PERF-08
+    name: bounded_concurrent_runs
+    category: scalability
+    indicator: concurrent_run_isolation
+    target:
+      operator: ">="
+      value: 4
+      unit: isolated_runs_without_contamination
+    measurement: four local/fake runs under the PR-1009 bounded concurrency harness
+    owner_task: PR-1009
+
+  - id: PERF-09
+    name: temporary_disk_cleanup
+    category: scalability
+    indicator: temporary_orphan_growth
+    target:
+      operator: "<="
+      value: 0
+      unit: orphan_files_after_soak
+    measurement: ten-run disposable soak; compare temporary-file inventory before and after
+    owner_task: PR-1009
+
+  - id: PERF-10
+    name: ui_event_stream_stability
+    category: scalability
+    indicator: sse_connection_task_growth
+    target:
+      operator: "<="
+      value: 0
+      unit: unbounded_connection_or_task_growth
+    measurement: bounded SSE connect/disconnect soak with event coalescing assertions
+    owner_task: PR-1009
+
+service_level_objectives:
+  - id: SLO-AVAILABILITY
+    name: Backlot control-plane availability
+    indicator: successful_health_checks / total_health_checks
+    window: 30d rolling
+    target: 0.995
+    error_budget: 0.005
+    alerting:
+      warning: "< 0.999 over 1h"
+      page: "< 0.995 over 15m or 3 consecutive failed probes"
+    exclusions: planned maintenance announced before the window; client-side network failures are reported separately
+
+  - id: SLO-QUEUE-START
+    name: Queued work starts within the declared bound
+    indicator: p95(queue_claim_started_at - queued_at)
+    window: 30d rolling
+    target: 0.995
+    error_budget: 0.005
+    target_seconds: 5.0
+    alerting:
+      warning: "p95 > 4s for 15m"
+      page: "p95 > 5s for 15m"
+    exclusions: a worker is intentionally paused by an operator or the project is awaiting human approval
+
+  - id: SLO-FAILURE-RECOVERY
+    name: Recoverable failures resume without duplicate spend
+    indicator: recovery_attempts_without_duplicate_spend / recoverable_failures
+    window: release_candidate_and_30d_rolling
+    target: 1.0
+    error_budget: 0.0
+    alerting:
+      warning: any_duplicate_provider_charge
+      page: any_unrecoverable_durable_state_loss
+
+  - id: SLO-QUALITY-ESCAPE
+    name: Critical quality defects do not escape final review
+    indicator: 1 - (critical_defects_after_release / released_deliverables)
+    window: 30d rolling and every release candidate
+    target: 1.0
+    error_budget: 0.0
+    alerting:
+      warning: any_critical_defect_in_internal_canary
+      page: any_critical_defect_in_limited_or_public_release
+    exclusions: non-critical editorial preference changes are tracked separately from safety, factual, audio, visual, and format defects
+
+  - id: SLO-LOCAL-RENDER
+    name: Local composition is fast enough for interactive iteration
+    indicator: p95(local_render_wall_seconds / output_duration_seconds)
+    window: release_candidate_and_30d_rolling
+    target: 2.0
+    error_budget: 0.0
+    target_unit: wall_seconds_per_output_second
+    alerting:
+      warning: p95 > 1.5x target
+      page: p95 > target for two consecutive release-candidate runs
+
+quality_escape_policy:
+  critical_classes:
+    - black_or_frozen_video
+    - missing_or_wrong_voice
+    - caption_timing_or_legibility_failure
+    - factual_grounding_failure
+    - wrong_format_or_duration
+    - licensing_or_provenance_gap
+  numerator: critical defects found after a deliverable was marked pass
+  denominator: deliverables released in the observation window
+  zero_tolerance: true
+
+measurement_rules:
+  - Do not combine warm and cold samples.
+  - Do not mix local, fake, and live-provider observations in one percentile.
+  - Record commit/ref, OS, Python, Node, FFmpeg/ffprobe, sample count, and raw summary.
+  - A missing sample is a measurement failure, not a success.
+  - A passing offline benchmark does not certify a cloud provider, human AV review, backup, rollback, or canary.

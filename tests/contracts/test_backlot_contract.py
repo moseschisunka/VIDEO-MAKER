@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+from lib.approval_contracts import build_checkpoint_approval
 from lib.checkpoint import (
     CheckpointValidationError,
     HISTORY_DIRNAME,
@@ -51,11 +52,25 @@ class TestGateEnforcement:
         assert cp["human_approval_required"] is True
 
     def test_completed_with_approval_passes(self, tmp_path):
+        write_checkpoint(
+            tmp_path, "proj", "script", "awaiting_human",
+            artifacts={"script": _minimal_script()},
+            pipeline_type="animated-explainer",
+            run_id="12345678-1234-4234-8234-123456789abc",
+        )
+        awaiting = read_checkpoint(tmp_path, "proj", "script")
+        approval = build_checkpoint_approval(
+            awaiting,
+            approver_id="reviewer-1",
+            decision="approve",
+        )
         path = write_checkpoint(
             tmp_path, "proj", "script", "completed",
             artifacts={"script": _minimal_script()},
             pipeline_type="animated-explainer",
-            human_approved=True,
+            run_id="12345678-1234-4234-8234-123456789abc",
+            approval_record=approval,
+            timestamp=awaiting["timestamp"],
         )
         assert path.exists()
 
@@ -88,12 +103,21 @@ class TestCheckpointHistory:
             tmp_path, "proj", "script", "awaiting_human",
             artifacts={"script": _minimal_script()},
             pipeline_type="animated-explainer",
+            run_id="12345678-1234-4234-8234-123456789abc",
+        )
+        awaiting = read_checkpoint(tmp_path, "proj", "script")
+        approval = build_checkpoint_approval(
+            awaiting,
+            approver_id="reviewer-1",
+            decision="approve",
         )
         write_checkpoint(
             tmp_path, "proj", "script", "completed",
             artifacts={"script": _minimal_script()},
             pipeline_type="animated-explainer",
-            human_approved=True,
+            run_id="12345678-1234-4234-8234-123456789abc",
+            approval_record=approval,
+            timestamp=awaiting["timestamp"],
         )
         history = list((tmp_path / "proj" / HISTORY_DIRNAME).glob("checkpoint_script_*.json"))
         assert len(history) == 1

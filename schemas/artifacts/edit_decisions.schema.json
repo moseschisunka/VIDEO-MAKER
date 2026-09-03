@@ -7,6 +7,19 @@
   "required": ["version", "cuts", "render_runtime"],
   "properties": {
     "version": { "type": "string", "const": "1.0" },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "target_duration_seconds": { "type": "number", "minimum": 1 },
+    "output_profile": { "type": "string", "minLength": 1 },
+    "profile": { "type": "string", "minLength": 1 },
+    "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
     "cuts": {
       "type": "array",
       "items": {
@@ -15,6 +28,12 @@
         "properties": {
           "id": { "type": "string" },
           "source": { "type": "string", "description": "Source file path or asset-manifest ID" },
+          "type": { "type": "string", "description": "Optional renderer component type" },
+          "surfaceColor": { "type": "string", "description": "Optional surface color override for a renderer component" },
+          "mutedColor": { "type": "string", "description": "Optional muted text color override for a renderer component" },
+          "backgroundColor": { "type": "string", "description": "Optional background color override for a renderer component" },
+          "accentColor": { "type": "string", "description": "Optional accent color override for a renderer component" },
+          "color": { "type": "string", "description": "Optional text color override for a renderer component" },
           "in_seconds": { "type": "number", "minimum": 0 },
           "out_seconds": { "type": "number", "minimum": 0 },
           "speed": { "type": "number", "minimum": 0.1, "default": 1.0 },
@@ -56,6 +75,32 @@
             "type": "number",
             "minimum": 0,
             "description": "Duration of transition in seconds"
+          },
+          "teacher_slide": {
+            "type": "object",
+            "description": "Structured teaching-slide data for animated text and diagram primitives.",
+            "required": ["title", "section", "bullets", "diagram"],
+            "properties": {
+              "title": { "type": "string" },
+              "section": { "type": "string" },
+              "bullets": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1,
+                "maxItems": 3
+              },
+              "diagram": { "type": "string" },
+              "keyTakeaway": { "type": "string" },
+              "diagramExplanation": { "type": "string" },
+              "visualTarget": { "type": "string" },
+              "slideNumber": { "type": "integer", "minimum": 1 },
+              "slideCount": { "type": "integer", "minimum": 1 },
+              "visualVariant": {
+                "type": "string",
+                "enum": ["balanced-grid", "diagram-focus", "minimal-lecture"]
+              }
+            },
+            "additionalProperties": false
           },
           "reason": { "type": "string" }
         },
@@ -102,7 +147,9 @@
                 "properties": {
                   "asset_id": { "type": "string" },
                   "start_seconds": { "type": "number", "minimum": 0 },
-                  "end_seconds": { "type": "number", "minimum": 0 }
+                  "end_seconds": { "type": "number", "minimum": 0 },
+                  "offset_seconds": { "type": "number", "minimum": 0 },
+                  "volume": { "type": "number", "minimum": 0, "maximum": 1 }
                 },
                 "additionalProperties": false
               }
@@ -114,6 +161,8 @@
           "properties": {
             "asset_id": { "type": "string" },
             "volume": { "type": "number", "minimum": 0, "maximum": 1 },
+            "offset_seconds": { "type": "number", "minimum": 0 },
+            "loop": { "type": "boolean", "default": false },
             "fade_in_seconds": { "type": "number", "minimum": 0 },
             "fade_out_seconds": { "type": "number", "minimum": 0 },
             "ducking": {
@@ -138,9 +187,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "properties": {
+              "properties": {
               "asset_id": { "type": "string" },
               "start_seconds": { "type": "number", "minimum": 0 },
+              "end_seconds": { "type": "number", "minimum": 0 },
+              "offset_seconds": { "type": "number", "minimum": 0 },
               "volume": { "type": "number", "minimum": 0, "maximum": 1, "default": 1.0 }
             },
             "additionalProperties": false
@@ -171,6 +222,8 @@
       "properties": {
         "asset_id": { "type": "string" },
         "volume": { "type": "number", "minimum": 0, "maximum": 1 },
+        "offset_seconds": { "type": "number", "minimum": 0 },
+        "loop": { "type": "boolean", "default": false },
         "ducking": { "type": "boolean", "default": true },
         "fade_in_seconds": { "type": "number", "minimum": 0 },
         "fade_out_seconds": { "type": "number", "minimum": 0 }

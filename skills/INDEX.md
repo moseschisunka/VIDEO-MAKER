@@ -284,6 +284,7 @@ Cross-cutting skills that apply to all pipelines:
 | Skill Creator | `meta/skill-creator.md` | Dynamically create new skills during pipeline runs |
 | Animation Runtime Selector | `meta/animation-runtime-selector.md` | Choose render runtime + animation library per scene |
 | Taste Direction | `meta/taste-direction.md` | Convert a brief into taste dials, anti-patterns, and reference strategy for proposal/playbook/atelier work |
+| Music Decision Contract | `meta/music-decision-contract.md` | Resolve and audit music/library/AI/bring-your-own/no-music choices before asset generation |
 | Bespoke Composition (Atelier) | `meta/bespoke-composition.md` | Hand-author a composition from scratch (hero work) — no stock scene-types; routes art-direction → motion principles → engine mechanics → atelier render |
 
 ## Style Playbooks

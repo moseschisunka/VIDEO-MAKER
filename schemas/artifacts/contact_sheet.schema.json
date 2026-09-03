@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/artifacts/contact_sheet",
+  "title": "Contact Sheet Candidate Approval",
+  "type": "object",
+  "required": ["version", "batch_id", "required_approval", "approval_status", "manifest_hash", "candidates"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "batch_id": { "type": "string", "minLength": 1 },
+    "required_approval": { "type": "boolean" },
+    "approval_status": { "type": "string", "enum": ["pending", "approved", "rejected", "not_required"] },
+    "created_at": { "type": "string" },
+    "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "contact_sheet_path": { "type": "string" },
+    "approval": {
+      "type": ["object", "null"],
+      "properties": {
+        "approved": { "type": "boolean" },
+        "approval_id": { "type": "string", "minLength": 1 },
+        "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "approved_at": { "type": "string" },
+        "reviewer": { "type": "string" },
+        "review_notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "scene_id", "provider", "strategy", "cost_usd"],
+        "properties": {
+          "candidate_id": { "type": "string", "minLength": 1 },
+          "scene_id": { "type": "string", "minLength": 1 },
+          "provider": { "type": "string", "minLength": 1 },
+          "strategy": { "type": "string", "minLength": 1 },
+          "path": { "type": "string" },
+          "thumbnail_path": { "type": "string" },
+          "source_url": { "type": "string" },
+          "creator": { "type": "string" },
+          "license": { "type": "string" },
+          "license_url": { "type": "string" },
+          "attribution_required": { "type": "boolean" },
+          "restrictions": { "type": "array", "items": { "type": "string" } },
+          "model": { "type": "string" },
+          "prompt": { "type": "string" },
+          "cost_usd": { "type": "number", "minimum": 0 },
+          "rejected": { "type": "boolean" },
+          "rejection_reasons": { "type": "array", "items": { "type": "string" } },
+          "metadata": { "type": "object", "additionalProperties": true }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -59,6 +59,7 @@ class PathsConfig(BaseModel):
     library_dir: str = "library"
     styles_dir: str = "styles"
     skills_dir: str = "skills"
+    template_dir: str = "content_templates"
     output_dir: str = "output"
 
 
@@ -70,6 +71,7 @@ class OpenMontageConfig(BaseModel):
     checkpoint: CheckpointConfig = Field(default_factory=CheckpointConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
+    creator_profile: str = "profiles/ilearnzed.yaml"
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "OpenMontageConfig":

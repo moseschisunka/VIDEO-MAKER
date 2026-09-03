@@ -9,9 +9,54 @@
     "name": { "type": "string" },
     "version": { "type": "string" },
     "description": { "type": "string" },
+    "ui_visible": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this manifest may appear in a user-facing catalog after release checks. Missing defaults to hidden."
+    },
+    "maturity": {
+      "type": "string",
+      "enum": ["test", "experimental", "beta", "production"],
+      "default": "experimental",
+      "description": "Manifest maturity; missing or invalid maturity must be treated as non-production by loaders."
+    },
+    "supported_runtimes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Explicit render/runtime identities supported by this manifest."
+    },
+    "supported_profiles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Explicit output profile identifiers supported by this manifest."
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Capability identities that must be available before the manifest can run."
+    },
+    "required_artifacts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Canonical artifacts required before this manifest is considered executable."
+    },
+    "deprecated": {
+      "type": "boolean",
+      "default": false
+    },
+    "replacement_pipeline": {
+      "type": "string"
+    },
+    "deprecation_reason": {
+      "type": "string"
+    },
     "category": {
       "type": "string",
-      "enum": ["talking_head", "generated", "hybrid", "screen_recording", "animation", "cinematic", "custom"]
+      "enum": ["talking_head", "generated", "hybrid", "screen_recording", "animation", "cinematic", "documentary", "custom"]
     },
     "stability": {
       "type": "string",
@@ -33,6 +78,24 @@
           }
         }
       ]
+    },
+    "production_modes": {
+      "description": "Optional production modes declared by a pipeline, such as real capture or synthetic composition.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "required_tools": { "type": "array", "items": { "type": "string" } },
+          "optional_tools": { "type": "array", "items": { "type": "string" } },
+          "best_for": { "type": "array", "items": { "type": "string" } },
+          "scene_type": { "type": "string" },
+          "agent_skills": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
     },
     "required_skills": {
       "type": "array",

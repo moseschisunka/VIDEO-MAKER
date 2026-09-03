@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -151,6 +152,107 @@ class TestBacklotServerApi:
         passthrough = client.get("/thumb/film/artifacts/note.txt")
         assert passthrough.status_code == 200
         assert passthrough.content == b"hello"
+
+    def test_qa_endpoint_exposes_safe_frames_and_review_truth(self, client, projects_root):
+        project = _make_project(projects_root, "film")
+        frame = project / "renders" / ".final_review_frames" / "review_frame_0.png"
+        _write_png(frame)
+        _write_json(project / "artifacts" / "final_review.json", {
+            "version": "1.0",
+            "output_path": str(project / "renders" / "final.mp4"),
+            "status": "revise",
+            "review_id": "review-1",
+            "checks": {
+                "visual_spotcheck": {
+                    "frames_sampled": 1,
+                    "frame_paths": [str(frame)],
+                    "issues": ["black frame"],
+                },
+                "audio_spotcheck": {
+                    "narration_present": False,
+                    "issues": ["missing audio"],
+                },
+                "transcript_comparison": {
+                    "transcript_matches_script": False,
+                    "word_accuracy": 0.5,
+                    "issues": ["script drift"],
+                },
+            },
+            "issues_found": ["black frame", "missing audio"],
+            "recommended_action": "re_render",
+        })
+        response = client.get("/api/project/film/qa")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["qa"]["status"] == "revise"
+        assert body["qa"]["frames"] == [{"path": "renders/.final_review_frames/review_frame_0.png", "timestamp_seconds": None}]
+        assert body["qa"]["transcript"]["word_accuracy"] == 0.5
+
+    def test_create_variant_copies_narration_and_launches_visual_only(self, client, projects_root, monkeypatch):
+        source = _make_project(projects_root, "lesson")
+        # Variants are intentionally limited to the explicit internal-demo
+        # fixture while the manifest-faithful visual executor is unfinished.
+        marker_path = source / "project.json"
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker.update({"pipeline_type": "animated-explainer", "runner_kind": "internal_demo", "demo_runner": True})
+        marker_path.write_text(json.dumps(marker), encoding="utf-8")
+        audio = source / "assets" / "audio" / "narration.mp3"
+        audio.parent.mkdir(parents=True, exist_ok=True)
+        audio.write_bytes(b"approved narration")
+        _write_json(source / "artifacts" / "project_config.json", {
+            "project_id": "lesson",
+            "title": "Lesson",
+            "topic": "A useful lesson",
+            "pipeline_type": "animated-explainer",
+            "playbook": "premium-minimalist",
+            "tts_provider": "openai",
+            "tts_model": "gpt-4o-mini-tts",
+        })
+        _write_json(source / "artifacts" / "narration_timeline.json", {
+            "version": "1.0",
+            "segments": [{"start_seconds": 0, "end_seconds": 4, "audio_path": str(audio)}],
+        })
+        _write_json(source / "artifacts" / "script.json", {"version": "1.0", "title": "Lesson"})
+        _write_json(source / "artifacts" / "asset_manifest.json", {
+            "version": "1.0",
+            "assets": [{
+                "id": "asset_audio_narration", "type": "narration", "path": str(audio),
+                "source_tool": "openai_tts", "scene_id": "scene_1", "provider": "openai",
+            }],
+        })
+
+        class FakeProcess:
+            pid = 43210
+            returncode = 0
+
+            def wait(self):
+                return self.returncode
+
+        launched = {}
+
+        def fake_popen(command, **kwargs):
+            launched["command"] = command
+            launched["kwargs"] = kwargs
+            return FakeProcess()
+
+        monkeypatch.setattr(subprocess, "Popen", fake_popen)
+        response = client.post("/api/project/lesson/variant", json={"visual_variant": "diagram-focus"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["reused_voiceover"] is True
+        assert body["source_project_id"] == "lesson"
+        assert body["visual_variant"] == "diagram-focus"
+        assert "--visual-only" in launched["command"]
+        assert launched["command"][-1] == "--internal-demo"
+
+        variants = list(projects_root.glob("lesson-variant-diagram-focus-*"))
+        assert len(variants) == 1
+        variant = variants[0]
+        config = json.loads((variant / "artifacts" / "project_config.json").read_text(encoding="utf-8"))
+        assert config["voiceover_reused"] is True
+        assert config["voiceover_source_project_id"] == "lesson"
+        assert (variant / "assets" / "audio" / "narration.mp3").read_bytes() == audio.read_bytes()
 
 
 class TestBacklotPerformanceBudgets:

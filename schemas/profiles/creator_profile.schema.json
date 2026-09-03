@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/profiles/creator_profile",
+  "title": "Creator and Channel Profile",
+  "type": "object",
+  "required": ["version", "id", "brand", "audience", "content_strategy", "language", "cta", "production", "consent", "thumbnail", "editorial_guardrails"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "brand": {
+      "type": "object",
+      "required": ["name", "operator", "website", "positioning", "promise", "identity_source"],
+      "properties": {
+        "name": { "type": "string" },
+        "operator": { "type": "string" },
+        "website": { "type": "string", "format": "uri" },
+        "positioning": { "type": "string" },
+        "promise": { "type": "string" },
+        "identity_source": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "audience": {
+      "type": "object",
+      "required": ["primary", "secondary", "learner_levels", "primary_outcomes"],
+      "properties": {
+        "primary": { "type": "string" },
+        "secondary": { "type": "array", "items": { "type": "string" } },
+        "learner_levels": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "primary_outcomes": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+    "content_strategy": {
+      "type": "object",
+      "required": ["channel_goal", "content_priority", "starting_mix", "subject_priorities"],
+      "properties": {
+        "channel_goal": { "type": "string" },
+        "content_priority": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "starting_mix": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "subject_priorities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["subject", "priority", "emphasis"],
+            "properties": {
+              "subject": { "type": "string" },
+              "priority": { "type": "integer", "minimum": 1 },
+              "emphasis": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "language": {
+      "type": "object",
+      "required": ["primary", "localized", "localization_order", "policy", "review_required"],
+      "properties": {
+        "primary": { "type": "string" },
+        "localized": { "type": "array", "items": { "type": "string" } },
+        "localization_order": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "policy": { "type": "string" },
+        "review_required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "cta": {
+      "type": "object",
+      "required": ["default_text", "temporary_destination", "preferred_destination", "subject_override", "ai_tutor_override"],
+      "properties": {
+        "default_text": { "type": "string" },
+        "temporary_destination": { "type": "string", "format": "uri" },
+        "preferred_destination": { "type": "string" },
+        "subject_override": { "type": "string" },
+        "ai_tutor_override": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "production": { "type": "object", "additionalProperties": true },
+    "consent": { "type": "object", "additionalProperties": true },
+    "thumbnail": { "type": "object", "required": ["logo_asset", "logo_source"], "additionalProperties": true },
+    "editorial_guardrails": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+  },
+  "additionalProperties": false
+}

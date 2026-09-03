@@ -437,7 +437,7 @@ To select the Gemini backend through the governed `image_selector`, pass
 
 | Model | Price | Notes |
 |-------|-------|-------|
-| `gemini-omni-flash-preview` | ~$0.10 per second of video | Billed as 5,792 output tokens/sec of 720p video at $17.50/1M tokens |
+| `gemini-omni-1.1-flash` | See current Google pricing | Confirm current billing and limits before production use |
 
 Generates 3–10 second clips at 720p/24fps with synthesized audio, plus stateful conversational editing (`edit_video` via `previous_interaction_id`). **Paid tier only — no free tier.** A typical 8-second clip costs ~$0.80; each edit turn generates a new clip and bills again.
 
@@ -675,6 +675,13 @@ Google TTS offers 700+ voices across 50+ languages. Voice names follow the patte
 - 200 requests/hour
 - 20,000 requests/month
 - Photo and video search + download
+- Multi-result search with `download=false`, then choose a result with `select_index`
+
+The adapters send the API key in Pexels' required `Authorization` header. Search
+supports pagination and orientation filters; the API permits up to 80 results per
+page. Review the returned options before downloading so the selected image or
+video matches the lesson's visual proof and licensing requirements. See the
+[official Pexels API documentation](https://www.pexels.com/api/documentation/).
 
 ---
 

@@ -6,6 +6,12 @@ This stage converts the long-form source into a ranked candidate list and then i
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Preserve the source clip's claim
+meaning and provenance; do not turn an uncertain excerpt into a factual title
+or caption without a source reference.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

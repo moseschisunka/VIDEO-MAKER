@@ -1,0 +1,66 @@
+version: "1.0"
+id: ilearnzed-product-demonstration
+name: "iLearnZed Product Demonstration"
+category: product_demonstration
+description: "Evidence-led demonstration of a real iLearnZed learner, teacher, or institution workflow."
+
+audience:
+  primary: secondary_school_learners
+  secondary: [school_leavers, teachers_and_course_creators, schools_and_institutions]
+  need: "See how a verified iLearnZed capability helps with a real learning or teaching task."
+  levels: ["Form 1", "Form 2", "Form 3", "Form 4", "Form 5", "Form 6", teacher, institution]
+
+promise:
+  viewer_outcome: "The viewer understands one real workflow and knows the next relevant action."
+  central_question_required: true
+  misconception_required: false
+  truthfulness_rule: "Use current product screens and verified MVP capabilities; never fabricate states, outcomes, users, or integrations."
+
+structure:
+  opening:
+    must_show: "The real product result or the learner/teacher problem the workflow solves."
+    must_say: "State the single task being demonstrated."
+    max_seconds: 15
+  beats:
+    - {id: problem, purpose: "Frame the real learning or teaching task.", plot: A, visual_requirement: "User goal and starting state.", viewer_question: "Can iLearnZed help with this?", required: true}
+    - {id: workflow, purpose: "Show the minimum path through the product.", plot: A, visual_requirement: "Real screen capture and restrained callouts.", viewer_question: "What do I click or do?", required: true}
+    - {id: evidence, purpose: "Show the resulting learning, content, or management state.", plot: both, visual_requirement: "Verified result screen or real output.", viewer_question: "What do I get?", required: true}
+    - {id: limitation, purpose: "State an important boundary or prerequisite.", plot: B, visual_requirement: "Short requirement or honest limitation card.", viewer_question: "What should I know first?", required: true}
+    - {id: next_action, purpose: "Send the viewer to the relevant verified action.", plot: A, visual_requirement: "Registration or relevant verified destination.", viewer_question: "How do I try it?", required: true}
+  ending:
+    payoff: "Show the completed task and restate what was actually demonstrated."
+    next_step: "Invite registration at https://ilearnzed.org or use a verified subject/product destination."
+    outro_limit_seconds: 8
+
+production:
+  default_pipeline: screen-demo
+  formats: [long_form, lesson_clip]
+  compatible_playbooks: [ilearnzed-education, clean-professional]
+  required_artifacts: [brief, thumbnail_package, script, scene_plan, asset_manifest, final_review, publish_log]
+  source_modes: [real_platform_capture, narrated_screen_recording, teacher_or_learner_walkthrough]
+  duration_guidance: "Demonstrate one coherent task; split unrelated capabilities into separate videos."
+
+thumbnail:
+  concepts: ["Real product result plus learner benefit", "One workflow screen plus task label", "Teacher or learner plus verified feature"]
+  on_image_word_target: "2-5 important words"
+  required_checks: [real_ui_only, no_private_data, one_task_only, capability_claim_verified, screen_text_is_legible]
+
+shorts:
+  derivative_allowed: true
+  self_contained_required: true
+  mechanisms: [one_feature, before_after_task, quick_workflow, result_reveal]
+  first_frame_rule: "Show the product result or task outcome before navigating through the interface."
+
+localization:
+  supported: true
+  languages: [bem, nya]
+  priority: "Localize learner-facing Mathematics and AI Tutor demonstrations when comprehension improves."
+  human_review_required: true
+
+consent:
+  teacher_consent_required: true
+  student_identifiable_consent_required: true
+  evidence_required_before_publish: true
+  scope: [youtube, shorts, social_media_repurposing, thumbnails, promotional_clips, ilearnzed_platform_use]
+
+quality_gates: [capture_is_current, private_data_is_hidden, capability_is_verified, workflow_is_reproducible, limitation_is_honest, consent_evidence_attached]

@@ -65,7 +65,7 @@ import shutil
 import tempfile
 import time
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
@@ -143,6 +143,9 @@ class CacheEntry:
     source_url: str = ""
     license: str = ""
     creator: str = ""
+    license_url: str = ""
+    attribution_required: bool = False
+    restrictions: list[str] = field(default_factory=list)
     source_tags: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -165,6 +168,9 @@ class CacheEntry:
             source_url=str(d.get("source_url", "") or ""),
             license=str(d.get("license", "") or ""),
             creator=str(d.get("creator", "") or ""),
+            license_url=str(d.get("license_url", "") or ""),
+            attribution_required=bool(d.get("attribution_required", False)),
+            restrictions=[str(item) for item in (d.get("restrictions") or [])],
             source_tags=str(d.get("source_tags", "") or ""),
         )
 
@@ -195,7 +201,16 @@ class ClipCache:
             if max_total_bytes is not None
             else default_max_total_bytes()
         )
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Some managed laptops and server containers expose a readable
+            # home directory but deny writes beneath it. Keep the cache
+            # optional: fall back to the platform temp directory instead of
+            # making corpus generation fail before any candidate is processed.
+            fallback_dir = Path(tempfile.gettempdir()) / "openmontage" / "clips_cache"
+            fallback_dir.mkdir(parents=True, exist_ok=True)
+            self.cache_dir = fallback_dir
         self.manifest_path = self.cache_dir / self.MANIFEST_NAME
         self.lock_path = self.cache_dir / self.LOCK_NAME
 
@@ -437,6 +452,9 @@ class ClipCache:
                 source_url=str(metadata.get("source_url", "") or ""),
                 license=str(metadata.get("license", "") or ""),
                 creator=str(metadata.get("creator", "") or ""),
+                license_url=str(metadata.get("license_url", "") or ""),
+                attribution_required=bool(metadata.get("attribution_required", False)),
+                restrictions=[str(item) for item in (metadata.get("restrictions") or [])],
                 source_tags=str(metadata.get("source_tags", "") or ""),
             )
             self._write_manifest(entries)

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/providers/provider_request",
+  "title": "OpenMontage Provider Request",
+  "type": "object",
+  "required": ["capability", "operation", "provider", "payload", "idempotency_key", "timeout_seconds", "max_retries", "estimated_cost_usd", "approved"],
+  "properties": {
+    "capability": { "type": "string", "minLength": 1 },
+    "operation": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": ["string", "null"] },
+    "payload": { "type": "object" },
+    "idempotency_key": { "type": "string", "minLength": 16 },
+    "project_id": { "type": ["string", "null"] },
+    "pipeline_type": { "type": ["string", "null"] },
+    "run_id": { "type": ["string", "null"], "format": "uuid" },
+    "attempt": { "type": ["integer", "null"], "minimum": 1 },
+    "stage": { "type": ["string", "null"] },
+    "timeout_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 86400 },
+    "max_retries": { "type": "integer", "minimum": 0, "maximum": 10 },
+    "estimated_cost_usd": { "type": "number", "minimum": 0 },
+    "approved": { "type": "boolean" },
+    "fallback_class": { "type": ["string", "null"] },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

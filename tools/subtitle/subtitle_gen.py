@@ -21,6 +21,7 @@ from tools.base_tool import (
     ToolStability,
     ToolTier,
 )
+from lib.caption_contracts import validate_verified_transcript
 
 
 class SubtitleGen(BaseTool):
@@ -47,6 +48,17 @@ class SubtitleGen(BaseTool):
                 "type": "array",
                 "description": "Transcript segments from transcriber (with words and timestamps)",
             },
+            "transcript": {
+                "type": "object",
+                "description": "Canonical transcript metadata and segments. Used with require_verified_transcript.",
+            },
+            "require_verified_transcript": {
+                "type": "boolean",
+                "default": False,
+                "description": "Fail closed unless transcript carries explicit verified/approved status and valid timing.",
+            },
+            "expected_language": {"type": "string"},
+            "expected_text": {"type": "string"},
             "format": {
                 "type": "string",
                 "enum": ["srt", "vtt", "json"],
@@ -81,6 +93,30 @@ class SubtitleGen(BaseTool):
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         segments = inputs["segments"]
+        transcript = inputs.get("transcript") or inputs.get("verified_transcript")
+        verification = None
+        if isinstance(transcript, dict):
+            candidate_segments = transcript.get("segments") or transcript.get("word_timestamps")
+            if isinstance(candidate_segments, list) and candidate_segments:
+                segments = candidate_segments
+        if bool(inputs.get("require_verified_transcript", False)):
+            payload = dict(transcript or {}) if isinstance(transcript, dict) else {}
+            payload.setdefault("segments", segments)
+            if "verified" not in payload and "verification_status" not in payload:
+                payload["verified"] = bool(inputs.get("transcript_verified", False))
+            if "language" not in payload and inputs.get("language"):
+                payload["language"] = inputs["language"]
+            verification = validate_verified_transcript(
+                payload,
+                expected_language=inputs.get("expected_language"),
+                expected_text=inputs.get("expected_text"),
+            )
+            if verification.get("valid") is not True:
+                return ToolResult(
+                    success=False,
+                    data={"transcript_verification": verification},
+                    error="; ".join(verification.get("errors") or ["verified transcript validation failed"]),
+                )
         fmt = inputs.get("format", "srt")
         max_words = inputs.get("max_words_per_cue", 8)
         max_chars = inputs.get("max_chars_per_line", 42)
@@ -95,7 +131,10 @@ class SubtitleGen(BaseTool):
             segments = self._apply_corrections(segments, corrections)
 
         # Build cues from word-level timestamps
-        cues = self._build_cues(segments, max_words, max_chars)
+        try:
+            cues = self._build_cues(segments, max_words, max_chars)
+        except (KeyError, TypeError, ValueError) as exc:
+            return ToolResult(success=False, error=f"Invalid caption timing data: {exc}")
 
         if fmt == "srt":
             content = self._render_srt(cues, highlight_style)
@@ -123,6 +162,8 @@ class SubtitleGen(BaseTool):
                 "format": fmt,
                 "cue_count": len(cues),
                 "output": str(out),
+                "transcript_verification": verification,
+                "transcript_digest": verification.get("transcript_digest") if verification else None,
             },
             artifacts=[str(out)],
             duration_seconds=round(elapsed, 2),

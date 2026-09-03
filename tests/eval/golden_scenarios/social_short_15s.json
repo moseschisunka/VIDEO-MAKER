@@ -1,0 +1,45 @@
+{
+  "name": "social_short_15s",
+  "pipeline_type": "talking-head",
+  "description": "A fifteen-second vertical social short used to test fast source-led editing and exact delivery shape.",
+  "inputs": {
+    "source_mode": "user_footage",
+    "brief": "Turn one strong statement from supplied footage into a hook-first vertical short.",
+    "profile": "social_vertical",
+    "duration_seconds": 15,
+    "input_media": ["fixtures/media/social_hook.mp4"],
+    "target_platform": "tiktok"
+  },
+  "expected_artifacts": {
+    "brief": { "required_fields": ["hook", "target_platform", "target_duration_seconds"] },
+    "script": { "required_fields": ["sections", "total_duration_seconds"] },
+    "scene_plan": { "required_fields": ["scenes"], "assertions": { "scene_count_minimum": 2 } },
+    "asset_manifest": { "required_fields": ["assets"], "assertions": { "source_media_provenance": true } },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "captions_enabled": true, "profile_propagated": true } },
+    "render_report": { "required_fields": ["outputs"], "assertions": { "duration_within_tolerance": true, "profile_matches": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "stochastic",
+  "tolerance": 0.5,
+  "profile": "social_vertical",
+  "duration_seconds": 15,
+  "duration_tolerance_seconds": 1.0,
+  "voice_intent": {
+    "mode": "original_source_audio",
+    "provider_policy": "no_tts_without_explicit_voice_decision",
+    "transcript_policy": "retain_source_words_and_verify_hook_timing"
+  },
+  "visual_strategy": {
+    "mode": "source_footage_with_dynamic_crops",
+    "description": "Open on the strongest hook, vary crops at intent changes, and keep captions within the vertical safe area.",
+    "asset_sources": ["user_media", "subtitle_generator"],
+    "motion_requirement": "preferred"
+  },
+  "runtime_candidates": ["remotion", "ffmpeg"],
+  "expected_approvals": ["idea", "script", "scene_plan", "assets", "edit", "publish"],
+  "prohibited_downgrade": [
+    "replace supplied footage with unrelated stock to reach the target duration without approval",
+    "crop captions outside the declared vertical safe area"
+  ],
+  "tags": ["phase0", "social", "vertical", "source-footage", "fast-path"]
+}

@@ -55,6 +55,9 @@ pexels_video_*.mp4
 # Scratch/debug scripts
 scratch/
 
+# Local evidence captures and render diagnostics (regenerable; never commit)
+tmp/
+
 # Internal docs (strategy, handoffs, playbooks — not shipped)
 internal/
 

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/evals/grounding_case",
+  "title": "Grounding Evaluation Case",
+  "type": "object",
+  "required": ["id", "research_brief", "script", "expected_decision", "expected_status"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "research_brief": { "type": "object" },
+    "script": { "type": "object" },
+    "expected_decision": { "type": "string", "enum": ["pass", "revise", "block"] },
+    "expected_status": { "type": "string", "enum": ["supported", "contradicted", "uncertain", "unsupported", "missing_source", "creative", "opinion", "instruction"] }
+  },
+  "additionalProperties": false
+}

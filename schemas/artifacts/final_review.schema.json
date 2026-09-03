@@ -11,6 +11,26 @@
       "type": "string",
       "description": "Path to the rendered output file that was reviewed"
     },
+    "project_id": { "type": "string", "minLength": 1 },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "output_profile": { "type": "string", "minLength": 1 },
+    "profile": { "type": "string", "minLength": 1 },
+    "voice_identity": {
+      "type": "object",
+      "description": "Approved narration voice identity carried into the final review.",
+      "required": ["provider", "model", "voice_id", "locale", "identity_key"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "voice_id": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "settings": { "type": "object", "additionalProperties": true },
+        "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "status": {
       "type": "string",
       "enum": ["pass", "revise", "fail"],
@@ -37,6 +57,10 @@
             "has_audio": { "type": "boolean" },
             "codec": { "type": "string" },
             "file_size_bytes": { "type": "integer" },
+            "stream_count": { "type": "integer", "minimum": 0 },
+            "audio_channels": { "type": "integer", "minimum": 0 },
+            "audio_channel_layout": { "type": ["string", "null"] },
+            "audio_tags": { "type": "object", "additionalProperties": true },
             "issues": {
               "type": "array",
               "items": { "type": "string" }
@@ -59,6 +83,19 @@
             "issues": {
               "type": "array",
               "items": { "type": "string" }
+            },
+            "video_quality": { "type": "object" },
+            "visual_contract": {
+              "type": "object",
+              "properties": {
+                "valid": { "type": "boolean" },
+                "overlay_bounds_checked": { "type": "integer", "minimum": 0 },
+                "missing_sources": { "type": "array", "items": { "type": "string" } },
+                "placeholder_tokens": { "type": "array", "items": { "type": "object" } },
+                "errors": { "type": "array", "items": { "type": "string" } },
+                "warnings": { "type": "array", "items": { "type": "string" } }
+              },
+              "additionalProperties": false
             }
           }
         },
@@ -74,8 +111,45 @@
             "issues": {
               "type": "array",
               "items": { "type": "string" }
-            }
+            },
+            "language_expected": { "type": ["string", "null"] },
+            "language_observed": { "type": ["string", "null"] },
+            "language_match": { "type": ["boolean", "null"] },
+            "audio_quality": { "type": ["object", "null"] }
           }
+        },
+        "visual_timeline": {
+          "type": "object",
+          "description": "Editorial visual-beat cadence and primary-track coverage validation.",
+          "properties": {
+            "valid": { "type": "boolean" },
+            "enforced": { "type": "boolean" },
+            "duration_seconds": { "type": "number" },
+            "beat_seconds": { "type": "number" },
+            "cut_count": { "type": "integer", "minimum": 0 },
+            "minimum_beats": { "type": "integer", "minimum": 0 },
+            "transition_boundaries_declared": { "type": "integer", "minimum": 0 },
+            "coverage_start_seconds": { "type": ["number", "null"] },
+            "coverage_end_seconds": { "type": "number" },
+            "errors": { "type": "array", "items": { "type": "string" } },
+            "warnings": { "type": "array", "items": { "type": "string" } },
+            "note": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "narration_timeline": {
+          "type": "object",
+          "description": "Optional narration segment timing and coverage validation.",
+          "properties": {
+            "valid": { "type": "boolean" },
+            "enforced": { "type": "boolean" },
+            "segment_count": { "type": "integer", "minimum": 0 },
+            "coverage_verified": { "type": "boolean" },
+            "errors": { "type": "array", "items": { "type": "string" } },
+            "warnings": { "type": "array", "items": { "type": "string" } },
+            "note": { "type": "string" }
+          },
+          "additionalProperties": false
         },
         "promise_preservation": {
           "type": "object",
@@ -124,11 +198,42 @@
           "properties": {
             "transcript_matches_script": { "type": ["boolean", "null"] },
             "word_accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "language_expected": { "type": ["string", "null"] },
+            "language_observed": { "type": ["string", "null"] },
+            "language_match": { "type": ["boolean", "null"] },
+            "voice_identity_observed": { "type": ["object", "null"] },
+            "voice_identity_match": { "type": ["boolean", "null"] },
             "issues": {
               "type": "array",
               "items": { "type": "string" }
             }
           }
+        },
+        "cross_artifact": {
+          "type": "object",
+          "description": "Deterministic identity/profile/render linkage checks.",
+          "properties": {
+            "valid": { "type": "boolean" },
+            "checked": { "type": "boolean" },
+            "errors": { "type": "array", "items": { "type": "string" } },
+            "warnings": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "voice_over": {
+          "type": "object",
+          "description": "Immutable voice identity and language evidence checks.",
+          "properties": {
+            "identity_expected": { "type": ["object", "null"] },
+            "identity_observed": { "type": ["object", "null"] },
+            "identity_match": { "type": ["boolean", "null"] },
+            "language_expected": { "type": ["string", "null"] },
+            "language_observed": { "type": ["string", "null"] },
+            "language_match": { "type": ["boolean", "null"] },
+            "identity_evidence": { "type": "array", "items": { "type": "object" } },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
         },
         "atelier": {
           "type": "object",
@@ -152,13 +257,36 @@
           }
         }
       },
-      "additionalProperties": false
-    },
+          "additionalProperties": false
+        },
+        "voice_over": {
+          "type": "object",
+          "description": "Voice identity, approval, segment resume, and transcript evidence.",
+          "properties": {
+            "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "provider": { "type": "string" },
+            "model": { "type": "string" },
+            "voice_id": { "type": "string" },
+            "locale": { "type": "string" },
+            "sample_approved": { "type": "boolean" },
+            "segment_count": { "type": "integer", "minimum": 0 },
+            "completed_segments": { "type": "integer", "minimum": 0 },
+            "cache_hits": { "type": "integer", "minimum": 0 },
+            "transcript_matches_script": { "type": ["boolean", "null"] },
+            "word_accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "pronunciation_notes": { "type": "array", "items": { "type": "string" } },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
     "issues_found": {
       "type": "array",
       "items": { "type": "string" },
       "description": "All issues found across all checks, summarized for the user"
     },
+    "review_id": { "type": "string", "minLength": 1 },
+    "output_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "reviewed_at": { "type": "string", "format": "date-time" },
     "recommended_action": {
       "type": "string",
       "enum": ["present_to_user", "re_render", "revise_edit", "revise_assets", "block", "re_author"],

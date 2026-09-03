@@ -24,10 +24,28 @@
       "enum": ["youtube", "instagram", "tiktok", "linkedin", "generic"]
     },
     "target_duration_seconds": { "type": "number", "minimum": 1 },
+    "output_profile": { "type": "string", "minLength": 1, "description": "Canonical media profile selected for the output" },
+    "profile": { "type": "string", "minLength": 1, "description": "Compatibility alias for output_profile" },
+    "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
     "reference_material": {
       "type": "array",
       "items": { "type": "string" },
       "description": "Paths or URLs to source material"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Canonical source IDs or locators used to shape the brief"
+    },
+    "grounding_contract": {
+      "type": "object",
+      "description": "Source/claim policy inherited by script and scene stages",
+      "properties": {
+        "required": { "type": "boolean", "default": true },
+        "policy": { "type": "string", "enum": ["block", "revise", "warn"] },
+        "source_record_version": { "type": "string", "const": "1.0" }
+      },
+      "additionalProperties": false
     },
     "angle_options": {
       "type": "array",

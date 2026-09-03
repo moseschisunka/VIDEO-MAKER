@@ -7,6 +7,18 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      run_live_provider:
+        description: "Run explicitly marked live-provider checks (may contact external services)"
+        required: false
+        type: boolean
+        default: false
+      run_hyperframes:
+        description: "Run HyperFrames CLI/browser QA (may download tooling and take several minutes)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,8 +28,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Validate Python
+  release-blockers:
+    name: Release blockers (offline contracts)
     runs-on: ubuntu-latest
 
     steps:
@@ -42,5 +54,308 @@ jobs:
       - name: Run lint smoke checks
         run: make lint
 
-      - name: Run test suite
-        run: make test
+      - name: Run release-blocking contract suite
+        run: python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q
+
+  clean-install-smoke:
+    name: Clean-install smoke (PR-1002)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: remotion-composer/package-lock.json
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Create disposable Python environment
+        run: python -m venv .clean-install-venv
+
+      - name: Install from the documented requirements wrapper
+        run: .clean-install-venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Install the locked Remotion dependency graph
+        run: npm ci --prefix remotion-composer
+
+      - name: Install the pinned Remotion browser
+        working-directory: remotion-composer
+        run: npx --no-install remotion browser ensure
+
+      - name: Type-check the clean Remotion source
+        working-directory: remotion-composer
+        run: npx --no-install tsc --noEmit -p tsconfig.json
+
+      - name: Bundle the clean Remotion source
+        working-directory: remotion-composer
+        run: |
+          rm -rf ../remotion-bundle
+          npx --no-install remotion bundle src/index.tsx --out-dir ../remotion-bundle
+          test -f ../remotion-bundle/index.html
+
+      - name: Build and enumerate Remotion compositions from the lockfile
+        working-directory: remotion-composer
+        run: npx --no-install remotion compositions src/index.tsx > ../remotion-compositions.txt
+
+      - name: Record clean Remotion build evidence
+        run: |
+          printf '%s\n' '{"status":"PASS","install":"npm ci","browser":"ensure","typecheck":"PASS","bundle":"PASS","compositions":"PASS"}' > remotion-clean-build-evidence.json
+
+      - name: Retain clean Remotion composition evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmontage-remotion-compositions
+          path: |
+            remotion-compositions.txt
+            remotion-clean-build-evidence.json
+          retention-days: 14
+
+      - name: Run PR-1002 smoke gate
+        run: .clean-install-venv/bin/python -m pytest tests/contracts/test_phase10_clean_install.py -q
+
+  container-build:
+    name: Container build and health contract (PR-1003)
+    runs-on: ubuntu-latest
+    needs: [clean-install-smoke]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build the production image
+        run: docker build --pull --tag openmontage-backlot:ci .
+
+      - name: Validate the image healthcheck and non-root user
+        run: |
+          test "$(docker inspect --format='{{json .Config.Healthcheck}}' openmontage-backlot:ci)" != "null"
+          test "$(docker image inspect --format='{{.Config.User}}' openmontage-backlot:ci)" = "node"
+
+      - name: Start the hardened image and wait for health
+        run: |
+          set -euo pipefail
+          cleanup() { docker rm -f openmontage-backlot-ci >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run --detach --name openmontage-backlot-ci \
+            --publish 127.0.0.1:4751:4750 \
+            --env BACKLOT_AUTH_TOKEN=ci-health-token \
+            --read-only --tmpfs /tmp --tmpfs /app/.backlot \
+            --tmpfs /home/node/.npm --tmpfs /home/node/.cache \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            openmontage-backlot:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --header 'Authorization: Bearer ci-health-token' http://127.0.0.1:4751/api/health; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs openmontage-backlot-ci
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker inspect --format='{{.State.Health.Status}}' openmontage-backlot-ci)" = "healthy"
+
+      - name: Verify the baked Remotion browser with an in-image still
+        run: |
+          set -euo pipefail
+          # The browser is project-local at node_modules/.remotion; the
+          # /home/node cache tmpfs below cannot hide the baked binary.
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion browser ensure
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion still src/index.tsx EndTag /tmp/container-still.png --frame=0
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion still src/index.tsx ProductReveal /tmp/container-product-still.png --frame=120
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion still src/index.tsx SignalFromTomorrowWithMusic /tmp/container-signal-still.png --frame=0
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion still src/index.tsx TalkingHead /tmp/container-talking-head-still.png --frame=0
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion still src/index.tsx TitledVideo /tmp/container-titled-video-still.png --frame=0
+          docker exec --workdir /app/remotion-composer openmontage-backlot-ci \
+            npx --no-install remotion still src/index.tsx LyricOverlay /tmp/container-lyric-still.png --frame=0
+          docker exec openmontage-backlot-ci test -s /tmp/container-still.png
+          docker exec openmontage-backlot-ci test -s /tmp/container-product-still.png
+          docker exec openmontage-backlot-ci test -s /tmp/container-signal-still.png
+          docker exec openmontage-backlot-ci test -s /tmp/container-talking-head-still.png
+          docker exec openmontage-backlot-ci test -s /tmp/container-titled-video-still.png
+          docker exec openmontage-backlot-ci test -s /tmp/container-lyric-still.png
+          printf '%s\n' '{"status":"PASS","browser":"baked","compositions":["EndTag","ProductReveal","SignalFromTomorrowWithMusic","TalkingHead","TitledVideo","LyricOverlay"],"outputs":"non_empty"}' > container-render-evidence.json
+
+      - name: Retain container render evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmontage-container-render
+          path: container-render-evidence.json
+          retention-days: 14
+
+  phase10-operational-evidence:
+    name: Phase 10 SLO and load evidence
+    runs-on: ubuntu-latest
+    needs: [release-blockers, clean-install-smoke]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: remotion-composer/package-lock.json
+
+      - name: Install local render dependency
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python test dependencies
+        run: make install-dev
+
+      - name: Install the locked Remotion dependency graph
+        run: npm ci --prefix remotion-composer
+
+      - name: Install the pinned Remotion browser
+        working-directory: remotion-composer
+        run: npx --no-install remotion browser ensure
+
+      - name: Type-check and bundle Remotion from the lockfile
+        working-directory: remotion-composer
+        run: |
+          npx --no-install tsc --noEmit -p tsconfig.json
+          rm -rf ../remotion-bundle
+          npx --no-install remotion bundle src/index.tsx --out-dir ../remotion-bundle
+          test -f ../remotion-bundle/index.html
+
+      - name: Build and enumerate Remotion compositions from the lockfile
+        working-directory: remotion-composer
+        run: npx --no-install remotion compositions src/index.tsx > ../remotion-compositions.txt
+
+      - name: Record Phase 10 Remotion build evidence
+        run: |
+          printf '%s\n' '{"status":"PASS","install":"npm ci","browser":"ensure","typecheck":"PASS","bundle":"PASS","compositions":"PASS"}' > remotion-clean-build-evidence.json
+
+      - name: Measure the documented Linux SLO baseline
+        run: python scripts/measure_slos.py > slo-baseline.json
+
+      - name: Fail when an SLO sample is missing or over target
+        run: python -c "import json; d=json.load(open('slo-baseline.json', encoding='utf-8')); bad=[r for r in d.get('results', []) if r.get('status') != 'PASS']; assert not bad, bad"
+
+      - name: Run the bounded offline load and soak harness
+        run: python scripts/measure_load_soak.py --output pr1009-load-soak.json
+
+      - name: Run offline operational drills
+        run: python scripts/run_operations_drill.py --output pr10g-operations-drill.json
+
+      - name: Retain Phase 10 raw evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmontage-phase10-evidence
+          path: |
+            slo-baseline.json
+            pr1009-load-soak.json
+            remotion-compositions.txt
+            remotion-clean-build-evidence.json
+            pr10g-operations-drill.json
+          retention-days: 14
+
+  offline-regression:
+    name: Offline regression suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Run deterministic offline suite
+        run: python -m pytest tests -m "not live_provider and not hyperframes_qa" -q
+
+  live-provider:
+    name: Opt-in live-provider checks
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_live_provider == true }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Run explicitly marked live checks
+        run: python -m pytest tests -m live_provider --run-live-provider -q
+
+  hyperframes:
+    name: Opt-in HyperFrames QA
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_hyperframes == true }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Run HyperFrames QA explicitly
+        env:
+          HYPERFRAMES_QA: "1"
+        run: python -m pytest tests -m hyperframes_qa -q

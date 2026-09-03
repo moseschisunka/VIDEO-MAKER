@@ -1,0 +1,45 @@
+{
+  "gate": "OPS-02",
+  "status": "PARTIAL",
+  "scope": "disposable_local_windows_node_tree",
+  "environment": {
+    "os": "Windows",
+    "node": "v22.13.1",
+    "remotion_cli": "4.0.484",
+    "install_mode": "npm ci --offline --ignore-scripts"
+  },
+  "steps": [
+    {
+      "command": "npm ci --offline --ignore-scripts",
+      "status": "PASS",
+      "packages_added": 211,
+      "packages_audited": 212,
+      "vulnerabilities": 0
+    },
+    {
+      "command": "npx --no-install tsc --noEmit -p tsconfig.json",
+      "status": "PASS"
+    },
+    {
+      "command": "npx --no-install remotion bundle src/index.tsx --out-dir ../remotion-bundle",
+      "status": "PASS",
+      "bundle_files": 36
+    },
+    {
+      "command": "npx --no-install remotion compositions src/index.tsx --browser-executable C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "status": "PASS",
+      "composition_count": 13,
+      "note": "Used the installed system Chrome because the disposable tree had no cached Remotion browser."
+    },
+    {
+      "command": "npx --no-install remotion browser ensure",
+      "status": "BLOCKED",
+      "error": "EACCES while connecting to storage.googleapis.com in the restricted local session"
+    }
+  ],
+  "limitations": [
+    "The local session cannot prove the standard Remotion browser download path because outbound network access is restricted.",
+    "The clean-install-smoke and phase10-operational-evidence CI jobs now run browser ensure, TypeScript, bundle, and composition enumeration on Ubuntu; a passing CI run is still required for supported-environment proof.",
+    "This evidence does not authorize live providers, external paging, rollback, or a production label."
+  ]
+}

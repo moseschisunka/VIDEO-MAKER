@@ -7,6 +7,56 @@
   "required": ["version", "outputs"],
   "properties": {
     "version": { "type": "string", "const": "1.0" },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "target_duration_seconds": { "type": "number", "minimum": 1 },
+    "output_profile": { "type": "string", "minLength": 1 },
+    "profile": { "type": "string", "minLength": 1 },
+    "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
+    "voice_identity": {
+      "type": "object",
+      "description": "Voice identity actually used by the rendered narration.",
+      "required": ["provider", "model", "voice_id", "locale", "identity_key"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "voice_id": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "settings": { "type": "object", "additionalProperties": true },
+        "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "narration_verification": {
+      "type": "object",
+      "properties": {
+        "segment_count": { "type": "integer", "minimum": 0 },
+        "completed_segments": { "type": "integer", "minimum": 0 },
+        "cache_hits": { "type": "integer", "minimum": 0 },
+        "transcript_matches_script": { "type": ["boolean", "null"] },
+        "word_accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "producer_stage": { "type": "string", "minLength": 1 },
+    "producer_tool": { "type": "string", "minLength": 1 },
+    "provenance_ref": {
+      "type": "string",
+      "description": "Project-relative run record or artifact provenance reference"
+    },
+    "render_runtime": {
+      "type": "string",
+      "enum": ["remotion", "hyperframes", "ffmpeg"]
+    },
     "outputs": {
       "type": "array",
       "items": {
@@ -16,12 +66,42 @@
           "path": { "type": "string" },
           "format": { "type": "string" },
           "codec": { "type": "string" },
+          "video_codec": { "type": "string" },
           "audio_codec": { "type": "string" },
+          "has_audio": { "type": "boolean" },
+          "stream_count": { "type": "integer", "minimum": 1 },
+          "format_name": { "type": "string" },
           "resolution": { "type": "string" },
           "fps": { "type": "number" },
           "duration_seconds": { "type": "number", "minimum": 0 },
           "file_size_bytes": { "type": "integer" },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Digest computed from the current run's promoted output"
+          },
+          "output_mtime_ns": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Filesystem timestamp recorded after current-run promotion"
+          },
+          "freshness": {
+            "type": "object",
+            "properties": {
+              "run_started_at": { "type": ["string", "null"], "format": "date-time" },
+              "candidate_created_at": { "type": ["string", "null"], "format": "date-time" },
+              "candidate_mtime_ns": { "type": ["integer", "null"], "minimum": 0 },
+              "output_created_at": { "type": ["string", "null"], "format": "date-time" },
+              "output_mtime_ns": { "type": ["integer", "null"], "minimum": 0 },
+              "new_hash_recorded": { "type": "boolean" },
+              "prior_output_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+            },
+            "additionalProperties": false
+          },
           "platform_target": { "type": "string" }
+          ,"output_profile": { "type": "string", "minLength": 1 }
+          ,"profile": { "type": "string", "minLength": 1 }
+          ,"aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] }
         },
         "additionalProperties": false
       },

@@ -14,12 +14,21 @@ Design rules:
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from lib.paths import PROJECTS_DIR, REPO_ROOT  # single source of truth
+from lib.observability import (
+    correlation_fields,
+    event_id,
+    metrics,
+    sanitize_observation,
+    structured_log,
+)
+from lib.secrets import redact_mapping
 
 EVENTS_FILENAME = "events.jsonl"
 
@@ -27,6 +36,7 @@ EVENTS_FILENAME = "events.jsonl"
 # by design: single-line O_APPEND writes rarely tear, and read_events skips
 # malformed lines, so a torn line degrades to one missing activity entry.
 _write_lock = threading.Lock()
+_logger = logging.getLogger("openmontage.events")
 try:
     from filelock import FileLock
 except ImportError:
@@ -45,6 +55,35 @@ _PATH_HINT_KEYS = (
     "image_path",
     "file_path",
 )
+
+
+def _project_identity_defaults(project_dir: Path) -> dict[str, Any]:
+    """Read persisted identity used to enrich events that omit it.
+
+    Tool instrumentation predates the durable work order and many callers do
+    not know the pipeline/run fields.  Enrichment is best-effort and never
+    overrides an explicit caller value; the cross-artifact validator remains
+    responsible for detecting an explicitly wrong value.
+    """
+    defaults: dict[str, Any] = {}
+    for filename in ("work_order.json", "project.json"):
+        try:
+            payload = json.loads((project_dir / filename).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        for field in ("project_id", "pipeline_type", "run_id", "attempt"):
+            if defaults.get(field) in (None, "") and payload.get(field) not in (None, ""):
+                defaults[field] = payload[field]
+        # A tool call often does not carry the stage explicitly.  The active
+        # work-order stage is the only safe default; never infer a stage from
+        # a filename or from a caller's free-form description.
+        if defaults.get("stage") in (None, ""):
+            candidate_stage = payload.get("current_stage") or payload.get("next_stage")
+            if candidate_stage not in (None, ""):
+                defaults["stage"] = candidate_stage
+    return defaults
 
 
 def infer_project_dir(inputs: Any) -> Optional[Path]:
@@ -89,8 +128,52 @@ def emit_event(project_dir: Path | str, payload: dict[str, Any]) -> None:
         if not project_dir.is_dir():
             return
         entry = {"ts": datetime.now(timezone.utc).isoformat()}
-        payload.pop('ts', None)  # prevent caller from overwriting system timestamp
-        entry.update({k: v for k, v in payload.items() if v is not None})
+        # Do not mutate the caller's dictionary: the same payload is commonly
+        # reused for a finish event and for result provenance.
+        safe_payload = sanitize_observation(redact_mapping(dict(payload)))
+        # System-owned fields cannot be spoofed by provider/user payloads.
+        for key in ("ts", "schema_version", "event_id", "span_id"):
+            safe_payload.pop(key, None)
+        defaults = _project_identity_defaults(project_dir)
+        for field, value in defaults.items():
+            if safe_payload.get(field) in (None, ""):
+                safe_payload[field] = value
+        safe_payload.setdefault("project_id", project_dir.name)
+        safe_payload["schema_version"] = "1.0"
+        safe_payload["event_id"] = event_id()
+        safe_payload["span_id"] = event_id()[:16]
+        current_trace = correlation_fields(
+            project_id=safe_payload.get("project_id"),
+            run_id=safe_payload.get("run_id"),
+            pipeline_type=safe_payload.get("pipeline_type"),
+            stage=safe_payload.get("stage"),
+            attempt=safe_payload.get("attempt"),
+            agent_id=safe_payload.get("agent_id"),
+            tool=safe_payload.get("tool"),
+            provider=safe_payload.get("provider"),
+        ).get("trace_id")
+        if current_trace:
+            safe_payload["trace_id"] = current_trace
+        entry.update({k: v for k, v in safe_payload.items() if v is not None})
+        event_name = str(entry.get("event") or "unknown")
+        metrics.increment("openmontage_events_total", labels={"event": event_name})
+        structured_log(
+            _logger,
+            logging.DEBUG,
+            f"backlot event: {event_name}",
+            context={
+                key: entry.get(key)
+                for key in (
+                    "project_id", "run_id", "pipeline_type", "stage", "attempt",
+                    "agent_id", "tool", "provider",
+                )
+                if entry.get(key) not in (None, "")
+            },
+            event=event_name,
+            success=entry.get("success"),
+            duration_s=entry.get("duration_s"),
+            cost_usd=entry.get("cost_usd"),
+        )
         path = project_dir / EVENTS_FILENAME
         line = json.dumps(entry, default=str)
         with _write_lock:

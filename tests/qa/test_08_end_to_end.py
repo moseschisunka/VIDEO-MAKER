@@ -9,7 +9,7 @@ an actual output video. All other stages use synthetic data.
 No API keys needed -- uses ffmpeg-generated fixtures throughout.
 """
 
-import sys, os, json, subprocess, shutil
+import sys, os, json, subprocess, shutil, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +27,7 @@ from lib.checkpoint import (
     STAGES,
     CANONICAL_STAGE_ARTIFACTS,
 )
+from lib.approval_contracts import build_checkpoint_approval
 from tools.cost_tracker import CostTracker, BudgetMode
 from schemas.artifacts import validate_artifact, list_schemas
 from styles.playbook_loader import load_playbook, validate_accessibility
@@ -76,6 +77,44 @@ def ensure_video(path, duration=5, width=1280, height=720, color="blue"):
          "-g", "30", "-keyint_min", "30",
          "-c:a", "aac", "-shortest", path],
         capture_output=True, check=True,
+    )
+
+
+def write_approved_checkpoint(stage, artifacts, *, pipeline_type, run_id,
+                              attempt=1, style_playbook=None,
+                              cost_snapshot=None):
+    """Write a manifest-gated checkpoint through the immutable approval flow.
+
+    The QA script is intentionally an end-to-end contract fixture, so gated
+    stages must follow the same pending -> bound approval -> completed path as
+    production rather than relying on the deprecated boolean flag.
+    """
+    common = {
+        "pipeline_type": pipeline_type,
+        "run_id": run_id,
+        "attempt": attempt,
+    }
+    if style_playbook is not None:
+        common["style_playbook"] = style_playbook
+    if cost_snapshot is not None:
+        common["cost_snapshot"] = cost_snapshot
+    write_checkpoint(
+        PIPELINE_DIR, PROJECT_ID, stage, "awaiting_human",
+        artifacts=artifacts, **common,
+    )
+    pending = read_checkpoint(PIPELINE_DIR, PROJECT_ID, stage)
+    approval = build_checkpoint_approval(
+        pending,
+        approver_id="qa-fixture",
+        decision="approve",
+        notes=f"Synthetic end-to-end fixture approval for {stage}.",
+    )
+    return write_checkpoint(
+        PIPELINE_DIR, PROJECT_ID, stage, "completed",
+        artifacts=artifacts,
+        approval_record=approval,
+        timestamp=pending["timestamp"],
+        **common,
     )
 
 # ===================================================================
@@ -204,6 +243,10 @@ proposal_packet = {
         "pipeline": "animated-explainer",
         "playbook": "clean-professional",
         "render_runtime": "remotion",
+        "music_source": {
+            "source_type": "none",
+            "reason": "No music selected for the end-to-end contract fixture.",
+        },
         "stages": [
             {"stage": "script", "tools": [{"tool_name": "tts_selector", "role": "narration", "available": True}], "approach": "AI-written script with TTS narration"},
             {"stage": "scene_plan", "tools": [], "approach": "5 scenes with motion graphics"},
@@ -233,10 +276,35 @@ try:
 except Exception as e:
     check("Proposal packet validates against schema", False, str(e))
 
-cp_path = write_checkpoint(
-    PIPELINE_DIR, PROJECT_ID, "proposal", "completed", human_approved=True,
+# ``proposal`` is human-gated by the manifest.  Exercise the production
+# protocol in this end-to-end fixture: persist the pending checkpoint first,
+# bind an immutable approval to its exact artifact digest/version, then write
+# the approved completion.  The legacy ``human_approved`` bit alone must not
+# be sufficient to bypass the gate.
+proposal_run_id = str(uuid.uuid4())
+pending_proposal = write_checkpoint(
+    PIPELINE_DIR, PROJECT_ID, "proposal", "awaiting_human",
     artifacts={"proposal_packet": proposal_packet},
     pipeline_type="animated-explainer",
+    run_id=proposal_run_id,
+    attempt=1,
+    style_playbook="clean-professional",
+)
+pending_checkpoint = read_checkpoint(PIPELINE_DIR, PROJECT_ID, "proposal")
+proposal_approval = build_checkpoint_approval(
+    pending_checkpoint,
+    approver_id="qa-fixture",
+    decision="approve",
+    notes="Synthetic end-to-end fixture approval.",
+)
+cp_path = write_checkpoint(
+    PIPELINE_DIR, PROJECT_ID, "proposal", "completed",
+    artifacts={"proposal_packet": proposal_packet},
+    pipeline_type="animated-explainer",
+    run_id=proposal_run_id,
+    attempt=1,
+    approval_record=proposal_approval,
+    timestamp=pending_checkpoint["timestamp"],
     style_playbook="clean-professional",
 )
 check("Proposal checkpoint written", cp_path.exists())
@@ -282,12 +350,16 @@ try:
 except Exception as e:
     check("Script validates against schema", False, str(e))
 
-write_checkpoint(
-    PIPELINE_DIR, PROJECT_ID, "script", "completed", human_approved=True,
-    artifacts={"script": script},
-    pipeline_type="animated-explainer",
+write_approved_checkpoint(
+    "script", {"script": script},
+    pipeline_type="animated-explainer", run_id=proposal_run_id,
+    style_playbook="clean-professional",
 )
-check("Completed stages", get_completed_stages(PIPELINE_DIR, PROJECT_ID) == ["research", "proposal", "script"])  # research, proposal and script in pipeline order
+check(
+    "Completed stages",
+    get_completed_stages(PIPELINE_DIR, PROJECT_ID, "animated-explainer")
+    == ["research", "proposal", "script"],
+)  # research, proposal and script in manifest order
 
 # ===================================================================
 # Stage 3: scene_plan
@@ -321,10 +393,10 @@ try:
 except Exception as e:
     check("Scene plan validates against schema", False, str(e))
 
-write_checkpoint(
-    PIPELINE_DIR, PROJECT_ID, "scene_plan", "completed", human_approved=True,
-    artifacts={"scene_plan": scene_plan},
-    pipeline_type="animated-explainer",
+write_approved_checkpoint(
+    "scene_plan", {"scene_plan": scene_plan},
+    pipeline_type="animated-explainer", run_id=proposal_run_id,
+    style_playbook="clean-professional",
 )
 
 # ===================================================================
@@ -375,6 +447,18 @@ clean_assets.append({
     "path": music_path,
     "source_tool": "music_gen",
     "scene_id": "sc1",
+    "music_provenance": {
+        "source_type": "ai_generated",
+        "source_tool": "music_gen",
+        "provider": "elevenlabs",
+        "license": "provider_terms",
+        "prompt": "restrained educational ambient bed",
+        "model": "elevenlabs-music",
+        "duration_seconds": 60,
+        "loop_allowed": True,
+        "edit_rights": "allowed",
+        "rights_status": "verified",
+    },
 })
 
 asset_manifest = {
@@ -400,10 +484,10 @@ tracker.reserve(eid)
 tracker.reconcile(eid, 0.0, success=True)
 print(f"  Cost snapshot: {tracker.cost_snapshot()}")
 
-write_checkpoint(
-    PIPELINE_DIR, PROJECT_ID, "assets", "completed", human_approved=True,
-    artifacts={"asset_manifest": asset_manifest},
-    pipeline_type="animated-explainer",
+write_approved_checkpoint(
+    "assets", {"asset_manifest": asset_manifest},
+    pipeline_type="animated-explainer", run_id=proposal_run_id,
+    style_playbook="clean-professional",
     cost_snapshot=tracker.cost_snapshot(),
 )
 
@@ -614,10 +698,10 @@ try:
 except Exception as e:
     check("Publish log validates against schema", False, str(e))
 
-write_checkpoint(
-    PIPELINE_DIR, PROJECT_ID, "publish", "completed", human_approved=True,
-    artifacts={"publish_log": publish_log},
-    pipeline_type="animated-explainer",
+write_approved_checkpoint(
+    "publish", {"publish_log": publish_log},
+    pipeline_type="animated-explainer", run_id=proposal_run_id,
+    style_playbook="clean-professional",
 )
 
 # ===================================================================
@@ -626,7 +710,7 @@ write_checkpoint(
 print("\n--- Final validation ---")
 
 E2E_STAGES = ["research", "proposal", "script", "scene_plan", "assets", "edit", "compose", "publish"]
-completed = get_completed_stages(PIPELINE_DIR, PROJECT_ID)
+completed = get_completed_stages(PIPELINE_DIR, PROJECT_ID, "animated-explainer")
 check("All 8 stages completed", len(completed) == 8, f"completed={completed}")
 check("Next stage is None (done)", get_next_stage(PIPELINE_DIR, PROJECT_ID, "animated-explainer") is None)
 check("Stages in correct order", completed == E2E_STAGES, f"{completed}")

@@ -6,6 +6,11 @@ This stage maps the story across source-led beats and support-led beats. You are
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Keep supplied speech, stock context,
+and newly written facts in separate claim records with explicit source refs.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

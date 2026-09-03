@@ -111,6 +111,14 @@ class MusicGen(BaseTool):
         return round(duration / 30 * 0.05, 4)
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
+        # The production migration lane opts this provider into the common
+        # executor.  The bypass marker is supplied only by the bridge's
+        # implementation callback and prevents recursive wrapping; direct
+        # provider tests remain focused on the provider-specific API contract.
+        if inputs.get("provider_kernel") is True and not inputs.get("_provider_executor_bypass"):
+            from lib.providers.bridge import execute_with_provider_executor
+
+            return execute_with_provider_executor(self, inputs)
         api_key = os.environ.get("ELEVENLABS_API_KEY")
         if not api_key:
             return ToolResult(
@@ -174,14 +182,21 @@ class MusicGen(BaseTool):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(response.content)
 
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "elevenlabs",
+            "prompt": prompt,
+            "duration_seconds": duration,
+            "output": str(output_path),
+            "format": "mp3",
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data, inputs, source_tool=self.name
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "elevenlabs",
-                "prompt": prompt,
-                "duration_seconds": duration,
-                "output": str(output_path),
-                "format": "mp3",
-            },
+            data=result_data,
             artifacts=[str(output_path)],
         )

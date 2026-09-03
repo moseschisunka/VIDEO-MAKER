@@ -1,0 +1,47 @@
+{
+  "name": "grounded_explainer_30s",
+  "pipeline_type": "animated-explainer",
+  "description": "A thirty-second research-grounded explainer that tests claim traceability, narration timing, and designed visual intent.",
+  "inputs": {
+    "source_mode": "research_to_generated",
+    "brief": "Explain one measurable learning principle for a general audience using cited evidence and concise narration.",
+    "profile": "landscape_16_9",
+    "duration_seconds": 30,
+    "target_platform": "youtube"
+  },
+  "expected_artifacts": {
+    "research_brief": { "required_fields": ["topic", "sources", "data_points"] },
+    "proposal_packet": { "required_fields": ["concept_options", "production_plan", "approval"] },
+    "script": { "required_fields": ["sections", "total_duration_seconds", "source_refs"] },
+    "scene_plan": { "required_fields": ["scenes"], "assertions": { "every_claim_has_source_ref": true } },
+    "asset_manifest": { "required_fields": ["assets"], "assertions": { "asset_provenance_complete": true } },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "motion_intent_preserved": true } },
+    "render_report": { "required_fields": ["outputs", "media_probe"], "assertions": { "output_is_playable": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "stochastic",
+  "tolerance": 1.0,
+  "profile": "landscape_16_9",
+  "duration_seconds": 30,
+  "duration_tolerance_seconds": 1.5,
+  "voice_intent": {
+    "mode": "narrated_synthesis",
+    "provider_policy": "route_through_tts_selector_and_record_provider_identity",
+    "transcript_policy": "script_and_audio_transcript_must_match",
+    "pronunciation_targets": ["domain_terms", "proper_nouns"]
+  },
+  "visual_strategy": {
+    "mode": "purposeful_diagrams_and_animated_support",
+    "description": "Use claim-specific diagrams, stat cards, or generated support visuals; each visual must explain or prove a spoken beat.",
+    "asset_sources": ["research_sources", "diagram_generator", "image_selector", "user_media_if_approved"],
+    "motion_requirement": "required"
+  },
+  "runtime_candidates": ["remotion", "hyperframes"],
+  "expected_approvals": ["research", "proposal", "script", "scene_plan", "assets", "edit", "compose", "publish"],
+  "prohibited_downgrade": [
+    "replace claim-specific visuals with a repetitive slideshow without approval",
+    "present an unsourced statistic or generic filler as research-grounded content",
+    "switch render runtime or provider without updating the decision log"
+  ],
+  "tags": ["phase0", "grounding", "explainer", "generated", "duration"]
+}

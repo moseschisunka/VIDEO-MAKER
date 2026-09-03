@@ -11,6 +11,23 @@ let searchQuery = "";
 let availablePipelines = [];
 let availablePlaybooks = [];
 let availableVoices = [];
+let releaseStatus = null;
+
+function updateReleaseBanner() {
+  const banner = document.getElementById("releaseBanner");
+  if (!banner) return;
+  const status = releaseStatus || {
+    label: "Internal preview — production certification pending",
+    production_gate: "PR-11G",
+  };
+  banner.innerHTML = "";
+  banner.append(
+    el("strong", {}, String(status.label || "Internal preview")),
+    " · Production certification is locked until ",
+    el("b", {}, String(status.production_gate || "PR-11G")),
+    ". Rendered outputs remain uncertified while the readiness roadmap is in progress."
+  );
+}
 
 // ---- Metrics Banner ------------------------------------------------
 function updateMetrics(projects) {
@@ -65,7 +82,7 @@ function renderProjectCard(p) {
       `STAGE: ${p.active_stage.toUpperCase()}`
     ));
   } else if (p.render_count > 0) {
-    poster.append(el("span", { class: "lp-badge badge-emerald" }, "✓ DELIVERABLE READY"));
+    poster.append(el("span", { class: "lp-badge badge-emerald" }, "✓ RENDERED · NOT CERTIFIED"));
   }
 
   // Stage Progress Bar
@@ -80,8 +97,10 @@ function renderProjectCard(p) {
     })
   );
 
+  const lane = p.release_lane || "experimental";
   const metaChips = el("div", { class: "card-meta-chips" },
     el("span", { class: "meta-chip chip-pipeline" }, p.pipeline_type || "animated-explainer"),
+    el("span", { class: `meta-chip release-lane lane-${lane}` }, p.release_label || "Not production-certified"),
     p.scene_count ? el("span", { class: "meta-chip" }, `${p.scene_count} scenes`) : null,
     p.render_count ? el("span", { class: "meta-chip chip-renders" }, `${p.render_count} renders`) : null,
     el("span", { class: "meta-time" }, fmtAgo(p.last_activity))
@@ -145,7 +164,12 @@ function filterProjects() {
 // ---- Render Main Library -------------------------------------------
 async function refreshLibrary() {
   try {
-    allProjects = await getJSON("/api/projects");
+    const requests = [getJSON("/api/projects")];
+    if (!releaseStatus) requests.push(getJSON("/api/release-status"));
+    const results = await Promise.all(requests);
+    allProjects = results[0];
+    if (results[1]) releaseStatus = results[1];
+    updateReleaseBanner();
     updateMetrics(allProjects);
     filterProjects();
   } catch (err) {
@@ -162,7 +186,7 @@ const cancelWizardBtn = document.getElementById("cancelWizardBtn");
 const createProjectForm = document.getElementById("createProjectForm");
 const submitCreateBtn = document.getElementById("submitCreateBtn");
 
-let selectedPipeline = "animated-explainer";
+let selectedPipeline = "screen-demo";
 let selectedPlaybook = "premium-minimalist";
 
 async function openWizard() {
@@ -198,16 +222,23 @@ function renderPipelineOptions() {
   const container = document.getElementById("pipelineSelectionGrid");
   container.innerHTML = "";
   const pipelines = availablePipelines.length ? availablePipelines : [
-    { id: "animated-explainer", name: "Animated Explainer", description: "React Remotion motion cards, charts & narration" },
-    { id: "cinematic", name: "Cinematic Montage", description: "Atmospheric camera movement, grading & score" },
-    { id: "screen-demo", name: "Screen Demo", description: "Product walkthrough with zooms and cursor focus" },
-    { id: "character-animation", name: "Character Animation", description: "Rigged vector character animation with lip-sync" },
+    { id: "screen-demo", name: "Screen Demo", description: "Product walkthrough with zooms and cursor focus", release_lane: "launch", release_label: "Launch candidate — not production-certified", creation_enabled: true },
+    { id: "talking-head", name: "Talking Head", description: "User-supplied source footage with captions and audio cleanup", release_lane: "launch", release_label: "Launch candidate — not production-certified", creation_enabled: true },
+    { id: "cinematic", name: "Cinematic Montage", description: "Atmospheric camera movement, grading & score", release_lane: "beta", release_label: "Beta — not production-certified", creation_enabled: false },
+    { id: "animated-explainer", name: "Animated Explainer", description: "Generated visuals, charts & narration", release_lane: "experimental", release_label: "Experimental — internal preview only", creation_enabled: false },
   ];
 
   for (const pipe of pipelines) {
+    const lane = pipe.release_lane || "experimental";
+    const canCreate = pipe.creation_enabled === true;
+    const statusText = pipe.release_label || "Not production-certified";
     const card = el("div", { 
-      class: `selector-card${pipe.id === selectedPipeline ? " selected" : ""}`,
+      class: `selector-card lane-${lane}${pipe.id === selectedPipeline ? " selected" : ""}${canCreate ? "" : " disabled"}`,
+      role: "button",
+      tabindex: canCreate ? "0" : "-1",
+      "aria-disabled": canCreate ? "false" : "true",
       onclick: () => {
+        if (!canCreate) return;
         selectedPipeline = pipe.id;
         renderPipelineOptions();
       }
@@ -216,6 +247,10 @@ function renderPipelineOptions() {
         el("span", { class: "selector-title" }, pipe.name),
         pipe.id === selectedPipeline ? el("span", { class: "selector-check" }, "✓") : null
       ),
+      el("span", { class: `pipeline-release-label lane-${lane}` }, statusText),
+      !canCreate && pipe.availability_reason
+        ? el("span", { class: "selector-availability" }, pipe.availability_reason)
+        : null,
       el("p", { class: "selector-desc" }, pipe.description || "Instruction-driven pipeline")
     );
     container.append(card);
@@ -293,7 +328,7 @@ async function handleCreateProject(e) {
   }
 
   submitCreateBtn.disabled = true;
-  submitCreateBtn.innerHTML = `<span>Initializing Studio & Pipeline...</span>`;
+  submitCreateBtn.innerHTML = `<span>Creating internal preview...</span>`;
 
   try {
     const res = await fetch("/api/project/create", {
@@ -318,15 +353,15 @@ async function handleCreateProject(e) {
       }
       window.location.href = `/p/${data.project_id}`;
     } else {
-      alert("Error creating project: " + (data.error || "Unknown error"));
+      alert("Error creating project: " + (data.detail || data.error || "Unknown error"));
       submitCreateBtn.disabled = false;
-      submitCreateBtn.innerHTML = `<span>Initialize & Launch Video</span>`;
+      submitCreateBtn.innerHTML = `<span>Create Internal Preview</span>`;
     }
   } catch (err) {
     console.error("Create project failed:", err);
     alert("Failed to initialize project.");
     submitCreateBtn.disabled = false;
-    submitCreateBtn.innerHTML = `<span>Initialize & Launch Video</span>`;
+    submitCreateBtn.innerHTML = `<span>Create Internal Preview</span>`;
   }
 }
 
@@ -367,4 +402,3 @@ refreshLibrary().catch(console.error);
 if (!new URLSearchParams(location.search).has("static")) {
   subscribe("/api/library/events", () => refreshLibrary().catch(console.error));
 }
-

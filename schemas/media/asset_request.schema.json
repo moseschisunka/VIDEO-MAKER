@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/media/asset_request",
+  "title": "Canonical Asset Request",
+  "type": "object",
+  "required": ["request_id", "scene_id", "intent", "media_type", "strategy", "provenance_required"],
+  "properties": {
+    "request_id": { "type": "string", "minLength": 1 },
+    "scene_id": { "type": "string", "minLength": 1 },
+    "intent": { "type": "string", "minLength": 1 },
+    "media_type": { "type": "string", "enum": ["image", "video", "audio", "diagram", "animation", "user_media", "stock", "generated"] },
+    "strategy": { "type": "string", "enum": ["user", "stock", "ai", "diagram", "generated", "local", "source"] },
+    "constraints": { "type": "object", "additionalProperties": true },
+    "provenance_required": { "type": "boolean" },
+    "source_refs": { "type": "array", "items": { "type": "string" } },
+    "sample_required": { "type": "boolean" },
+    "stable_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,66 @@
+version: "1.0"
+id: ilearnzed-concept-explainer
+name: "iLearnZed Concept Explainer"
+category: concept_explainer
+description: "Visual explanation of a difficult Mathematics, Biology, Chemistry, Physics, or English concept."
+
+audience:
+  primary: secondary_school_learners
+  secondary: [school_leavers]
+  need: "Replace memorisation with a simple mental model, example, and application."
+  levels: ["Form 1", "Form 2", "Form 3", "Form 4", "Form 5", "Form 6"]
+
+promise:
+  viewer_outcome: "The learner understands the concept, can describe how it works, and can recognise it in a question."
+  central_question_required: true
+  misconception_required: true
+  truthfulness_rule: "Use approved curriculum content and distinguish analogy from scientific fact."
+
+structure:
+  opening:
+    must_show: "The object, diagram, surprising result, or comparison that makes the concept visible."
+    must_say: "Name the misconception or question the explanation will resolve."
+    max_seconds: 20
+  beats:
+    - {id: observation, purpose: "Create a concrete question before explaining.", plot: A, visual_requirement: "Real or accurate visual observation.", viewer_question: "What am I actually seeing?", required: true}
+    - {id: model, purpose: "Introduce the simplest accurate mental model.", plot: A, visual_requirement: "Progressive labelled diagram or animation.", viewer_question: "What causes this?", required: true}
+    - {id: evidence, purpose: "Connect the model to a worked example or demonstration.", plot: both, visual_requirement: "Teacher, experiment, diagram, or real-world application.", viewer_question: "How do I know the model fits?", required: true}
+    - {id: misconception_check, purpose: "Correct the tempting but wrong interpretation.", plot: B, visual_requirement: "Side-by-side correct/wrong comparison.", viewer_question: "What mistake should I avoid?", required: true}
+    - {id: application, purpose: "Show how the concept appears in assessment or life.", plot: A, visual_requirement: "Short practice question or application scene.", viewer_question: "Where will I use this?", required: true}
+  ending:
+    payoff: "Answer the opening question in the learner's own conceptual language."
+    next_step: "Invite registration at https://ilearnzed.org and link a verified related course when available."
+    outro_limit_seconds: 8
+
+production:
+  default_pipeline: animated-explainer
+  formats: [long_form, lesson_clip]
+  compatible_playbooks: [ilearnzed-education, minimalist-diagram]
+  required_artifacts: [brief, thumbnail_package, script, scene_plan, asset_manifest, final_review, publish_log]
+  source_modes: [teacher_camera, diagram_animation, safe_demonstration, labelled_illustration]
+  duration_guidance: "Slow down when the learner must study a diagram; the explanation may run as long as understanding requires, while decorative motion must still be removed."
+
+thumbnail:
+  concepts: ["Large concept visual plus short question", "Teacher pointing to a labelled diagram", "Misconception versus correct model"]
+  on_image_word_target: "2-5 important words"
+  required_checks: [concept_visible_without_title, diagram_legible_at_mobile_size, no_unsupported_scientific_claim, one_dominant_visual]
+
+shorts:
+  derivative_allowed: true
+  self_contained_required: true
+  mechanisms: [misconception_reveal, visual_comparison, one_diagram_step, surprising_observation]
+  first_frame_rule: "Show the key object, result, or diagram before the explanation begins."
+
+localization:
+  supported: true
+  languages: [bem, nya]
+  priority: "Mathematics first, followed by Biology and general study support."
+  human_review_required: true
+
+consent:
+  teacher_consent_required: true
+  student_identifiable_consent_required: true
+  evidence_required_before_publish: true
+  scope: [youtube, shorts, social_media_repurposing, thumbnails, promotional_clips, ilearnzed_platform_use]
+
+quality_gates: [concept_source_is_approved, analogy_is_not_presented_as_fact, diagram_labels_are_checked, audio_and_visuals_are_clear, consent_evidence_attached, opening_question_is_resolved]

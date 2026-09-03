@@ -6,6 +6,12 @@ Turn the approved brief into scene-safe spoken copy for an avatar presenter. The
 
 ## Reference Inputs
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Product, legal, health, financial, and
+performance assertions require claim IDs and approved source references;
+personality and delivery copy is classified as creative or opinion.
+
 - `docs/avatar-spokesperson-best-practices.md`
 - `skills/creative/storytelling.md`
 

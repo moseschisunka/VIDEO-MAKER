@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/artifacts/grounding_report",
+  "title": "Claim Grounding Report",
+  "description": "Deterministic validation report linking factual script claims to approved research sources.",
+  "type": "object",
+  "required": ["version", "valid", "decision", "errors", "warnings", "sources", "claims"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "valid": { "type": "boolean" },
+    "decision": { "type": "string", "enum": ["pass", "revise", "block"] },
+    "errors": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "source_count": { "type": "integer", "minimum": 0 },
+    "claim_count": { "type": "integer", "minimum": 0 },
+    "status_counts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "canonical_locator", "accessed_at", "excerpt_or_note", "license", "usage_constraints", "claim_ids"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "canonical_locator": { "type": "string" },
+          "accessed_at": { "type": ["string", "null"] },
+          "excerpt_or_note": { "type": ["string", "null"] },
+          "license": { "type": ["string", "null"] },
+          "usage_constraints": { "type": ["string", "null"] },
+          "claim_ids": { "type": "array", "items": { "type": "string" } },
+          "reliability": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "claim_type", "status", "source_refs", "resolved_source_ids", "risk_level", "section_id"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "claim_type": { "type": "string" },
+          "status": { "type": "string" },
+          "source_refs": { "type": "array", "items": { "type": "string" } },
+          "resolved_source_ids": { "type": "array", "items": { "type": "string" } },
+          "risk_level": { "type": "string" },
+          "section_id": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

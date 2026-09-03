@@ -6,6 +6,12 @@ This stage creates the transcript truth, speaker attribution, highlight set, and
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Preserve source timestamps and claim
+meaning when selecting excerpts; added factual framing requires its own
+approved source reference.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

@@ -1,0 +1,66 @@
+version: "1.0"
+id: ilearnzed-study-methods
+name: "iLearnZed Study Methods"
+category: study_methods
+description: "Practical study and examination technique video that demonstrates a method instead of making unsupported promises."
+
+audience:
+  primary: secondary_school_learners
+  secondary: [school_leavers]
+  need: "Study more deliberately, remember more, and approach examination preparation with a usable routine."
+  levels: ["Form 1", "Form 2", "Form 3", "Form 4", "Form 5", "Form 6"]
+
+promise:
+  viewer_outcome: "The learner can apply one demonstrated study or examination method immediately."
+  central_question_required: true
+  misconception_required: true
+  truthfulness_rule: "Do not use universal statistics or guarantee grades; demonstrate the method and state its limits."
+
+structure:
+  opening:
+    must_show: "A visible study mistake, before/after notes, recall test, or examination decision."
+    must_say: "Name the common approach that fails and the specific method being tested."
+    max_seconds: 20
+  beats:
+    - {id: problem, purpose: "Make the learner recognise the costly habit.", plot: A, visual_requirement: "Concrete study example, not a generic talking head.", viewer_question: "Why is my current approach weak?", required: true}
+    - {id: method, purpose: "Explain the method in a small number of steps.", plot: A, visual_requirement: "On-screen steps and live demonstration.", viewer_question: "What should I change?", required: true}
+    - {id: test, purpose: "Demonstrate the method against a real topic or question.", plot: both, visual_requirement: "Observable practice result without inflated claims.", viewer_question: "Does this help me practise?", required: true}
+    - {id: obstacles, purpose: "Handle a realistic learner constraint.", plot: B, visual_requirement: "Phone, timetable, noisy setting, or difficult topic example.", viewer_question: "How do I use it in real life?", required: true}
+    - {id: action_plan, purpose: "Give a small plan for the next study session.", plot: A, visual_requirement: "Checklist or schedule the learner can copy.", viewer_question: "What do I do today?", required: true}
+  ending:
+    payoff: "Restate the method as an actionable learner routine."
+    next_step: "Invite registration at https://ilearnzed.org and point to a verified subject course."
+    outro_limit_seconds: 8
+
+production:
+  default_pipeline: talking-head
+  formats: [long_form, lesson_clip]
+  compatible_playbooks: [ilearnzed-education, clean-professional]
+  required_artifacts: [brief, thumbnail_package, script, scene_plan, asset_manifest, final_review, publish_log]
+  source_modes: [teacher_camera, desk_demonstration, screen_or_notebook_capture]
+  duration_guidance: "Prefer one method demonstrated well over a list of shallow tips."
+
+thumbnail:
+  concepts: ["Study mistake versus better method", "Teacher plus visible recall test", "Three-step routine with learner benefit"]
+  on_image_word_target: "2-5 important words"
+  required_checks: [specific_method_visible, no_guaranteed_result, clear_learner_benefit, readable_at_mobile_size]
+
+shorts:
+  derivative_allowed: true
+  self_contained_required: true
+  mechanisms: [before_after, three_steps, timed_test, common_mistake]
+  first_frame_rule: "Show the study mistake, test, or improved result immediately."
+
+localization:
+  supported: true
+  languages: [bem, nya]
+  priority: "Localize difficult Mathematics study explanations and foundational numeracy first."
+  human_review_required: true
+
+consent:
+  teacher_consent_required: true
+  student_identifiable_consent_required: true
+  evidence_required_before_publish: true
+  scope: [youtube, shorts, social_media_repurposing, thumbnails, promotional_clips, ilearnzed_platform_use]
+
+quality_gates: [method_is_demonstrated, claims_are_evidence_safe, action_plan_is_feasible, no_empty_motivational_intro, consent_evidence_attached, ending_is_actionable]

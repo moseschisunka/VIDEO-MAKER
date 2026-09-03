@@ -1,0 +1,301 @@
+# OpenMontage Production Readiness Progress Tracker
+
+This is the only authoritative implementation status ledger for the production-readiness program.
+
+Do not mark a task complete because code exists. Link current test and review evidence. Do not erase historical blocker notes; append resolution evidence.
+
+## Program control
+
+| Field | Current value |
+|---|---|
+| Program status | `IN_PROGRESS` |
+| Current phase | Phase 10 — Packaging, performance, security, and operations |
+| Next task | `PR-10G` (blocked pending supported-environment and deployment evidence) |
+| Current task owner | OpenMontage execution agent |
+| Frozen release candidate | None |
+| Production decision | Not eligible |
+| Last tracker update | `PR-10G` audited; the latest offline release-blocker run is 1044 passed, all Phase 10 contract modules are 58 passed with one environment-level client warning, the HyperFrames unit contract suite is 46 passed after offline-operation and empty-report hardening, the full 1499-test repository regression suite passes with the Backlot lifecycle warning removed, the 13-composition local Remotion default sweep passes, and Python dependency audits report no known vulnerabilities; Docker/CI browser, Ubuntu-reference, rollback, external alert-delivery, and deployed-edge security proof remain blocked; `PR-1003` remains implemented pending CI proof |
+
+## Status rules
+
+Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`, `VERIFIED`, `COMPLETE`.
+
+- A task needs an evidence link before `VERIFIED`.
+- A task becomes `COMPLETE` only after its integration condition is satisfied.
+- A phase gate becomes `COMPLETE` only with a phase-gate report and human decision where required.
+- When a completed contract regresses, reopen the task and all dependent gates.
+
+## Phase 0 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-000` | Capture repository and environment baseline | None | `VERIFIED` | Codex | [`evidence/PR-000.md`](evidence/PR-000.md) |
+| `PR-001` | Establish registers and ownership | `PR-000` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-001.md`](evidence/PR-001.md) |
+| `PR-002` | Define first-launch pipeline scope | `PR-001` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-002.md`](evidence/PR-002.md) — Option A approved; launch lane is `screen-demo` + source-footage `talking-head` |
+| `PR-003` | Add honest non-production labelling | `PR-002` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-003.md`](evidence/PR-003.md) — catalog, API, persisted state, and UI are explicitly non-production |
+| `PR-004` | Create golden scenarios | `PR-001`, `PR-002` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-004.md`](evidence/PR-004.md) — eight strict scenario contracts pass |
+| `PR-005` | Record baseline quality/latency/reliability | `PR-000`, `PR-004` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-005.md`](evidence/PR-005.md) — baseline measurements and failure routing recorded |
+| `PR-006` | Add release-blocker CI semantics | `PR-001` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-006.md`](evidence/PR-006.md) — known provider-catalog blocker remains intentionally red |
+| `PR-0G` | Phase 0 gate | `PR-002`–`PR-006` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-0G.md`](evidence/PR-0G.md) — all Phase 0 exit conditions pass; known blockers remain mapped |
+
+## Phase 1 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-100` | Extend manifest release metadata schema | `PR-0G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-100.md`](evidence/PR-100.md) — strict release metadata fields and fail-closed defaults |
+| `PR-101` | Repair and validate all manifests | `PR-100` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-101.md`](evidence/PR-101.md) — all 13 manifests load; documentary category repaired |
+| `PR-102` | Build canonical pipeline catalog | `PR-101` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-102.md`](evidence/PR-102.md) — loader, CLI, API, and UI consume one filtered catalog |
+| `PR-103` | Validate create requests before mutation | `PR-102` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-103.md`](evidence/PR-103.md) — normalized pipeline/playbook/voice/profile/runtime/source validation; rejected requests leave no project |
+| `PR-104` | Define durable manifest work-order contract | `PR-101` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-104.md`](evidence/PR-104.md) — atomic manifest-derived work order with run, selections, stages, approvals, claim, resume, and blocker state |
+| `PR-105` | Quarantine hardcoded Studio/demo runner | `PR-102`, `PR-104` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-105.md`](evidence/PR-105.md) — ordinary `/run` cannot spawn the legacy runner; explicit internal fixture is separately marked |
+| `PR-106` | Add manifest-to-agent-contract validator | `PR-101` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-106.md`](evidence/PR-106.md) — structured skill/artifact/tool/checkpoint/review/release contract report; launch candidates valid, held lanes blocked honestly |
+| `PR-107` | Preserve pipeline identity across artifacts | `PR-104`, `PR-106` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-107.md`](evidence/PR-107.md) — read-only cross-artifact validator, fail-closed checkpoint merge, event enrichment, and runner propagation |
+| `PR-108` | Implement agent claim/advance/resume semantics | `PR-104`, `PR-107` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-108.md`](evidence/PR-108.md) — atomic leases, manifest-derived advance, gated approval, failed-stage resume, and API contracts pass |
+| `PR-109` | Certify one thin vertical pipeline path | `PR-103`, `PR-105`, `PR-108` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-109.md`](evidence/PR-109.md) — screen-demo agent artifact chain reaches current local FFmpeg output and publish without legacy runner |
+| `PR-1G` | Phase 1 gate | `PR-100`–`PR-109` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1G.md`](evidence/PR-1G.md) — Phase 1 exit conditions pass; full-suite provider-catalog drift remains mapped to Phase 3 |
+
+## Phase 2 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-200` | Fix Remotion undefined-variable failure | `PR-1G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-200.md`](evidence/PR-200.md) — baseline NameError reproduced, fixed, diagnostics pass, and real local Remotion smoke renders |
+| `PR-201` | Define run record and output provenance | `PR-1G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-201.md`](evidence/PR-201.md) — durable UUID-scoped run record, checkpoint/stage provenance, BaseTool result provenance, and artifact indexing pass |
+| `PR-202` | Make `/run` idempotent | `PR-201` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-202.md`](evidence/PR-202.md) — same/different-agent retries reuse one live run and never spawn duplicate work |
+| `PR-203` | Isolate per-run staging | `PR-201` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-203.md`](evidence/PR-203.md) — UUID-scoped work/inputs/props and HyperFrames/Remotion/FFmpeg isolation pass |
+| `PR-204` | Publish outputs atomically | `PR-200`, `PR-203` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-204.md`](evidence/PR-204.md) — ffprobe-validated run candidates atomically promote and invalid candidates preserve prior finals |
+| `PR-205` | Eliminate stale-success logic | `PR-201`, `PR-204` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-205.md`](evidence/PR-205.md) — current-run candidate hash/timestamp proof; stale final cannot rescue a failed renderer |
+| `PR-206` | Add cancellation/restart/resume | `PR-202`, `PR-205` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-206.md`](evidence/PR-206.md) — cancellation, dead-lease recovery, restart, and run-record lifecycle evidence |
+| `PR-207` | Probe actual media properties | `PR-204` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-207.md`](evidence/PR-207.md) — ffprobe facts and render-report mismatch rejection |
+| `PR-208` | Add concurrency/crash fault tests | `PR-202`–`PR-207` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-208.md`](evidence/PR-208.md) — concurrent promotion, same-final serialization, and partial-candidate crash evidence |
+| `PR-2G` | Phase 2 gate | `PR-200`–`PR-208` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-2G.md`](evidence/PR-2G.md) — 32 targeted contracts and full 45-test HyperFrames suite pass; production lock remains |
+
+## Phase 3 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-300` | Define provider request/result contracts | `PR-2G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-300.md`](evidence/PR-300.md) |
+| `PR-301` | Implement deterministic ProviderExecutor | `PR-300` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-301.md`](evidence/PR-301.md) |
+| `PR-302` | Add idempotency keys and result cache | `PR-301` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-302.md`](evidence/PR-302.md) |
+| `PR-303` | Enforce timeout/retry/backoff/jitter | `PR-301` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-303.md`](evidence/PR-303.md) |
+| `PR-304` | Add rate limits and circuit breaker | `PR-303` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-304.md`](evidence/PR-304.md) |
+| `PR-305` | Make fallback approval-aware | `PR-301`, `PR-304` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-305.md`](evidence/PR-305.md) |
+| `PR-306` | Return selector ranked dry-run plans | `PR-300`, `PR-305` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-306.md`](evidence/PR-306.md) |
+| `PR-307` | Split fast preflight from diagnostics | `PR-300` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-307.md`](evidence/PR-307.md) |
+| `PR-308` | Integrate cost reserve/reconcile | `PR-301`, `PR-302` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-308.md`](evidence/PR-308.md) |
+| `PR-309` | Migrate provider families incrementally | `PR-302`–`PR-308` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-309.md`](evidence/PR-309.md) |
+| `PR-310` | Add provider fault-injection suite | `PR-309` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-310.md`](evidence/PR-310.md) |
+| `PR-3G` | Phase 3 gate and contract freeze | `PR-300`–`PR-310` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-3G.md`](evidence/PR-3G.md) |
+
+## Phase 4 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-400` | Define source/claim-grounding contracts | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-400.md`](evidence/PR-400.md) |
+| `PR-401` | Implement grounding validator | `PR-400` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-401.md`](evidence/PR-401.md) |
+| `PR-402` | Remove hardcoded/generic subject filler | `PR-400` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-402.md`](evidence/PR-402.md) |
+| `PR-403` | Align research/script director skills | `PR-400`, `PR-401` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-403.md`](evidence/PR-403.md) |
+| `PR-404` | Establish canonical duration solver | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-404.md`](evidence/PR-404.md) |
+| `PR-405` | Enforce profile/aspect propagation | `PR-404` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-405.md`](evidence/PR-405.md) |
+| `PR-406` | Calibrate script length to voice rate | `PR-404` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-406.md`](evidence/PR-406.md) |
+| `PR-407` | Add format/timing regression suite | `PR-405`, `PR-406` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-407.md`](evidence/PR-407.md) |
+| `PR-408` | Add factual accuracy eval set | `PR-401`, `PR-403` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-408.md`](evidence/PR-408.md) |
+| `PR-4G` | Phase 4 gate | `PR-400`–`PR-408` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-4G.md`](evidence/PR-4G.md) |
+
+## Phase 5 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-500` | Normalize voice identity model | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-500.md`](evidence/PR-500.md) |
+| `PR-501` | Persist voice selection across artifacts | `PR-500` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-501.md`](evidence/PR-501.md) |
+| `PR-502` | Implement voice-sample approval gate | `PR-501` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-502.md`](evidence/PR-502.md) |
+| `PR-503` | Segment narration deterministically | `PR-501` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-503.md`](evidence/PR-503.md) |
+| `PR-504` | Cache/resume per narration segment | `PR-302`, `PR-503` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-504.md`](evidence/PR-504.md) |
+| `PR-505` | Assemble audio safely | `PR-503`, `PR-504` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-505.md`](evidence/PR-505.md) |
+| `PR-506` | Verify transcript/pronunciation | `PR-505` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-506.md`](evidence/PR-506.md) |
+| `PR-507` | Add voice provider/failure matrix | `PR-502`–`PR-506` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-507.md`](evidence/PR-507.md) |
+| `PR-5G` | Phase 5 gate | `PR-500`–`PR-507` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-5G.md`](evidence/PR-5G.md) |
+
+## Phase 6 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-600` | Define asset request/result contracts | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-600.md`](evidence/PR-600.md) |
+| `PR-601` | Harden user-media ingestion | `PR-600` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-601.md`](evidence/PR-601.md) |
+| `PR-602` | Harden stock downloads | `PR-600` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-602.md`](evidence/PR-602.md) |
+| `PR-603` | Normalize stock license/provenance | `PR-602` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-603.md`](evidence/PR-603.md) |
+| `PR-604` | Improve stock ranking/diversity | `PR-602`, `PR-603` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-604.md`](evidence/PR-604.md) |
+| `PR-605` | Route AI images through executor | `PR-600`, `PR-309` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-605.md`](evidence/PR-605.md) |
+| `PR-606` | Route AI video through executor | `PR-600`, `PR-309` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-606.md`](evidence/PR-606.md) |
+| `PR-607` | Integrate diagram/structured visuals | `PR-600` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-607.md`](evidence/PR-607.md) |
+| `PR-608` | Add contact-sheet/sample approval | `PR-601`–`PR-607` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-608.md`](evidence/PR-608.md) |
+| `PR-609` | Add asset cache/partial resume | `PR-302`, `PR-600`–`PR-607` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-609.md`](evidence/PR-609.md) |
+| `PR-610` | Add multi-source/corruption tests | `PR-601`–`PR-609` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-610.md`](evidence/PR-610.md) |
+| `PR-6G` | Phase 6 gate | `PR-600`–`PR-610` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-6G.md`](evidence/PR-6G.md) |
+
+## Phase 7 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-700` | Define edit-to-HyperFrames mapping | `PR-2G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-700.md`](evidence/PR-700.md) |
+| `PR-701` | Honor narration offsets/timing | `PR-700` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-701.md`](evidence/PR-701.md) |
+| `PR-702` | Implement fades/stems/ducking | `PR-700`, `PR-701` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-702.md`](evidence/PR-702.md) |
+| `PR-703` | Remove runtime CDN dependency | `PR-700` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-703.md`](evidence/PR-703.md) — offline HyperFrames 0.8.25 + vendored GSAP render passed |
+| `PR-704` | Enforce lint/validate/inspect/render | `PR-700` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-704.md`](evidence/PR-704.md) |
+| `PR-705` | Enforce keyframe/motion quality | `PR-704` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-705.md`](evidence/PR-705.md) |
+| `PR-706` | Apply resource-safe worker policy | `PR-704` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-706.md`](evidence/PR-706.md) |
+| `PR-707` | Isolate workspace/cleanup | `PR-203`, `PR-700` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-707.md`](evidence/PR-707.md) |
+| `PR-708` | Add offline/concurrency/timing tests | `PR-701`–`PR-707` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-708.md`](evidence/PR-708.md) |
+| `PR-709` | Run HyperFrames golden review | `PR-708` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-709.md`](evidence/PR-709.md) — sampled frames, audio probe, and standing-approval review passed |
+| `PR-7G` | Phase 7 gate | `PR-700`–`PR-709` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-7G.md`](evidence/PR-7G.md) |
+
+## Phase 8 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-800` | Enforce proposal-stage music decision | `PR-5G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-800.md`](evidence/PR-800.md) |
+| `PR-801` | Normalize music provenance | `PR-800` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-801.md`](evidence/PR-801.md) |
+| `PR-802` | Preserve separate audio stems | `PR-801` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-802.md`](evidence/PR-802.md) |
+| `PR-803` | Enforce loudness/peak/clipping/ducking | `PR-802` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-803.md`](evidence/PR-803.md) |
+| `PR-804` | Generate captions from verified transcript | `PR-506` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-804.md`](evidence/PR-804.md) |
+| `PR-805` | Certify caption rendering per runtime | `PR-804`, `PR-2G`, `PR-7G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-805.md`](evidence/PR-805.md) |
+| `PR-806` | Add audio/caption failure tests | `PR-803`–`PR-805` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-806.md`](evidence/PR-806.md) |
+| `PR-807` | Add accessibility/profile checks | `PR-805` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-807.md`](evidence/PR-807.md) |
+| `PR-8G` | Phase 8 gate | `PR-800`–`PR-807` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-8G.md`](evidence/PR-8G.md) |
+
+## Phase 9 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-900` | Define immutable approval record | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-900.md`](evidence/PR-900.md) |
+| `PR-901` | Make gated stages pause | `PR-900` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-901.md`](evidence/PR-901.md) |
+| `PR-902` | Implement approve/revise/reject transitions | `PR-901` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-902.md`](evidence/PR-902.md) |
+| `PR-903` | Persist/link final review | `PR-2G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-903.md`](evidence/PR-903.md) |
+| `PR-904` | Implement technical video QA | `PR-903` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-904.md`](evidence/PR-904.md) |
+| `PR-905` | Implement audio/content QA | `PR-5G`, `PR-903` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-905.md`](evidence/PR-905.md) |
+| `PR-906` | Add cross-artifact consistency validator | `PR-4G`, `PR-5G`, `PR-6G`, `PR-7G`, `PR-8G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-906.md`](evidence/PR-906.md) |
+| `PR-907` | Block completion on revise/fail | `PR-902`–`PR-906` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-907.md`](evidence/PR-907.md) |
+| `PR-908` | Add QA fault-injection corpus | `PR-904`–`PR-907` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-908.md`](evidence/PR-908.md) |
+| `PR-909` | Surface QA evidence in Backlot | `PR-902`, `PR-903`, `PR-908` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-909.md`](evidence/PR-909.md) |
+| `PR-9G` | Phase 9 gate | `PR-900`–`PR-909` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
+
+## Phase 10 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-1000` | Establish dependency truth | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1000.md`](evidence/PR-1000.md) — pyproject authority, requirements wrappers, clean disposable install, wheel metadata, and lock coherence |
+| `PR-1001` | Include non-Python package data | `PR-1000` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1001.md`](evidence/PR-1001.md) — wheel and installed-target checks cover manifests, skills, styles, schemas, templates, UI, config, and Remotion |
+| `PR-1002` | Add clean-install smoke test | `PR-1000`, `PR-1001` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1002.md`](evidence/PR-1002.md) — disposable install, manifest/registry/health checks, local FFmpeg render, and CI job |
+| `PR-1003` | Harden container/deployment build | `PR-1002` | `IMPLEMENTED` | OpenMontage execution agent | [`evidence/PR-1003.md`](evidence/PR-1003.md) — pinned non-root image, baked Remotion browser, hardened Compose/CI health-and-still job, local static contracts pass; Docker daemon unavailable locally so CI proof remains required |
+| `PR-1004` | Add auth/authorization/path controls | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1004.md`](evidence/PR-1004.md) — remote bearer auth, project scope, traversal, and symlink contracts pass |
+| `PR-1005` | Define secrets/privacy/retention/deletion | `PR-1004` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1005.md`](evidence/PR-1005.md) — policy/config contract and secret-redaction persistence tests pass; automated purge remains a later task |
+| `PR-1006` | Add logs/metrics/traces | `PR-3G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1006.md`](evidence/PR-1006.md) — correlated JSON events/logs, bounded metrics, and privacy-preserving reconstruction tests pass |
+| `PR-1007` | Define and measure SLOs | `PR-1006` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1007.md`](evidence/PR-1007.md) — versioned SLO contract, 11-sample offline measurements, create-validation cache fix; PR-1009 owns load/soak gates |
+| `PR-1008` | Add backup/restore/migrations | `PR-2G`, `PR-1006` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1008.md`](evidence/PR-1008.md) — integrity-checked backup/restore, secret/path safeguards, and audited state migration drill |
+| `PR-1009` | Add bounded load/soak tests | `PR-1003`, `PR-1006`, `PR-1007` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1009.md`](evidence/PR-1009.md) — four-run isolation, queue contention, fake-provider throttling, ten-run cleanup, bounded SSE soak, and dynamic Remotion worker policy |
+| `PR-1010` | Write operator/incident runbooks | `PR-1003`–`PR-1009` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1010.md`](evidence/PR-1010.md) — deploy, rollback, provider outage, stuck/corrupt job, restore, secret rotation, and incident procedures |
+| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1010` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — offline contracts, cached HyperFrames QA (including direct-operation offline contract hardening), fake operational drills, and alert-rule evaluation pass; Docker/clean-Remotion/Linux-reference, rollback, and external alert-delivery proof remain required |
+
+## Phase 11 tracker
+
+| ID | Task | Depends on | Status | Owner | Evidence/blocker |
+|---|---|---|---|---|---|
+| `PR-1100` | Freeze release candidate/inventory | `PR-4G`–`PR-10G` | `NOT_STARTED` | — | — |
+| `PR-1101` | Run full offline acceptance matrix | `PR-1100` | `NOT_STARTED` | — | — |
+| `PR-1102` | Run clean-environment certification | `PR-1100` | `NOT_STARTED` | — | — |
+| `PR-1103` | Run authorized live-provider smoke | `PR-1100`, explicit approval | `NOT_STARTED` | — | — |
+| `PR-1104` | Run human audiovisual review | `PR-1101`–`PR-1103` | `NOT_STARTED` | — | — |
+| `PR-1105` | Perform security/recovery/rollback drill | `PR-1100` | `NOT_STARTED` | — | — |
+| `PR-1106` | Launch internal canary | `PR-1104`, `PR-1105` | `NOT_STARTED` | — | — |
+| `PR-1107` | Expand limited canary | `PR-1106` observation pass | `NOT_STARTED` | — | — |
+| `PR-1108` | Conduct go/no-go review | `PR-1107` | `NOT_STARTED` | — | — |
+| `PR-1109` | Apply production label/release | `PR-1108` approval | `NOT_STARTED` | — | — |
+| `PR-1110` | Complete post-launch observation | `PR-1109` | `NOT_STARTED` | — | — |
+| `PR-11G` | Close readiness program | `PR-1110` | `NOT_STARTED` | — | — |
+
+## Confirmed finding register
+
+Severity meanings:
+
+- `P0`: can expose/corrupt user data, spend money incorrectly, cross-contaminate projects, bypass approval, or deliver a stale/wrong artifact as current.
+- `P1`: blocks a core advertised workflow or makes identity, factual accuracy, format, voice, runtime, or completion materially false.
+- `P2`: significant reliability, speed, diagnostics, packaging, or operational weakness without immediate P0 impact.
+- `P3`: non-blocking polish or maintainability improvement.
+
+| Finding | Severity | Phase | Remediation task(s) | Owner role | Regression/eval | Status | Evidence |
+|---|---:|---:|---|---|---|---|---|
+| Backlot launches one hardcoded runner for multiple advertised pipelines | P1 | 1 | `PR-104`–`PR-106` | Pipeline/backend | Pipeline contract tests | `RESOLVED at PR-105` | [`evidence/PR-105.md`](evidence/PR-105.md) |
+| Advertised manifests cannot follow the fixed generic stage list | P1 | 1 | `PR-101`, `PR-106`, `PR-108` | Pipeline/backend | Manifest compatibility tests | `RESOLVED at PR-106/PR-108` | [`evidence/PR-106.md`](evidence/PR-106.md), [`evidence/PR-108.md`](evidence/PR-108.md) |
+| Documentary manifest/schema mismatch | P1 | 1 | `PR-101` | Pipeline/backend | Manifest schema suite | `RESOLVED at PR-101` | [`evidence/PR-101.md`](evidence/PR-101.md) |
+| Pipeline/playbook/runtime/profile selections may be ignored | P1 | 1, 4 | `PR-103`, `PR-107` | Pipeline/frontend | Cross-artifact identity tests | `RESOLVED at PR-103/PR-107` | [`evidence/PR-103.md`](evidence/PR-103.md), [`evidence/PR-107.md`](evidence/PR-107.md) |
+| Normal Remotion path has an undefined-variable failure | P1 | 2 | `PR-200` | Media/render | Remotion regression fixture | `RESOLVED at PR-200` | [`evidence/PR-200.md`](evidence/PR-200.md) |
+| Shared staging can contaminate concurrent projects | P0 | 2 | `PR-203`, `PR-208` | Media/render | Concurrency fault suite | `RESOLVED at PR-203/PR-208` | [`evidence/PR-203.md`](evidence/PR-203.md), [`evidence/PR-208.md`](evidence/PR-208.md) |
+| Duplicate `/run` calls can launch duplicate work | P0 | 2 | `PR-202`, `PR-208` | Pipeline/backend | Same-project idempotency test | `RESOLVED at PR-202/PR-208` | [`evidence/PR-202.md`](evidence/PR-202.md), [`evidence/PR-208.md`](evidence/PR-208.md) |
+| Old output may be accepted after a failed current render | P0 | 2 | `PR-204`, `PR-205` | Media/render | Stale-output fault test | `RESOLVED at PR-204/PR-205` | [`evidence/PR-204.md`](evidence/PR-204.md), [`evidence/PR-205.md`](evidence/PR-205.md) |
+| Declared retry/fallback/idempotency policies are not centrally enforced | P1 | 3 | `PR-300`–`PR-310` | Provider/QA | Provider fault suite | `RESOLVED at PR-3G` | [`evidence/PR-3G.md`](evidence/PR-3G.md) |
+| Preflight may take roughly a minute or more | P2 | 3 | `PR-307` | Provider/operations | Cold/warm performance benchmark | `RESOLVED at PR-307` | [`evidence/PR-307.md`](evidence/PR-307.md) |
+| Generic or epidemiology filler can enter unrelated topics | P1 | 4 | `PR-400`–`PR-403` | Content/pipeline | Topic contamination tests | `RESOLVED at PR-4G` | [`evidence/PR-4G.md`](evidence/PR-4G.md) |
+| Declared short durations may be structurally impossible | P1 | 4 | `PR-404`–`PR-407` | Content/media | Duration golden matrix | `RESOLVED at PR-4G` | [`evidence/PR-4G.md`](evidence/PR-4G.md) |
+| UI voice identity can execute a different provider/default | P1 | 5 | `PR-500`, `PR-501` | Audio/provider | Voice identity contract test | `RESOLVED at PR-5G` | [`evidence/PR-5G.md`](evidence/PR-5G.md) |
+| TTS reruns serially and may assemble MP3 unsafely | P1 | 5 | `PR-503`–`PR-505` | Audio/render | Segment resume/audio decode tests | `RESOLVED at PR-5G` | [`evidence/PR-5G.md`](evidence/PR-5G.md) |
+| Stock, AI, user media, and diagrams are not one coherent Studio flow | P1 | 6 | `PR-600`–`PR-610` | Media/provider | Mixed-media golden test | `RESOLVED at PR-6G` | [`evidence/PR-6G.md`](evidence/PR-6G.md) |
+| Partial/invalid stock downloads can be trusted | P1 | 6 | `PR-602` | Media/provider | Interrupted/corrupt download tests | `RESOLVED at PR-6G` | [`evidence/PR-6G.md`](evidence/PR-6G.md) |
+| HyperFrames can ignore offsets/fades/ducking | P1 | 7 | `PR-700`–`PR-702` | Media/render | Canonical timing/audio parity tests | `RESOLVED at PR-7G (contract and real audio render verified)` | [`evidence/PR-7G.md`](evidence/PR-7G.md) |
+| HyperFrames has inspection/keyframe/worker/offline gaps | P1 | 7 | `PR-703`–`PR-709` | Media/operations | Offline and inspection fault suite | `RESOLVED at PR-7G (real runtime and concurrent render verified)` | [`evidence/PR-7G.md`](evidence/PR-7G.md) |
+| Studio path lacks a complete music/caption contract | P1 | 8 | `PR-800`–`PR-807` | Audio/frontend | Audio/caption matrix | `RESOLVED at PR-8G` | [`evidence/PR-8G.md`](evidence/PR-8G.md) |
+| Human gates can be auto-approved | P0 | 9 | `PR-900`, `PR-901` | Pipeline/frontend | Gate bypass tests | `RESOLVED at PR-9G` | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
+| Approve endpoint may not complete/resume the gated stage | P1 | 9 | `PR-902` | Pipeline/backend | Approval transition integration tests | `RESOLVED at PR-9G` | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
+| QA does not reliably inspect visual/audio correctness | P1 | 9 | `PR-903`–`PR-906`, `PR-908` | QA/media | Seeded defect corpus | `RESOLVED at PR-9G (automated/local evidence; human AV review remains Phase 11)` | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
+| `revise` may still be treated as success | P0 | 9 | `PR-907` | Pipeline/QA | Revise/fail block tests | `RESOLVED at PR-9G` | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
+| Render report may assume instead of probe media properties | P1 | 2, 9 | `PR-207` | Media/QA | Probe/report consistency test | `RESOLVED at PR-207` | [`evidence/PR-207.md`](evidence/PR-207.md) |
+| Mandatory dependencies/package data are incomplete | P1 | 10 | `PR-1000`–`PR-1002` | DevOps | Clean-install certification | `RESOLVED in implementation; supported CI proof pending` | [`evidence/PR-1000.md`](evidence/PR-1000.md), [`evidence/PR-1001.md`](evidence/PR-1001.md), [`evidence/PR-1002.md`](evidence/PR-1002.md), [`evidence/PR-10G.md`](evidence/PR-10G.md) |
+| Production SLO, recovery, and canary evidence is missing | P1 | 10, 11 | `PR-1007`–`PR-1110` | Operations/release | Operational and release gates | `OPEN` | — |
+
+## Human decisions register
+
+Append decisions; never rewrite history.
+
+| Decision ID | Date | Subject | Options | Decision | Approver | Consequence/evidence |
+|---|---|---|---|---|---|---|
+| — | — | First-launch pipeline scope | Pending Phase 0 inventory | Pending | — | — |
+| `PR-002-SCOPE-2026-09-02` | 2026-09-02 | First-launch pipeline scope | A: `screen-demo` + source-footage `talking-head` (recommended); B: add source-footage `cinematic`/`clip-factory`/`podcast-repurpose`; C: broad launch after all certification | **Approved: A — reliability-first** | Project release owner (standing approval in this chat) | [`evidence/PR-002.md`](evidence/PR-002.md); classification is not pipeline certification |
+| — | — | Supported production environments | Pending Phase 10 design | Pending | — | — |
+| — | — | Canary size and observation window | Pending Phase 11 | Pending | — | — |
+
+## Blocker log
+
+| Date | Task | Blocker | Classification | Required decision/change | Owner | Status |
+|---|---|---|---|---|---|---|
+| 2026-09-02 | `PR-101` | `documentary-montage` manifest used schema-rejected category `documentary` | Contract/schema | Normalize category or explicitly exclude the pipeline; add regression test | Pipeline/backend | Resolved — [`evidence/PR-101.md`](evidence/PR-101.md) |
+| 2026-09-02 | `PR-200` | Remotion diagnostics tests failed with undefined `edit_decisions` at `video_compose.py:1900` | Code defect | Add failing regression fix and render-path verification | Media/render | Resolved — [`evidence/PR-200.md`](evidence/PR-200.md) |
+| 2026-09-02 | `PR-300`/`PR-306` | Registry catalog test expects stale TTS provider set; registry exposes `azure`, `edge_tts`, and `fish_audio` | Contract drift | Make catalog contract dynamic/authoritative and retain provider coverage | Provider/QA | Resolved — [`evidence/PR-306.md`](evidence/PR-306.md) |
+| 2026-09-02 | `PR-307` | Capability preflight is 104.35s cold and 29.20s warm | Performance | Split cached summary from deep/live probes and measure p95 | Provider/operations | Resolved — [`evidence/PR-307.md`](evidence/PR-307.md) |
+| 2026-09-02 | `PR-703` | Historical HyperFrames npm package probe timed out; runtime was unavailable at that moment | Environment/provider | Install or explicitly exclude HyperFrames from launch scope; no silent runtime swap | Media/operations | Superseded by cached offline certification — [`evidence/PR-703.md`](evidence/PR-703.md) |
+| 2026-09-02 | `PR-703` | Historical npm probe superseded by cached HyperFrames 0.8.25 and vendored GSAP 3.15.0; offline strict render passed | Environment/provider | Retain the pinned package/cache and rerun the offline gate on clean setup | Media/operations | Resolved — [`evidence/PR-703.md`](evidence/PR-703.md) |
+| 2026-09-02 | `PR-1000` | `.venv` is POSIX layout on Windows; FFmpeg/ffprobe versions differ; npm reports five extraneous packages | Packaging/environment | Define supported environment and clean-install contract | DevOps | Open |
+| 2026-09-02 | `PR-1009`/`PERF-06` | Pre-tuning Windows diagnostic measured local FFmpeg p95 at 2.0875× output duration against the 2.0× target | Performance/environment | Repeat on the documented Linux reference runner; investigate encoder/preset tuning if the reference gate also fails | Media/operations | Superseded locally by bounded `fast` preset rerun; Linux reference still required |
+| 2026-09-02 | `PR-10G`/`PERF-06` | Bounded `fast` FFmpeg compose default reduced the current Windows diagnostic p95 to 1.005× with all seven SLO measurements passing | Performance | Attach and review the Ubuntu reference run; retain explicit preset overrides for quality/size trade-offs | Media/operations | Resolved locally — Linux reference pending |
+| 2026-09-02 | `PR-10G`/`SEC-06` | Same-origin/bearer-only web policy is explicit, but trusted-edge CORS/CSRF/rate-limit enforcement has not been exercised on a supported deployment | Security/operations | Execute the reverse-proxy boundary test and retain a redacted `429`/CORS evidence artifact | DevOps/security | Open |
+| 2026-09-02 | `PR-10G`/`OBS-02` | Runtime metrics are bounded and reset on restart; external aggregation/scrape proof and durable SLO denominators are not attached | Observability | Connect the approved monitoring sink and retain a redacted scrape/alert evidence artifact | Operations | Open |
+| 2026-09-02 | `PR-10G`/`Remotion default previews` | `ProductReveal` referenced an absent image; three video-led defaults passed empty sources to `staticFile("")`; Signal fixture referenced unshipped demo media | Code defect | Use explicit assetless preview props/branches; retain strict failure for declared missing assets and run the container smoke | Media/render | Resolved locally — [`evidence/PR-10G-remotion-defaults.md`](evidence/PR-10G-remotion-defaults.md); supported container proof pending |
+| 2026-09-02 | `PR-000` | Full suite emitted FastAPI `on_event` and Starlette/httpx deprecation warnings | Maintenance | Replace deprecated server lifecycle; track the remaining test-client compatibility warning | Backend/operations | Resolved in server; one Starlette/httpx environment warning remains |
+| 2026-09-02 | Full repository regression | End-to-end QA fixture attempted to complete manifest-gated stages with only the deprecated `human_approved` boolean, aborting test collection | Test/governance contract | Route gated fixture stages through pending checkpoint plus immutable approval record | QA/pipeline | Resolved — `evidence/PR-10G.md`; full suite **1499 passed** and executable fixture **38/38** |
+| 2026-09-02 | `PR-002` | First-launch lane was a material release decision; inventory recommended option A before approval was recorded | Release governance | Approve option A, B, or a documented alternative; then continue `PR-003`/`PR-004` | Project release owner | Resolved — Option A recorded in [`evidence/PR-002.md`](evidence/PR-002.md) |
+| 2026-09-02 | `PR-002` | Scope decision resolved: Option A approved; held lanes remain subject to their phase gates | Release governance | Use the approved launch boundary; retain all held workflows for later certification | Project release owner | Resolved — [`evidence/PR-002.md`](evidence/PR-002.md) |
+| 2026-09-03 | `PR-10G`/HyperFrames | Direct CLI-backed operations did not consistently honor the public `offline` flag; empty lint JSON reports could raise `TypeError` while counting findings | Code defect / reliability | Apply offline mode at the operation boundary and normalize absent finding arrays to `[]`; retain focused regression evidence | Media/operations | Resolved locally — [`evidence/PR-10G-hyperframes-offline-qa.md`](evidence/PR-10G-hyperframes-offline-qa.md) and `tests/tools/test_hyperframes_compose.py` (**46 passed**); supported CI/RC proof remains pending |
+
+## Phase gate summary
+
+| Gate | Status | Evidence | Human decision |
+|---|---|---|---|
+| Phase 0 | `COMPLETE` | [`evidence/PR-0G.md`](evidence/PR-0G.md) | Option A approved; production remains locked until `PR-11G` |
+| Phase 1 | `COMPLETE` | [`evidence/PR-1G.md`](evidence/PR-1G.md) | — |
+| Phase 2 | `COMPLETE` | [`evidence/PR-2G.md`](evidence/PR-2G.md) | — |
+| Phase 3 | `COMPLETE` | [`evidence/PR-3G.md`](evidence/PR-3G.md) | — |
+| Phase 4 | `COMPLETE` | [`evidence/PR-4G.md`](evidence/PR-4G.md) | — |
+| Phase 5 | `COMPLETE` | [`evidence/PR-5G.md`](evidence/PR-5G.md) | — |
+| Phase 6 | `COMPLETE` | [`evidence/PR-6G.md`](evidence/PR-6G.md) | — |
+| Phase 7 | `COMPLETE` | [`evidence/PR-7G.md`](evidence/PR-7G.md) | — |
+| Phase 8 | `COMPLETE` | [`evidence/PR-8G.md`](evidence/PR-8G.md) | — |
+| Phase 9 | `COMPLETE` | [`evidence/PR-9G.md`](evidence/PR-9G.md) | Automated/local gate passed; human AV review remains Phase 11 |
+| Phase 10 | `IN_PROGRESS` | — | Dependency and deployment readiness work started |
+| Phase 11 | `NOT_STARTED` | — | — |

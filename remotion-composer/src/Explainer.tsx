@@ -10,7 +10,8 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { loadFont } from "@remotion/google-fonts/SpaceGrotesk";
+// Use a local/system fallback chain so rendering does not require network access.
+const fontFamily = "Space Grotesk, Inter, Arial, sans-serif";
 
 // Resolve asset path — handle URLs, absolute paths (Windows/Unix), and public/ relative paths
 function resolveAsset(src: string): string {
@@ -43,7 +44,8 @@ import { LineChart } from "./components/charts/LineChart";
 import { PieChart } from "./components/charts/PieChart";
 import { KPIGrid } from "./components/charts/KPIGrid";
 import { ProgressBar } from "./components/ProgressBar";
-import { CaptionOverlay, WordCaption } from "./components/CaptionOverlay";
+import { CaptionOverlay, CaptionRenderContract, WordCaption } from "./components/CaptionOverlay";
+import { TeacherSlide, TeacherSlideData } from "./components/TeacherSlide";
 import { SectionTitle } from "./components/SectionTitle";
 import { StatReveal } from "./components/StatReveal";
 import { HeroTitle } from "./components/HeroTitle";
@@ -56,12 +58,6 @@ import type { ScreenshotStep } from "./components/ScreenshotScene";
 import { ProviderChip } from "./components/ProviderChip";
 import type { ParticleType } from "./components/ParticleOverlay";
 import { resolveTheme, type ThemeConfig, DEFAULT_THEME } from "./Root";
-
-// Load Space Grotesk font for cinematic typography
-const { fontFamily } = loadFont("normal", {
-  weights: ["400", "700"],
-  subsets: ["latin"],
-});
 
 // ---------------------------------------------------------------------------
 // Animated Background — Gradient Mesh + Floating Orbs
@@ -204,6 +200,9 @@ interface Cut {
   out_seconds: number;
   layer?: string;
   type?: string;
+  teacher_slide?: TeacherSlideData;
+  surfaceColor?: string;
+  mutedColor?: string;
   // Component-specific props
   text?: string;
   stat?: string;
@@ -254,6 +253,7 @@ interface Cut {
   animation?: string;
   transition_in?: string;
   transition_out?: string;
+  transition_duration?: number;
   transform?: {
     animation?: string;
     scale?: number;
@@ -292,9 +292,22 @@ interface Overlay {
   label?: string;
 }
 
-interface AudioLayer {
-  src: string;
+interface NarrationSegment {
+  src?: string;
+  asset_id?: string;
+  start_seconds?: number;
+  end_seconds?: number;
+  startSeconds?: number;
+  endSeconds?: number;
+  offset_seconds?: number;
+  offsetSeconds?: number;
   volume?: number;
+}
+
+interface AudioLayer {
+  src?: string;
+  volume?: number;
+  segments?: NarrationSegment[];
 }
 
 interface AudioConfig {
@@ -315,6 +328,7 @@ export interface ExplainerProps {
   cuts: Cut[];
   overlays?: Overlay[];
   captions?: WordCaption[];
+  captionContract?: CaptionRenderContract;
   audio?: AudioConfig;
 }
 
@@ -322,7 +336,7 @@ export interface ExplainerProps {
 // Image Extensions
 // ---------------------------------------------------------------------------
 
-const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"];
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp", ".svg"];
 const VIDEO_EXTENSIONS = [".mp4", ".mov", ".webm", ".avi", ".mkv"];
 
 function isImage(source: string): boolean {
@@ -353,19 +367,25 @@ const Vignette: React.FC = () => (
 // Enhanced Image Scene — spring physics, parallax, variety
 // ---------------------------------------------------------------------------
 
-const ImageScene: React.FC<{ src: string; animation?: string }> = ({
+const ImageScene: React.FC<{
+  src: string;
+  animation?: string;
+  sceneDurationInFrames?: number;
+}> = ({
   src,
   animation,
+  sceneDurationInFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+  const sceneFrames = sceneDurationInFrames ?? durationInFrames;
 
   // Smooth spring fade-in
   const fadeIn = spring({ frame, fps, config: { damping: 18, stiffness: 80 } });
 
   // Fade-out for crossfade effect
-  const fadeOutStart = durationInFrames - 8;
-  const fadeOut = interpolate(frame, [fadeOutStart, durationInFrames], [1, 0.3], {
+  const fadeOutStart = Math.max(0, sceneFrames - 8);
+  const fadeOut = interpolate(frame, [fadeOutStart, sceneFrames], [1, 0.3], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -376,7 +396,7 @@ const ImageScene: React.FC<{ src: string; animation?: string }> = ({
   const anim = animation || "zoom-in";
 
   // Progress with easing — smoother than linear
-  const progress = interpolate(frame, [0, durationInFrames], [0, 1], {
+  const progress = interpolate(frame, [0, sceneFrames], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -400,6 +420,12 @@ const ImageScene: React.FC<{ src: string; animation?: string }> = ({
     // Subtle parallax — foreground moves faster
     translateY = interpolate(progress, [0, 1], [15, -15]);
     scale = 1.1;
+  } else if (anim === "float") {
+    // Keep a still image alive without making the teaching content move too
+    // aggressively. The sine wave is deterministic for render reproducibility.
+    translateY = Math.sin(progress * Math.PI * 2) * 8;
+  } else if (anim === "pulse") {
+    scale = 1 + Math.sin(progress * Math.PI * 2) * 0.025;
   }
   // "static" or "none" → just display
 
@@ -413,6 +439,9 @@ const ImageScene: React.FC<{ src: string; animation?: string }> = ({
           objectFit: "cover",
           opacity: fadeIn * fadeOut,
           transform: `scale(${scale}) translate(${translateX}px, ${translateY}px)`,
+          clipPath: anim === "draw-on"
+            ? `inset(0 ${Math.max(0, (1 - progress) * 100)}% 0 0)`
+            : undefined,
           willChange: "transform, opacity",
         }}
       />
@@ -425,16 +454,22 @@ const ImageScene: React.FC<{ src: string; animation?: string }> = ({
 // Enhanced Video Scene
 // ---------------------------------------------------------------------------
 
-const VideoScene: React.FC<{ src: string; startFrom?: number }> = ({
+const VideoScene: React.FC<{
+  src: string;
+  startFrom?: number;
+  sceneDurationInFrames?: number;
+}> = ({
   src,
   startFrom = 0,
+  sceneDurationInFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+  const sceneFrames = sceneDurationInFrames ?? durationInFrames;
 
   const fadeIn = spring({ frame, fps, config: { damping: 20 } });
-  const fadeOutStart = durationInFrames - 8;
-  const fadeOut = interpolate(frame, [fadeOutStart, durationInFrames], [1, 0.3], {
+  const fadeOutStart = Math.max(0, sceneFrames - 8);
+  const fadeOut = interpolate(frame, [fadeOutStart, sceneFrames], [1, 0.3], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -465,13 +500,15 @@ const VideoScene: React.FC<{ src: string; startFrom?: number }> = ({
 const BackgroundImageLayer: React.FC<{
   src: string;
   overlayOpacity?: number;
+  sceneDurationInFrames?: number;
   children: React.ReactNode;
-}> = ({ src, overlayOpacity = 0.55, children }) => {
+}> = ({ src, overlayOpacity = 0.55, sceneDurationInFrames, children }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+  const sceneFrames = sceneDurationInFrames ?? durationInFrames;
 
   // Subtle ken-burns on the background
-  const progress = interpolate(frame, [0, durationInFrames], [0, 1], {
+  const progress = interpolate(frame, [0, sceneFrames], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -536,7 +573,11 @@ const BackgroundVideoLayer: React.FC<{
   );
 };
 
-const SceneRenderer: React.FC<{ cut: Cut; theme: ThemeConfig }> = ({ cut, theme }) => {
+const SceneRenderer: React.FC<{
+  cut: Cut;
+  theme: ThemeConfig;
+  sceneDurationInFrames?: number;
+}> = ({ cut, theme, sceneDurationInFrames }) => {
   // Wrap component with background video or image if specified
   const maybeWrapWithBg = (element: React.ReactElement) => {
     if (cut.backgroundVideo) {
@@ -555,6 +596,7 @@ const SceneRenderer: React.FC<{ cut: Cut; theme: ThemeConfig }> = ({ cut, theme 
         <BackgroundImageLayer
           src={cut.backgroundImage}
           overlayOpacity={cut.backgroundOverlay ?? 0.55}
+          sceneDurationInFrames={sceneDurationInFrames}
         >
           {element}
         </BackgroundImageLayer>
@@ -694,6 +736,23 @@ const SceneRenderer: React.FC<{ cut: Cut; theme: ThemeConfig }> = ({ cut, theme 
     );
   }
 
+  // Purpose-built slide renderer for teacher-led lessons. The source SVG is
+  // retained in the asset manifest for fallback/export, but this path gives
+  // Remotion access to individual text and diagram primitives so they can
+  // reveal and highlight in sync with the explanation.
+  if (cut.type === "teacher_slide" && cut.teacher_slide) {
+    return (
+      <TeacherSlide
+        slide={cut.teacher_slide}
+        backgroundColor={bgColor || theme.backgroundColor}
+        surfaceColor={cut.surfaceColor || theme.surfaceColor}
+        accentColor={accent}
+        textColor={textColor}
+        mutedColor={cut.mutedColor || theme.mutedTextColor}
+      />
+    );
+  }
+
   // --- Anime scene (multi-image crossfade + particles) ---
   if (cut.type === "anime_scene" && cut.images && cut.images.length > 0) {
     return (
@@ -717,16 +776,34 @@ const SceneRenderer: React.FC<{ cut: Cut; theme: ThemeConfig }> = ({ cut, theme 
   const animation = cut.animation || cut.transform?.animation;
 
   if (cut.source && isImage(cut.source)) {
-    return maybeWrapWithBg(<ImageScene src={cut.source} animation={animation} />);
+    return maybeWrapWithBg(
+      <ImageScene
+        src={cut.source}
+        animation={animation}
+        sceneDurationInFrames={sceneDurationInFrames}
+      />
+    );
   }
 
   if (cut.source && isVideo(cut.source)) {
-    return maybeWrapWithBg(<VideoScene src={cut.source} startFrom={cut.source_in_seconds ?? 0} />);
+    return maybeWrapWithBg(
+      <VideoScene
+        src={cut.source}
+        startFrom={cut.source_in_seconds ?? 0}
+        sceneDurationInFrames={sceneDurationInFrames}
+      />
+    );
   }
 
   // Final fallback — try as image if source exists, otherwise show text_card
   if (cut.source) {
-    return maybeWrapWithBg(<ImageScene src={cut.source} animation={animation} />);
+    return maybeWrapWithBg(
+      <ImageScene
+        src={cut.source}
+        animation={animation}
+        sceneDurationInFrames={sceneDurationInFrames}
+      />
+    );
   }
 
   // No source, no type — render as text card with cut id as fallback
@@ -734,11 +811,128 @@ const SceneRenderer: React.FC<{ cut: Cut; theme: ThemeConfig }> = ({ cut, theme 
 };
 
 // ---------------------------------------------------------------------------
+// Beat motion and deterministic transitions
+// ---------------------------------------------------------------------------
+
+function transitionName(value?: string): string {
+  return (value || "fade").trim().toLowerCase().replace(/[_\s]+/g, "-");
+}
+
+const BeatFrame: React.FC<{
+  cut: Cut;
+  theme: ThemeConfig;
+  durationInFrames: number;
+}> = ({ cut, theme, durationInFrames }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const durationSeconds = durationInFrames / fps;
+  const transitionSeconds = Math.min(
+    Math.max(cut.transition_duration ?? theme.transitionDuration ?? 0.35, 0),
+    durationSeconds / 2,
+  );
+  const transitionFrames = Math.max(1, Math.round(transitionSeconds * fps));
+  const enterProgress = interpolate(frame, [0, transitionFrames], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const exitProgress = interpolate(
+    frame,
+    [Math.max(0, durationInFrames - transitionFrames), durationInFrames],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  const enter = transitionName(cut.transition_in || (cut.in_seconds > 0 ? "fade" : "cut"));
+  const exit = transitionName(cut.transition_out || "fade");
+  let opacity = 1;
+  let clipPath: string | undefined;
+  const transforms: string[] = [];
+
+  const applyTransition = (kind: string, progress: number, entering: boolean) => {
+    if (kind === "cut" || kind === "none" || kind === "static") return;
+    if (kind === "fade" || kind === "dissolve" || kind === "crossfade") {
+      // Crossfade is authored with overlapping visual sequences below. A
+      // full linear fade keeps the outgoing and incoming slides balanced at
+      // the boundary instead of flashing the animated background through.
+      opacity *= entering ? progress : 1 - progress;
+      return;
+    }
+    if (kind === "slide-left") {
+      transforms.push(`translateX(${(entering ? 1 - progress : -progress) * 12}%)`);
+      opacity *= entering ? 1 : 1 - progress;
+      return;
+    }
+    if (kind === "slide-right") {
+      transforms.push(`translateX(${(entering ? progress - 1 : progress) * 12}%)`);
+      opacity *= entering ? 1 : 1 - progress;
+      return;
+    }
+    if (kind === "zoom") {
+      transforms.push(`scale(${entering ? 0.92 + progress * 0.08 : 1 + progress * 0.04})`);
+      opacity *= entering ? progress : 1 - progress * 0.2;
+      return;
+    }
+    if (kind === "wipe" || kind === "wipe-left") {
+      clipPath = entering
+        ? `inset(0 ${Math.max(0, (1 - progress) * 100)}% 0 0)`
+        : `inset(0 0 0 ${Math.min(100, progress * 100)}%)`;
+    }
+  };
+
+  applyTransition(enter, enterProgress, true);
+  applyTransition(exit, exitProgress, false);
+
+  // Component scenes do not all have a camera-motion prop. Give them a
+  // restrained, deterministic micro-motion so a diagram or text card remains
+  // alive while narration explains it. Image/video scenes own their richer
+  // camera motion internally and are not double-animated here.
+  const hasMediaSource = Boolean(cut.source && (isImage(cut.source) || isVideo(cut.source)));
+  if (!hasMediaSource) {
+    const motion = cut.animation || cut.transform?.animation || "micro-drift";
+    const progress = interpolate(frame, [0, durationInFrames], [0, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+    if (motion === "micro-drift" || motion === "float") {
+      transforms.push(`translateY(${Math.sin(progress * Math.PI) * 5}px)`);
+    } else if (motion === "zoom-in") {
+      transforms.push(`scale(${1 + progress * 0.04})`);
+    } else if (motion === "zoom-out") {
+      transforms.push(`scale(${1.04 - progress * 0.04})`);
+    } else if (motion === "pulse") {
+      transforms.push(`scale(${1 + Math.sin(progress * Math.PI * 2) * 0.018})`);
+    } else if (motion === "draw-on") {
+      clipPath = `inset(0 ${Math.max(0, (1 - progress) * 100)}% 0 0)`;
+    }
+  }
+
+  const baseScale = cut.transform?.scale && cut.transform.scale !== 1
+    ? `scale(${cut.transform.scale})`
+    : undefined;
+  if (baseScale) transforms.push(baseScale);
+
+  return (
+    <AbsoluteFill
+      style={{
+        opacity,
+        clipPath,
+        overflow: "hidden",
+        transform: transforms.length > 0 ? transforms.join(" ") : undefined,
+        transformOrigin: "center center",
+        willChange: "transform, opacity, clip-path",
+      }}
+    >
+      <SceneRenderer cut={cut} theme={theme} sceneDurationInFrames={durationInFrames} />
+    </AbsoluteFill>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Overlay renderer
 // ---------------------------------------------------------------------------
 
 const OverlayRenderer: React.FC<{ overlay: Overlay }> = ({ overlay }) => {
-  if (overlay.type === "section_title") {
+  if (overlay.type === "section_title" && overlay.text) {
     return (
       <SectionTitle
         title={overlay.text}
@@ -748,7 +942,7 @@ const OverlayRenderer: React.FC<{ overlay: Overlay }> = ({ overlay }) => {
       />
     );
   }
-  if (overlay.type === "stat_reveal") {
+  if (overlay.type === "stat_reveal" && overlay.text) {
     return (
       <StatReveal
         stat={overlay.text}
@@ -758,7 +952,7 @@ const OverlayRenderer: React.FC<{ overlay: Overlay }> = ({ overlay }) => {
       />
     );
   }
-  if (overlay.type === "hero_title") {
+  if (overlay.type === "hero_title" && overlay.text) {
     return <HeroTitle title={overlay.text} subtitle={overlay.subtitle} />;
   }
   if (overlay.type === "provider_chip" && overlay.providers) {
@@ -780,25 +974,37 @@ const OverlayRenderer: React.FC<{ overlay: Overlay }> = ({ overlay }) => {
 // ---------------------------------------------------------------------------
 
 export const Explainer: React.FC<ExplainerProps> = (props) => {
-  const { cuts, overlays, captions, audio } = props;
+  const { cuts, overlays, captions, captionContract, audio } = props;
   const { fps, durationInFrames } = useVideoConfig();
 
   // Resolve theme from props — playbook name, theme name, or custom themeConfig
   const theme = resolveTheme(props as Record<string, unknown>);
 
   return (
-    <AbsoluteFill style={{ background: theme.backgroundColor, fontFamily: theme.headingFont || fontFamily }}>
+      <AbsoluteFill style={{ background: theme.backgroundColor, fontFamily: theme.headingFont || fontFamily }}>
       {/* Layer 0: Animated gradient background — driven by theme */}
       <AnimatedBackground theme={theme} />
 
       {/* Layer 1: Visual scenes */}
-      {cuts.map((cut) => {
-        const from = Math.round(cut.in_seconds * fps);
-        const duration = Math.round((cut.out_seconds - cut.in_seconds) * fps);
+      {cuts.map((cut, index) => {
+        const baseFrom = Math.round(cut.in_seconds * fps);
+        const baseTo = Math.round(cut.out_seconds * fps);
+        const baseDuration = Math.max(1, baseTo - baseFrom);
+        const transitionFrames = Math.max(
+          1,
+          Math.round(Math.min(cut.transition_duration ?? theme.transitionDuration ?? 0.6, baseDuration / fps / 2) * fps),
+        );
+        // Keep each adjacent slide alive for half the transition window on
+        // either side of the authored boundary. This creates a real visual
+        // crossfade: the next slide enters while the previous slide exits.
+        const halfTransition = index === 0 ? 0 : Math.floor(transitionFrames / 2);
+        const from = Math.max(0, baseFrom - halfTransition);
+        const after = index === cuts.length - 1 ? 0 : Math.ceil(transitionFrames / 2);
+        const duration = Math.max(1, baseDuration + halfTransition + after);
 
         return (
           <Sequence key={cut.id} from={from} durationInFrames={duration}>
-            <SceneRenderer cut={cut} theme={theme} />
+            <BeatFrame cut={cut} theme={theme} durationInFrames={duration} />
           </Sequence>
         );
       })}
@@ -825,13 +1031,37 @@ export const Explainer: React.FC<ExplainerProps> = (props) => {
           fontSize={42}
           highlightColor={theme.captionHighlightColor}
           backgroundColor={theme.captionBackgroundColor}
+          captionContract={captionContract}
         />
       )}
 
-      {/* Layer 4: Audio — narration */}
-      {audio?.narration?.src && (
-        <Audio src={resolveAsset(audio.narration.src)} volume={audio.narration.volume ?? 1} />
-      )}
+      {/* Layer 4: Audio — narration. Segments are optional but, when present,
+          they keep voiceover boundaries explicit and frame-addressable. */}
+      {audio?.narration?.segments && audio.narration.segments.length > 0
+        ? audio.narration.segments.map((segment, index) => {
+            const startSeconds = segment.startSeconds ?? segment.start_seconds ?? 0;
+            const endSeconds = segment.endSeconds ?? segment.end_seconds;
+            const from = Math.max(0, Math.round(startSeconds * fps));
+            const duration = Math.max(
+              1,
+              Math.round(((endSeconds ?? durationInFrames / fps) - startSeconds) * fps),
+            );
+            const source = segment.src || audio.narration?.src;
+            if (!source) return null;
+            const offsetSeconds = segment.offsetSeconds ?? segment.offset_seconds ?? 0;
+            return (
+              <Sequence key={`narration-${index}`} from={from} durationInFrames={duration}>
+                <Audio
+                  src={resolveAsset(source)}
+                  startFrom={Math.max(0, Math.round(offsetSeconds * fps))}
+                  volume={segment.volume ?? audio.narration?.volume ?? 1}
+                />
+              </Sequence>
+            );
+          })
+        : audio?.narration?.src && (
+            <Audio src={resolveAsset(audio.narration.src)} volume={audio.narration.volume ?? 1} />
+          )}
 
       {/* Layer 4: Audio — music with offset, fade in/out, and optional loop */}
       {audio?.music?.src && (

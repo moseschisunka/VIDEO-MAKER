@@ -6,7 +6,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { CaptionOverlay, WordCaption } from "./components/CaptionOverlay";
+import { CaptionOverlay, CaptionRenderContract, WordCaption } from "./components/CaptionOverlay";
 import { resolveAsset } from "./lib/resolveAsset";
 import { TextCard } from "./components/TextCard";
 import { StatCard } from "./components/StatCard";
@@ -303,6 +303,7 @@ export interface TalkingHeadProps {
   wordsPerPage?: number;
   fontSize?: number;
   highlightColor?: string;
+  captionContract?: CaptionRenderContract;
 }
 
 export const TalkingHead: React.FC<TalkingHeadProps> = ({
@@ -312,16 +313,21 @@ export const TalkingHead: React.FC<TalkingHeadProps> = ({
   wordsPerPage = 4,
   fontSize = 52,
   highlightColor = "#22D3EE",
+  captionContract,
 }) => {
   const { fps } = useVideoConfig();
+  const hasVideo = Boolean(videoSrc?.trim());
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
-      {/* Layer 1: Video background */}
-      <OffthreadVideo
-        src={resolveAsset(videoSrc)}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-      />
+      {/* Layer 1: Video background. An empty source is an intentional
+          assetless preview; a declared source remains strict. */}
+      {hasVideo ? (
+        <OffthreadVideo
+          src={resolveAsset(videoSrc)}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : null}
 
       {/* Layer 2: Overlays (charts, stats, callouts, etc.) */}
       {overlays?.map((overlay, i) => {
@@ -348,6 +354,7 @@ export const TalkingHead: React.FC<TalkingHeadProps> = ({
         highlightColor={highlightColor}
         backgroundColor="rgba(0, 0, 0, 0.65)"
         color="#FFFFFF"
+        captionContract={captionContract}
       />
     </AbsoluteFill>
   );

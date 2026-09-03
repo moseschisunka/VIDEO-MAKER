@@ -59,6 +59,13 @@ class ClipRecord:
     query: str = ""                    # the search query that surfaced this clip
     creator: str = ""
     license: str = ""
+    license_url: str = ""
+    attribution_required: bool = False
+    restrictions: list[str] = field(default_factory=list)
+    sha256: str = ""
+    mime_type: str = ""
+    retrieved_at: str = ""
+    validation: dict[str, Any] = field(default_factory=dict)
     duration: float = 0.0              # seconds (0 for images)
     width: int = 0
     height: int = 0

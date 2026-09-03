@@ -39,7 +39,7 @@ class PexelsVideo(BaseTool):
     )
     agent_skills = []
 
-    capabilities = ["search_video", "download_video", "stock_video"]
+    capabilities = ["search_video", "download_video", "stock_video", "multi_result_search"]
     supports = {
         "orientation_filter": True,
         "size_filter": True,
@@ -81,6 +81,14 @@ class PexelsVideo(BaseTool):
             },
             "per_page": {"type": "integer", "default": 5, "minimum": 1, "maximum": 80},
             "page": {"type": "integer", "default": 1},
+            "select_index": {
+                "type": "integer", "minimum": 0, "default": 0,
+                "description": "Zero-based result to download after reviewing returned options.",
+            },
+            "download": {
+                "type": "boolean", "default": True,
+                "description": "When false, return search options without downloading a file.",
+            },
             "preferred_quality": {
                 "type": "string",
                 "enum": ["hd", "sd"],
@@ -94,8 +102,8 @@ class PexelsVideo(BaseTool):
         cpu_cores=1, ram_mb=256, vram_mb=0, disk_mb=200, network_required=True
     )
     retry_policy = RetryPolicy(max_retries=2, retryable_errors=["rate_limit", "timeout"])
-    idempotency_key_fields = ["query", "orientation", "size", "page"]
-    side_effects = ["writes video file to output_path", "calls Pexels API"]
+    idempotency_key_fields = ["query", "orientation", "size", "page", "select_index", "download"]
+    side_effects = ["optionally writes the selected video to output_path", "calls Pexels API"]
     user_visible_verification = ["Watch downloaded clip to verify it matches the intended scene"]
 
     def get_status(self) -> ToolStatus:
@@ -162,29 +170,63 @@ class PexelsVideo(BaseTool):
                     data={"total_results": data.get("total_results", 0)},
                 )
 
-            video = videos[0]
             preferred_quality = inputs.get("preferred_quality", "hd")
+            options = []
+            for index, candidate in enumerate(videos):
+                video_files = candidate.get("video_files", [])
+                selected = next(
+                    (vf for vf in sorted(video_files, key=lambda x: x.get("width", 0), reverse=True)
+                     if vf.get("quality") == preferred_quality and vf.get("link")),
+                    None,
+                )
+                if not selected:
+                    selected = next(
+                        (vf for vf in sorted(video_files, key=lambda x: x.get("width", 0), reverse=True) if vf.get("link")),
+                        None,
+                    )
+                options.append({
+                    "index": index,
+                    "video_id": candidate.get("id"),
+                    "user": (candidate.get("user") or {}).get("name", "Unknown"),
+                    "duration_seconds": candidate.get("duration"),
+                    "width": selected.get("width") if selected else candidate.get("width"),
+                    "height": selected.get("height") if selected else candidate.get("height"),
+                    "quality": selected.get("quality") if selected else None,
+                    "fps": selected.get("fps") if selected else None,
+                    "preview_url": candidate.get("image", ""),
+                    "download_url": selected.get("link") if selected else None,
+                    "pexels_url": candidate.get("url", ""),
+                })
+            select_index = int(inputs.get("select_index", 0))
+            if select_index < 0 or select_index >= len(videos):
+                return ToolResult(
+                    success=False,
+                    error=f"select_index must be between 0 and {len(videos) - 1}",
+                    data={"options": options, "total_results": data.get("total_results", 0)},
+                )
 
-            # Pick the best matching video file
-            video_files = video.get("video_files", [])
-            selected_file = None
-            for vf in sorted(video_files, key=lambda x: x.get("width", 0), reverse=True):
-                if vf.get("quality") == preferred_quality:
-                    selected_file = vf
-                    break
-            if not selected_file and video_files:
-                selected_file = video_files[0]
-
+            video = videos[select_index]
+            selected_file = next(
+                (vf for vf in sorted(video.get("video_files", []), key=lambda x: x.get("width", 0), reverse=True)
+                 if vf.get("quality") == preferred_quality and vf.get("link")),
+                None,
+            )
             if not selected_file:
-                return ToolResult(success=False, error="No downloadable video file found.")
+                selected_file = next(
+                    (vf for vf in sorted(video.get("video_files", []), key=lambda x: x.get("width", 0), reverse=True) if vf.get("link")),
+                    None,
+                )
+            if not selected_file:
+                return ToolResult(success=False, error="Selected Pexels video has no downloadable video file.", data={"options": options})
 
-            video_url = selected_file["link"]
-            video_response = requests.get(video_url, timeout=120)
-            video_response.raise_for_status()
+            output_path = None
+            if inputs.get("download", True):
+                video_response = requests.get(selected_file["link"], timeout=120)
+                video_response.raise_for_status()
 
-            output_path = Path(inputs.get("output_path", f"pexels_video_{video['id']}.mp4"))
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(video_response.content)
+                output_path = Path(inputs.get("output_path", f"pexels_video_{video['id']}.mp4"))
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_bytes(video_response.content)
 
         except Exception as e:
             return ToolResult(success=False, error=f"Pexels video search failed: {e}")
@@ -201,13 +243,15 @@ class PexelsVideo(BaseTool):
                 "fps": selected_file.get("fps"),
                 "quality": selected_file.get("quality"),
                 "query": query,
-                "output": str(output_path),
+                "output": str(output_path) if output_path else None,
                 "total_results": data.get("total_results", 0),
                 "results_returned": len(videos),
+                "selected_index": select_index,
+                "options": options,
                 "license": "Pexels License (free, no attribution required)",
                 "pexels_url": video.get("url", ""),
             },
-            artifacts=[str(output_path)],
+            artifacts=[str(output_path)] if output_path else [],
             cost_usd=0.0,
             duration_seconds=round(time.time() - start, 2),
         )

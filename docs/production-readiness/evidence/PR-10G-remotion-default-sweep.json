@@ -1,0 +1,25 @@
+{
+  "gate": "remotion_default_compositions",
+  "status": "PASS_LOCAL",
+  "browser": "installed_system_chrome",
+  "frame": 0,
+  "compositions": [
+    {"id": "Explainer", "status": "PASS", "output_bytes": 1682205},
+    {"id": "CinematicRenderer", "status": "PASS", "output_bytes": 34418},
+    {"id": "SignalFromTomorrowWithMusic", "status": "PASS", "output_bytes": 948208},
+    {"id": "TalkingHead", "status": "PASS", "output_bytes": 37835},
+    {"id": "TitledVideo", "status": "PASS", "output_bytes": 34418},
+    {"id": "HeroTitle", "status": "PASS", "output_bytes": 1096816},
+    {"id": "ProductReveal", "status": "PASS", "output_bytes": 535750},
+    {"id": "ProductRevealVertical", "status": "PASS", "output_bytes": 608987},
+    {"id": "CaptionOverlayOnly", "status": "PASS", "output_bytes": 44075},
+    {"id": "CollageBurst", "status": "PASS", "output_bytes": 67163},
+    {"id": "LyricOverlay", "status": "PASS", "output_bytes": 37835},
+    {"id": "EndTag", "status": "PASS", "output_bytes": 34418},
+    {"id": "EndTagOverlay", "status": "PASS", "output_bytes": 44075}
+  ],
+  "limitations": [
+    "This is a local Windows still sweep using installed system Chrome, not clean Ubuntu/container proof.",
+    "The sweep validates default props only; supplied media paths remain subject to the strict asset/probe contracts and Phase 11 audiovisual review."
+  ]
+}

@@ -7,6 +7,41 @@
   "required": ["version", "assets"],
   "properties": {
     "version": { "type": "string", "const": "1.0" },
+    "voice_identity": {
+      "type": "object",
+      "description": "Immutable narration voice identity carried into all generated audio assets.",
+      "required": ["provider", "model", "voice_id", "locale", "identity_key"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "voice_id": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "settings": { "type": "object", "additionalProperties": true },
+        "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "narration_segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["segment_id", "text", "voice_identity_key", "status"],
+        "properties": {
+          "segment_id": { "type": "string", "minLength": 8 },
+          "text": { "type": "string", "minLength": 1 },
+          "voice_identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "audio_path": { "type": "string" },
+          "start_seconds": { "type": "number", "minimum": 0 },
+          "end_seconds": { "type": "number", "minimum": 0 },
+          "expected_duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+          "measured_duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+          "status": { "type": "string", "enum": ["pending", "running", "completed", "failed", "cached"] },
+          "cache_hit": { "type": "boolean" },
+          "transcript_status": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
     "assets": {
       "type": "array",
       "items": {
@@ -34,6 +69,19 @@
           "provider": { "type": "string", "description": "Provider name (e.g. pixabay, google_imagen)" },
           "license": { "type": "string", "description": "License type (e.g. Pixabay License, CC0)" },
           "original_url": { "type": "string", "description": "Source URL if downloaded from a stock service" },
+          "source_url": { "type": "string" },
+          "creator": { "type": "string" },
+          "license_url": { "type": "string" },
+          "attribution_required": { "type": "boolean" },
+          "restrictions": { "type": "array", "items": { "type": "string" } },
+          "asset_request_id": { "type": "string" },
+          "strategy": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": "integer", "exclusiveMinimum": 0 },
+          "mime_type": { "type": "string" },
+          "retrieved_at": { "type": "string" },
+          "validation_status": { "type": "string", "enum": ["validated", "pending", "rejected"] },
+          "validation": { "type": "object", "additionalProperties": true },
           "voice_performance": {
             "type": "object",
             "description": "Applied voice-performance contract for narration assets.",
@@ -46,13 +94,54 @@
                 "additionalProperties": true
               },
               "sample_approved": { "type": "boolean" },
+              "sample_status": { "type": "string", "enum": ["not_required", "pending", "approved", "rejected"] },
               "sample_path": { "type": "string" },
-              "review_notes": { "type": "string" }
+              "review_notes": { "type": "string" },
+              "voice_identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "provider": { "type": "string" },
+              "model": { "type": "string" },
+              "voice_id": { "type": "string" },
+              "locale": { "type": "string" }
             },
             "additionalProperties": false
+          },
+          "music_provenance": {
+            "type": "object",
+            "description": "Canonical provenance and rights record for type=music assets.",
+            "required": ["source_type", "source_tool", "provider", "license", "duration_seconds", "loop_allowed", "edit_rights"],
+            "properties": {
+              "source_type": { "type": "string", "enum": ["user_library", "ai_generated", "bring_your_own"] },
+              "source_tool": { "type": "string", "minLength": 1 },
+              "provider": { "type": "string", "minLength": 1 },
+              "source_url": { "type": "string" },
+              "license": { "type": "string", "minLength": 1 },
+              "license_url": { "type": "string" },
+              "prompt": { "type": "string" },
+              "model": { "type": "string" },
+              "creator": { "type": "string" },
+              "retrieved_at": { "type": "string" },
+              "duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+              "loop_allowed": { "type": ["boolean", "null"] },
+              "edit_rights": { "type": "string", "enum": ["allowed", "not_allowed", "unknown"] },
+              "rights_status": { "type": "string", "enum": ["verified", "needs_review"] },
+              "restrictions": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": { "properties": { "source_type": { "const": "ai_generated" } } },
+                "then": { "anyOf": [{ "required": ["prompt"] }, { "required": ["model"] }] }
+              }
+            ]
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "music" } } },
+            "then": { "required": ["music_provenance"] }
+          }
+        ]
       }
     },
     "total_cost_usd": { "type": "number", "minimum": 0 },

@@ -1,0 +1,66 @@
+version: "1.0"
+id: ilearnzed-teacher-onboarding
+name: "iLearnZed Teacher Onboarding"
+category: teacher_onboarding
+description: "Teacher-led or screen-supported video showing educators how to create useful learning content on iLearnZed."
+
+audience:
+  primary: teachers_and_course_creators
+  secondary: [schools_and_institutions]
+  need: "Understand the educator value proposition and complete the next course-creation action."
+  levels: [teacher, institution]
+
+promise:
+  viewer_outcome: "A teacher understands the demonstrated workflow and the value of contributing a course."
+  central_question_required: true
+  misconception_required: false
+  truthfulness_rule: "Show only current, verified platform workflows and label features that are still planned."
+
+structure:
+  opening:
+    must_show: "The educator problem, course result, or first screen of the real workflow."
+    must_say: "State what the teacher will be able to do after watching."
+    max_seconds: 20
+  beats:
+    - {id: educator_problem, purpose: "Show why the workflow matters to a teacher.", plot: A, visual_requirement: "Teacher context or real course-creation need.", viewer_question: "Why should I create here?", required: true}
+    - {id: workflow, purpose: "Demonstrate the verified course-creation path.", plot: A, visual_requirement: "Real screen capture with readable callouts.", viewer_question: "How do I do it?", required: true}
+    - {id: teaching_quality, purpose: "Show what makes a useful lesson or assessment.", plot: B, visual_requirement: "Example lesson, quiz, diagram, or content checklist.", viewer_question: "How do I make it useful?", required: true}
+    - {id: value, purpose: "Explain the verified teacher or learner value.", plot: both, visual_requirement: "Concrete platform evidence; no unsupported earnings claims.", viewer_question: "What happens after I contribute?", required: true}
+    - {id: next_action, purpose: "Give the teacher one clear onboarding action.", plot: A, visual_requirement: "Final checklist and verified destination.", viewer_question: "What should I do now?", required: true}
+  ending:
+    payoff: "Return to the educator problem and show how the demonstrated workflow addresses it."
+    next_step: "Use the verified teacher onboarding or registration destination; fall back to https://ilearnzed.org."
+    outro_limit_seconds: 8
+
+production:
+  default_pipeline: screen-demo
+  formats: [long_form, lesson_clip]
+  compatible_playbooks: [ilearnzed-education, clean-professional]
+  required_artifacts: [brief, thumbnail_package, script, scene_plan, asset_manifest, final_review, publish_log]
+  source_modes: [real_platform_capture, teacher_camera, narrated_workflow]
+  duration_guidance: "Remove dead navigation while preserving every action the teacher must reproduce."
+
+thumbnail:
+  concepts: ["Teacher plus course-creation screen", "Educator benefit plus platform workflow", "Before/after course lesson transformation"]
+  on_image_word_target: "2-5 important words"
+  required_checks: [real_ui_only, teacher_benefit_is_specific, no_unverified_earnings_claim, screen_text_is_legible]
+
+shorts:
+  derivative_allowed: true
+  self_contained_required: true
+  mechanisms: [one_workflow_step, before_after_course, teacher_problem_solution]
+  first_frame_rule: "Show the real educator workflow or finished course result immediately."
+
+localization:
+  supported: false
+  languages: []
+  priority: "Keep teacher onboarding English-first until localized demand is demonstrated."
+  human_review_required: true
+
+consent:
+  teacher_consent_required: true
+  student_identifiable_consent_required: true
+  evidence_required_before_publish: true
+  scope: [youtube, shorts, social_media_repurposing, thumbnails, promotional_clips, ilearnzed_platform_use]
+
+quality_gates: [screen_flow_is_current, every_feature_claim_is_verified, teacher_consent_evidence_attached, no_sensitive_user_data_visible, onboarding_destination_is_verified_or_fallback_used, next_action_is_clear]

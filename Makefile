@@ -6,7 +6,7 @@ PIP = $(RUN_PYTHON) -m pip
 
 .DEFAULT_GOAL := setup
 
-.PHONY: setup install install-dev install-gpu test test-contracts lint clean preflight demo demo-list hyperframes-doctor hyperframes-warm venv ensure-venv
+.PHONY: setup install install-dev install-gpu test test-contracts test-release-blockers test-offline slo load-soak operations-drill lint clean preflight demo demo-list hyperframes-doctor hyperframes-warm venv ensure-venv
 
 # ---- Virtual environment ----
 
@@ -94,6 +94,23 @@ test: ensure-venv
 
 test-contracts: ensure-venv
 	$(RUN_PYTHON) -m pytest tests/contracts/ -v
+
+# ---- Production-readiness test gates ----
+
+test-release-blockers: ensure-venv
+	$(RUN_PYTHON) -m pytest tests/contracts/ -m "release_blocker and not live_provider and not hyperframes_qa" -q
+
+test-offline: ensure-venv
+	$(RUN_PYTHON) -m pytest tests/ -m "not live_provider and not hyperframes_qa" -q
+
+slo: ensure-venv
+	$(RUN_PYTHON) scripts/measure_slos.py
+
+load-soak: ensure-venv
+	$(RUN_PYTHON) scripts/measure_load_soak.py
+
+operations-drill: ensure-venv
+	$(RUN_PYTHON) scripts/run_operations_drill.py
 
 # ---- Utilities ----
 

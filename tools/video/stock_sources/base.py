@@ -40,6 +40,15 @@ from pathlib import Path
 from typing import Any, Optional, Protocol, runtime_checkable
 
 
+_LICENSE_PAGE_BY_SOURCE = {
+    "pexels": "https://www.pexels.com/license/",
+    "pixabay_video": "https://pixabay.com/service/license-summary/",
+    "unsplash": "https://unsplash.com/license",
+    "wikimedia": "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia",
+    "archive_org": "https://archive.org/about/terms.php",
+}
+
+
 @dataclass
 class Candidate:
     """One pre-download search result, normalised across sources.
@@ -65,9 +74,31 @@ class Candidate:
     duration: float = 0.0                   # seconds (0 for images)
     creator: str = ""                       # attribution name
     license: str = ""                       # licence string or URL
+    license_url: str = ""                   # canonical licence page, when exposed
+    attribution_required: bool = False      # source-specific attribution obligation
+    restrictions: tuple[str, ...] = ()      # commercial/use restrictions
     source_tags: str = ""                   # title + description + tags joined
     thumbnail_url: str = ""                 # for previews and image-fallback embeds
     extra: dict[str, Any] = field(default_factory=dict)  # source-specific junk
+
+    def __post_init__(self) -> None:
+        """Normalise provenance fields without breaking older adapters.
+
+        Adapters written before the Phase 6 contract often put license data in
+        ``extra`` or supplied only a human-readable license string.  Promote
+        those values into the canonical fields so downstream manifests never
+        have to guess where attribution metadata lives.
+        """
+        if not isinstance(self.extra, dict):
+            self.extra = dict(self.extra or {})
+        if not self.license_url:
+            self.license_url = str(self.extra.get("license_url") or _LICENSE_PAGE_BY_SOURCE.get(self.source, ""))
+        if not self.attribution_required:
+            self.attribution_required = bool(self.extra.get("attribution_required", False))
+        raw_restrictions = self.restrictions or self.extra.get("restrictions") or ()
+        if isinstance(raw_restrictions, str):
+            raw_restrictions = (raw_restrictions,)
+        self.restrictions = tuple(str(item) for item in raw_restrictions)
 
     @property
     def clip_id(self) -> str:
@@ -78,6 +109,47 @@ class Candidate:
         directly when it materialises the row.
         """
         return f"{self.source}_{self.source_id}"
+
+
+def stock_provenance(candidate: Candidate, *, retrieval_time: str = "") -> dict[str, Any]:
+    """Return one normalized provenance payload for every stock adapter."""
+    source_url = str(candidate.source_url or "").strip()
+    creator = str(candidate.creator or "").strip()
+    license_name = str(candidate.license or "").strip()
+    if not source_url or not creator or not license_name:
+        missing = [name for name, value in (("source_url", source_url), ("creator", creator), ("license", license_name)) if not value]
+        raise ValueError(f"stock candidate {candidate.clip_id} is missing provenance: {', '.join(missing)}")
+    return {
+        "source": str(candidate.source),
+        "source_id": str(candidate.source_id),
+        "source_url": source_url,
+        "creator": creator,
+        "license": license_name,
+        "license_url": str(candidate.license_url or ""),
+        "attribution_required": bool(candidate.attribution_required),
+        "restrictions": list(candidate.restrictions or ()),
+        "retrieved_at": str(retrieval_time or ""),
+    }
+
+
+def download_candidate_atomic(
+    candidate: Candidate,
+    out_path: Path,
+    *,
+    strict_decode: bool = True,
+    timeout_seconds: float = 120.0,
+) -> dict[str, Any]:
+    """Shared adapter download boundary used by production acquisition paths."""
+    from lib.media_ingestion import download_stream_atomic
+
+    return download_stream_atomic(
+        candidate.download_url,
+        out_path,
+        media_type="image" if candidate.kind == "image" else "video",
+        timeout_seconds=timeout_seconds,
+        min_bytes=1024,
+        strict_decode=strict_decode,
+    )
 
 
 @dataclass

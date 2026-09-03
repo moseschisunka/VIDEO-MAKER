@@ -1,19 +1,24 @@
-import { Composition, CalculateMetadataFunction } from "remotion";
+import { Composition, CalculateMetadataFunction, AnyZodObject } from "remotion";
 import { Explainer, ExplainerProps } from "./Explainer";
 import {
   CinematicRenderer,
   calculateCinematicMetadata,
 } from "./CinematicRenderer";
-import { signalFromTomorrowWithMusicFixture } from "./cinematic/fixtures";
+import { signalFromTomorrowPreviewFixture } from "./cinematic/fixtures";
 import { TalkingHead, TalkingHeadProps } from "./TalkingHead";
 import {
   TitledVideo,
+  TitledVideoProps,
   calculateTitledVideoMetadata,
 } from "./TitledVideo";
 import { EndTag, EndTagProps } from "./components/EndTag";
-import { HeroTitle } from "./components/HeroTitle";
+import { HeroTitle, HeroTitleProps } from "./components/HeroTitle";
 import { ProductReveal, ProductRevealProps } from "./components/ProductReveal";
-import { CaptionOverlay, WordCaption } from "./components/CaptionOverlay";
+import {
+  CaptionOverlay,
+  CaptionOverlayProps,
+  WordCaption,
+} from "./components/CaptionOverlay";
 import { CollageBurst, CollageBurstProps } from "./CollageBurst";
 import { LyricOverlay, LyricOverlayProps } from "./LyricOverlay";
 
@@ -128,8 +133,17 @@ const calculateMetadata: CalculateMetadataFunction<ExplainerProps> = async ({
     return { durationInFrames: 30 * 60 };
   }
   const lastEnd = Math.max(...cuts.map((c) => c.out_seconds || 0));
-  // Add 1 second padding for final fade
-  return { durationInFrames: Math.ceil((lastEnd + 1) * 30) };
+  const metadata = (props as Record<string, unknown>).metadata;
+  const metadataTargetRaw = metadata && typeof metadata === "object"
+    ? Number((metadata as Record<string, unknown>).target_duration_seconds || 0)
+    : 0;
+  const explicitTargetRaw = Number((props as Record<string, unknown>).total_duration_seconds || 0);
+  const metadataTarget = Number.isFinite(metadataTargetRaw) ? metadataTargetRaw : 0;
+  const explicitTarget = Number.isFinite(explicitTargetRaw) ? explicitTargetRaw : 0;
+  // The edit timeline is authoritative. Do not append an invisible one-second
+  // tail: it makes the narration and the final visual beat drift apart.
+  const durationSeconds = Math.max(lastEnd, metadataTarget, explicitTarget);
+  return { durationInFrames: Math.max(1, Math.ceil(durationSeconds * 30)) };
 };
 
 export const Root: React.FC = () => {
@@ -172,7 +186,10 @@ export const Root: React.FC = () => {
         fps={30}
         width={1920}
         height={1080}
-        defaultProps={signalFromTomorrowWithMusicFixture}
+        // The full media fixture is opt-in; the default is an assetless
+        // preview so composition enumeration and smoke renders never depend
+        // on unshipped demo video/audio files.
+        defaultProps={signalFromTomorrowPreviewFixture}
         calculateMetadata={calculateCinematicMetadata}
       />
       <Composition
@@ -191,7 +208,7 @@ export const Root: React.FC = () => {
           highlightColor: "#22D3EE",
         }}
       />
-      <Composition
+      <Composition<AnyZodObject, TitledVideoProps>
         id="TitledVideo"
         component={TitledVideo}
         durationInFrames={30 * 60}
@@ -209,7 +226,7 @@ export const Root: React.FC = () => {
         }}
         calculateMetadata={calculateTitledVideoMetadata}
       />
-      <Composition
+      <Composition<AnyZodObject, HeroTitleProps>
         id="HeroTitle"
         component={HeroTitle}
         durationInFrames={30 * 17}
@@ -221,7 +238,7 @@ export const Root: React.FC = () => {
           subtitle: "The People Who Define Reality",
         }}
       />
-      <Composition
+      <Composition<AnyZodObject, ProductRevealProps>
         id="ProductReveal"
         component={ProductReveal}
         durationInFrames={30 * 8}
@@ -229,7 +246,7 @@ export const Root: React.FC = () => {
         width={1280}
         height={720}
         defaultProps={{
-          productImage: "airnothing/product.png",
+          productImage: "",
           productName: "AirNothing Pro Max Ultra",
           price: "Starting at $999",
           tagline: "Nothing included.",
@@ -237,7 +254,7 @@ export const Root: React.FC = () => {
           accentColor: "#00D4FF",
         } as ProductRevealProps}
       />
-      <Composition
+      <Composition<AnyZodObject, ProductRevealProps>
         id="ProductRevealVertical"
         component={ProductReveal}
         durationInFrames={30 * 8}
@@ -245,7 +262,7 @@ export const Root: React.FC = () => {
         width={720}
         height={1280}
         defaultProps={{
-          productImage: "airnothing/product.png",
+          productImage: "",
           productName: "AirNothing Pro Max Ultra",
           price: "Starting at $999",
           tagline: "Nothing included.",
@@ -253,7 +270,7 @@ export const Root: React.FC = () => {
           accentColor: "#00D4FF",
         } as ProductRevealProps}
       />
-      <Composition
+      <Composition<AnyZodObject, CaptionOverlayProps>
         id="CaptionOverlayOnly"
         component={CaptionOverlay}
         durationInFrames={30 * 300}
@@ -268,7 +285,7 @@ export const Root: React.FC = () => {
           backgroundColor: "rgba(15, 23, 42, 0.75)",
         }}
       />
-      <Composition
+      <Composition<AnyZodObject, CollageBurstProps>
         id="CollageBurst"
         component={CollageBurst}
         durationInFrames={30 * 30}
@@ -283,7 +300,7 @@ export const Root: React.FC = () => {
           clips: [],
         } as CollageBurstProps}
       />
-      <Composition
+      <Composition<AnyZodObject, LyricOverlayProps>
         id="LyricOverlay"
         component={LyricOverlay}
         durationInFrames={30 * 28}
@@ -296,7 +313,7 @@ export const Root: React.FC = () => {
           bottomY: 0.88,
         } as LyricOverlayProps}
       />
-      <Composition
+      <Composition<AnyZodObject, EndTagProps>
         id="EndTag"
         component={EndTag}
         // 5.5s at 30fps = 165 frames. Render CLI can override via --props.
@@ -312,7 +329,7 @@ export const Root: React.FC = () => {
           fadeOutSeconds: 0.6,
         } as EndTagProps}
       />
-      <Composition
+      <Composition<AnyZodObject, EndTagProps>
         id="EndTagOverlay"
         component={EndTag}
         // 8.19s at 30fps = 246 frames. Render CLI can override via --props.

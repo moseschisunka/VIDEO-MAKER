@@ -6,6 +6,12 @@ This stage turns the approved proposal into animation-ready beats. The script mu
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Tag each animation beat as factual or
+creative and preserve source-backed uncertainty; visual invention does not
+license invented data or technical claims.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

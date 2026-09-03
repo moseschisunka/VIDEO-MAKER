@@ -30,4 +30,8 @@ paths:
   library_dir: library
   styles_dir: styles
   skills_dir: skills
+  template_dir: content_templates
   output_dir: output
+
+# Active company/channel profile used by iLearnZed-aware production tools.
+creator_profile: profiles/ilearnzed.yaml

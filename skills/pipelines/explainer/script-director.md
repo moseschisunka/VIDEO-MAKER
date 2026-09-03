@@ -8,6 +8,12 @@ The script is the backbone of the video. Every visual, every scene, every audio 
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Set `grounding_contract.required=true`,
+write an explicit claim ledger, and attach `source_refs` to every factual
+section. Use the duration solver after the claim ledger is stable.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

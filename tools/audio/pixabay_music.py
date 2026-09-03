@@ -177,20 +177,30 @@ class PixabayMusic(BaseTool):
                 duration_seconds=round(time.time() - start, 2),
             )
 
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "pixabay_music",
+            "track_title": track.get("title", "Unknown"),
+            "artist": track.get("artist", "Unknown"),
+            "duration_seconds": track.get("duration"),
+            "query": inputs["query"],
+            "output": str(output_path),
+            "format": "mp3",
+            "license": "Pixabay Content License (free, no attribution required)",
+            "results_found": len(tracks),
+            "results_after_filter": len(filtered),
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data,
+            inputs,
+            source_tool=self.name,
+            source_type="bring_your_own",
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "pixabay_music",
-                "track_title": track.get("title", "Unknown"),
-                "artist": track.get("artist", "Unknown"),
-                "duration_seconds": track.get("duration"),
-                "query": inputs["query"],
-                "output": str(output_path),
-                "format": "mp3",
-                "license": "Pixabay Content License (free, no attribution required)",
-                "results_found": len(tracks),
-                "results_after_filter": len(filtered),
-            },
+            data=result_data,
             artifacts=[str(output_path)],
             cost_usd=0.0,
             duration_seconds=round(time.time() - start, 2),

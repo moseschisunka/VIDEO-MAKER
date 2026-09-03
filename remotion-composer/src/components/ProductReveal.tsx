@@ -9,7 +9,7 @@ import {
   Easing,
 } from "remotion";
 
-export interface ProductRevealProps {
+export interface ProductRevealProps extends Record<string, unknown> {
   productImage: string;
   productName: string;
   price: string;
@@ -28,6 +28,12 @@ export const ProductReveal: React.FC<ProductRevealProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  // An empty image means the composition is being previewed without an
+  // approved asset. Render a deterministic placeholder in that case; a
+  // non-empty path is still rendered strictly and will fail if the pipeline
+  // supplied an invalid/missing asset instead of silently substituting it.
+  const imageSrc = productImage?.trim() ? staticFile(productImage) : null;
+  const placeholderLabel = (productName?.trim() || "Product").slice(0, 1).toUpperCase();
 
   // === PHASE 1: Product image scales in with glow (0-1.5s) ===
   const imgScale = spring({
@@ -145,14 +151,33 @@ export const ProductReveal: React.FC<ProductRevealProps> = ({
             border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <Img
-            src={staticFile(productImage)}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
+          {imageSrc ? (
+            <Img
+              src={imageSrc}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: `linear-gradient(135deg, ${accentColor}44, #111827 58%, #030712)`,
+                color: "#FFFFFF",
+                fontFamily: "system-ui, sans-serif",
+                fontSize: 116,
+                fontWeight: 700,
+              }}
+            >
+              {placeholderLabel}
+            </div>
+          )}
         </div>
         {/* Reflection */}
         <div
@@ -171,15 +196,25 @@ export const ProductReveal: React.FC<ProductRevealProps> = ({
               "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)",
           }}
         >
-          <Img
-            src={staticFile(productImage)}
-            style={{
-              width: "100%",
-              height: 260,
-              objectFit: "cover",
-              objectPosition: "bottom",
-            }}
-          />
+          {imageSrc ? (
+            <Img
+              src={imageSrc}
+              style={{
+                width: "100%",
+                height: 260,
+                objectFit: "cover",
+                objectPosition: "bottom",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: 260,
+                background: `linear-gradient(135deg, ${accentColor}22, #030712)`,
+              }}
+            />
+          )}
         </div>
       </div>
 

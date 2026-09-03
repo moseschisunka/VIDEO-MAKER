@@ -1,0 +1,45 @@
+{
+  "name": "hyperframes_kinetic_typography_20s",
+  "pipeline_type": "animation",
+  "description": "A twenty-second kinetic-typography piece used to certify HyperFrames timing, keyframes, fades, and runtime honesty.",
+  "inputs": {
+    "source_mode": "script_to_motion_graphics",
+    "brief": "Animate one concise statement with word-level timing, deliberate emphasis, and a clean kinetic layout.",
+    "profile": "social_vertical",
+    "duration_seconds": 20,
+    "target_platform": "instagram_reels"
+  },
+  "expected_artifacts": {
+    "proposal_packet": { "required_fields": ["production_plan", "approval"], "assertions": { "runtime_options_present": true } },
+    "script": { "required_fields": ["sections", "word_timing"] },
+    "scene_plan": { "required_fields": ["scenes"], "assertions": { "motion_beats_present": true } },
+    "asset_manifest": { "required_fields": ["assets"] },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "render_runtime_locked": true, "offsets_preserved": true } },
+    "render_report": { "required_fields": ["outputs", "inspection", "media_probe"], "assertions": { "keyframes_inspected": true, "audio_timing_verified": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "deterministic",
+  "tolerance": 0.25,
+  "profile": "social_vertical",
+  "duration_seconds": 20,
+  "duration_tolerance_seconds": 1.0,
+  "voice_intent": {
+    "mode": "word_timed_narration",
+    "provider_policy": "selected_voice_and_timing_must_survive_runtime_render",
+    "transcript_policy": "word_timings_are_the_source_for_text_animation"
+  },
+  "visual_strategy": {
+    "mode": "kinetic_typography",
+    "description": "Use meaningful keyframes, staggered word emphasis, safe-area typography, and audio-aligned transitions rather than static text cards.",
+    "asset_sources": ["script", "typography_system", "audio_timeline"],
+    "motion_requirement": "required"
+  },
+  "runtime_candidates": ["hyperframes", "remotion"],
+  "expected_approvals": ["proposal", "script", "scene_plan", "assets", "edit", "compose", "publish"],
+  "prohibited_downgrade": [
+    "silently render a HyperFrames selection with another runtime without approval or a decision-log update",
+    "replace keyframed motion with a static card and report success",
+    "ignore narration offsets, fades, ducking, or inspection failures"
+  ],
+  "tags": ["phase0", "hyperframes", "kinetic-typography", "runtime", "motion-required"]
+}

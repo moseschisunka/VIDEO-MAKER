@@ -37,6 +37,7 @@ from contextlib import contextmanager
 import subprocess
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -183,6 +184,24 @@ class DirectClipSearch(BaseTool):
                 "default": True,
                 "description": "Skip download if a file with the same clip_id already exists.",
             },
+            "strict_media_validation": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Production mode: validate content length, MIME/magic, and decode before promotion. "
+                    "Legacy fixture mode remains opt-in false for non-media test doubles."
+                ),
+            },
+            "require_provenance": {
+                "type": "boolean",
+                "default": True,
+                "description": "Production mode: reject candidates without source URL, creator, and license metadata.",
+            },
+            "production_mode": {
+                "type": "boolean",
+                "default": False,
+                "description": "Alias that enables strict media and provenance validation together.",
+            },
             "timeout_seconds": {
                 "type": "number",
                 "default": 600,
@@ -219,9 +238,11 @@ class DirectClipSearch(BaseTool):
             return ToolStatus.UNAVAILABLE
         return ToolStatus.AVAILABLE
 
-    def get_info(self) -> dict[str, Any]:
-        info = super().get_info()
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
+        info = super().get_info(include_status=include_status)
         try:
+            if not include_status:
+                raise RuntimeError("stock source diagnostics deferred")
             from tools.video.stock_sources import source_catalog, source_summary
             info["source_provider_menu"] = source_catalog()
             info["source_provider_summary"] = source_summary()
@@ -252,6 +273,8 @@ class DirectClipSearch(BaseTool):
                 get_source,
                 source_summary,
             )
+            from tools.video.stock_sources.base import stock_provenance
+            from tools.video.stock_sources.base import download_candidate_atomic
 
             output_dir = Path(inputs["output_dir"])
             queries: list[dict] = list(inputs["queries"])
@@ -260,6 +283,8 @@ class DirectClipSearch(BaseTool):
             clips_per_query = int(inputs.get("clips_per_query", 3))
             extract_thumbs = bool(inputs.get("extract_thumbnails", True))
             skip_existing = bool(inputs.get("skip_existing", True))
+            strict_media_validation = bool(inputs.get("strict_media_validation", False) or inputs.get("production_mode", False))
+            require_provenance = bool(inputs.get("require_provenance", True))
             timeout_seconds = float(inputs.get("timeout_seconds", 600))
             deadline = start + timeout_seconds
 
@@ -406,40 +431,88 @@ class DirectClipSearch(BaseTool):
                             break
 
                         clip_id = cand.clip_id
+                        if require_provenance and strict_media_validation:
+                            try:
+                                stock_provenance(cand)
+                            except Exception as exc:
+                                errors.append({
+                                    "phase": "provenance",
+                                    "clip_id": clip_id,
+                                    "source": src.name,
+                                    "error": str(exc),
+                                })
+                                continue
                         ext = _guess_ext(cand)
                         clip_path = clips_dir / f"{clip_id}{ext}"
 
                         # Skip if already downloaded
                         if skip_existing and clip_path.exists() and clip_path.stat().st_size > 1024:
-                            skipped += 1
-                            # Still record it in results so the agent knows it's there
-                            thumb_path = thumbs_dir / f"{clip_id}.jpg"
-                            downloaded.append({
-                                "clip_id": clip_id,
-                                "source": cand.source,
-                                "source_id": cand.source_id,
-                                "source_url": cand.source_url,
-                                "query": query,
-                                "slot_id": slot_id,
-                                "kind": cand.kind,
-                                "path": str(clip_path),
-                                "thumbnail": str(thumb_path) if thumb_path.exists() else "",
-                                "duration": cand.duration,
-                                "width": cand.width,
-                                "height": cand.height,
-                                "creator": cand.creator,
-                                "license": cand.license,
-                                "source_tags": cand.source_tags,
-                                "skipped_existing": True,
-                            })
-                            collected_for_query += 1
-                            continue
+                            existing_validation: dict[str, Any] = {
+                                "validated": False,
+                                "validation_mode": "size_only_legacy_fixture",
+                            }
+                            if strict_media_validation:
+                                try:
+                                    from lib.media_ingestion import validate_media_file
 
-                        # Download
+                                    existing_validation = validate_media_file(
+                                        clip_path,
+                                        "image" if cand.kind == "image" else "video",
+                                        strict_decode=True,
+                                        min_bytes=1024,
+                                    )
+                                except Exception:
+                                    # A corrupt/mismatched existing file must
+                                    # be regenerated individually, never reused.
+                                    clip_path.unlink(missing_ok=True)
+                                    existing_validation = {}
+                            if not strict_media_validation or existing_validation:
+                                skipped += 1
+                                # Still record it in results so the agent knows it's there
+                                thumb_path = thumbs_dir / f"{clip_id}.jpg"
+                                downloaded.append({
+                                    "clip_id": clip_id,
+                                    "source": cand.source,
+                                    "source_id": cand.source_id,
+                                    "source_url": cand.source_url,
+                                    "query": query,
+                                    "slot_id": slot_id,
+                                    "kind": cand.kind,
+                                    "path": str(clip_path),
+                                    "thumbnail": str(thumb_path) if thumb_path.exists() else "",
+                                    "duration": cand.duration,
+                                    "width": cand.width,
+                                    "height": cand.height,
+                                    "creator": cand.creator,
+                                    "license": cand.license,
+                                    "license_url": getattr(cand, "license_url", ""),
+                                    "attribution_required": bool(getattr(cand, "attribution_required", False)),
+                                    "restrictions": list(getattr(cand, "restrictions", ()) or ()),
+                                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                                    "source_tags": cand.source_tags,
+                                    "skipped_existing": True,
+                                    "validation": existing_validation,
+                                })
+                                collected_for_query += 1
+                                continue
+
+                        # Download to a sibling .part path.  The shared
+                        # ingestion validator can then reject bad MIME/magic
+                        # or undecodable media before an atomic promotion.
+                        part_path = clip_path.with_name(clip_path.name + ".part")
+                        try:
+                            part_path.unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                        download_facts: dict[str, Any] = {}
                         try:
                             with _requests_deadline(deadline):
-                                src.download(cand, clip_path)
+                                if strict_media_validation and src.__class__.__module__.startswith("tools.video.stock_sources."):
+                                    download_facts = download_candidate_atomic(cand, part_path, strict_decode=True, timeout_seconds=remaining_seconds(deadline))
+                                else:
+                                    src.download(cand, part_path)
                         except _DeadlineExceeded:
+                            part_path.unlink(missing_ok=True)
                             return timeout_result(
                                 phase="download",
                                 query=query,
@@ -447,6 +520,7 @@ class DirectClipSearch(BaseTool):
                                 clip_id=clip_id,
                             )
                         except Exception as e:
+                            part_path.unlink(missing_ok=True)
                             errors.append({
                                 "phase": "download",
                                 "clip_id": clip_id,
@@ -455,7 +529,7 @@ class DirectClipSearch(BaseTool):
                             })
                             continue
 
-                        if not clip_path.exists() or clip_path.stat().st_size < 1024:
+                        if not part_path.exists() or part_path.stat().st_size < 1024:
                             errors.append({
                                 "phase": "download",
                                 "clip_id": clip_id,
@@ -463,10 +537,50 @@ class DirectClipSearch(BaseTool):
                                 "error": "Download produced empty or tiny file",
                             })
                             try:
-                                if clip_path.exists():
-                                    clip_path.unlink()
+                                if part_path.exists():
+                                    part_path.unlink()
                             except OSError:
                                 pass
+                            continue
+
+                        validation_facts: dict[str, Any] = {
+                            "validated": False,
+                            "validation_mode": "size_only_legacy_fixture",
+                        }
+                        if strict_media_validation and not download_facts:
+                            try:
+                                from lib.media_ingestion import validate_media_file
+
+                                validation_facts = validate_media_file(
+                                    part_path,
+                                    "image" if cand.kind == "image" else "video",
+                                    strict_decode=True,
+                                    min_bytes=1024,
+                                )
+                            except Exception as exc:
+                                errors.append({
+                                    "phase": "validation",
+                                    "clip_id": clip_id,
+                                    "source": src.name,
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                })
+                                try:
+                                    part_path.unlink(missing_ok=True)
+                                except OSError:
+                                    pass
+                                continue
+                        elif download_facts:
+                            validation_facts = download_facts
+                        try:
+                            part_path.replace(clip_path)
+                        except OSError as exc:
+                            errors.append({
+                                "phase": "promotion",
+                                "clip_id": clip_id,
+                                "source": src.name,
+                                "error": f"{type(exc).__name__}: {exc}",
+                            })
+                            part_path.unlink(missing_ok=True)
                             continue
 
                         downloaded_record = {
@@ -484,8 +598,13 @@ class DirectClipSearch(BaseTool):
                             "height": cand.height,
                             "creator": cand.creator,
                             "license": cand.license,
+                            "license_url": getattr(cand, "license_url", ""),
+                            "attribution_required": bool(getattr(cand, "attribution_required", False)),
+                            "restrictions": list(getattr(cand, "restrictions", ()) or ()),
+                            "retrieved_at": datetime.now(timezone.utc).isoformat(),
                             "source_tags": cand.source_tags,
                             "skipped_existing": False,
+                            "validation": validation_facts,
                         }
                         downloaded.append(downloaded_record)
                         per_source_counts[src.name] = per_source_counts.get(src.name, 0) + 1
@@ -531,6 +650,8 @@ class DirectClipSearch(BaseTool):
                     "per_source_counts": per_source_counts,
                     "queries_run": queries_started,
                     "resolved_sources": [s.name for s in sources],
+                    "strict_media_validation": strict_media_validation,
+                    "require_provenance": require_provenance,
                     "clips": downloaded,
                     "errors": errors[:25],
                 },

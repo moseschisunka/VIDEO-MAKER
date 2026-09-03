@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/artifacts/voice_plan",
+  "title": "Voice Plan",
+  "description": "Immutable voice selection, sample approval, and resumable narration segment manifest.",
+  "type": "object",
+  "required": ["version", "voice_identity", "sample_approval", "segments"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "project_id": { "type": "string" },
+    "pipeline_type": { "type": "string" },
+    "run_id": { "type": "string" },
+    "voice_identity": {
+      "type": "object",
+      "required": ["provider", "model", "voice_id", "locale", "identity_key"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "voice_id": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "settings": { "type": "object", "additionalProperties": true },
+        "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "sample_approval": {
+      "type": "object",
+      "required": ["required", "status"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["not_required", "pending", "approved", "rejected"] },
+        "sample_asset_id": { "type": ["string", "null"] },
+        "sample_path": { "type": ["string", "null"] },
+        "approved_by": { "type": ["string", "null"] },
+        "approved_at": { "type": ["string", "null"] },
+        "review_notes": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["segment_id", "text", "voice_identity_key", "start_seconds", "end_seconds", "status"],
+        "properties": {
+          "segment_id": { "type": "string", "minLength": 8 },
+          "section_id": { "type": "string" },
+          "ordinal": { "type": "integer", "minimum": 1 },
+          "text": { "type": "string", "minLength": 1 },
+          "text_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "voice_identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "start_seconds": { "type": "number", "minimum": 0 },
+          "end_seconds": { "type": "number", "minimum": 0 },
+          "expected_duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+          "measured_duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+          "pronunciation_dictionary_version": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["pending", "running", "completed", "failed", "cached"] },
+          "audio_path": { "type": "string" },
+          "artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "cache_hit": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "transcript_verification": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["pending", "passed", "failed", "not_available"] },
+        "word_accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

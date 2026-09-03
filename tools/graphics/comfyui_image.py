@@ -133,7 +133,7 @@ class ComfyUIImage(BaseTool):
     user_visible_verification = ["Inspect generated image for quality and prompt adherence"]
 
     def __init__(self) -> None:
-        self._client = ComfyUIClient()
+        self._client = ComfyUIClient(capability="image")
 
     def get_status(self) -> ToolStatus:
         if not self._client.is_available():
@@ -149,8 +149,8 @@ class ComfyUIImage(BaseTool):
     def estimate_runtime(self, inputs: dict[str, Any]) -> float:
         return float(inputs.get("steps", 20)) * 1.5
 
-    def get_info(self) -> dict[str, Any]:
-        info = super().get_info()
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
+        info = super().get_info(include_status=include_status)
         info["setup_offer"] = self.setup_offer
         info["bundled_model_stack"] = BUNDLED_MODEL_STACKS["flux2-txt2img"]
         return info

@@ -1,4 +1,9 @@
-# Proposal Director — Cinematic Pipeline
+# Proposal Director - Cinematic Pipeline
+
+Before drafting the proposal, read `skills/meta/music-decision-contract.md`.
+Music is a gated proposal choice, not a downstream default. Record the selected
+source and the matching `decision_log` entry; if silence is intended, record
+`source_type: "none"` with a reason.
 
 ## When to Use
 

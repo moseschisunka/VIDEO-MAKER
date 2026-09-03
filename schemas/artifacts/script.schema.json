@@ -9,6 +9,85 @@
     "version": { "type": "string", "const": "1.0" },
     "title": { "type": "string" },
     "total_duration_seconds": { "type": "number", "minimum": 1 },
+    "target_duration_seconds": { "type": "number", "minimum": 1 },
+    "output_profile": { "type": "string", "minLength": 1 },
+    "profile": { "type": "string", "minLength": 1 },
+    "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
+    "voice_identity": {
+      "type": "object",
+      "description": "Immutable provider/model/voice/locale tuple for this narration run.",
+      "required": ["provider", "model", "voice_id", "locale", "identity_key"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "voice_id": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "settings": { "type": "object", "additionalProperties": true },
+        "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "narration_segments": {
+      "type": "array",
+      "description": "Deterministic segment/timing manifest used for resumable narration.",
+      "items": { "$ref": "#/$defs/narration_segment" }
+    },
+    "duration_contract": {
+      "type": "object",
+      "description": "Voice-rate and timing assumptions used by the canonical duration solver",
+      "properties": {
+        "voice_rate_wpm": { "type": "number", "exclusiveMinimum": 0 },
+        "duration_policy": { "type": "string", "enum": ["target_led", "content_led"] },
+        "intro_seconds": { "type": "number", "minimum": 0 },
+        "outro_seconds": { "type": "number", "minimum": 0 },
+        "silence_seconds": { "type": "number", "minimum": 0 },
+        "transition_duration_seconds": { "type": "number", "minimum": 0 },
+        "transition_count": { "type": "integer", "minimum": 0 },
+        "tolerance_seconds": { "type": "number", "minimum": 0 },
+        "validated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "grounding_contract": {
+      "type": "object",
+      "description": "Claim traceability policy for production narration",
+      "properties": {
+        "required": { "type": "boolean", "default": true },
+        "policy": { "type": "string", "enum": ["block", "revise", "warn"] },
+        "source_artifact": { "type": "string", "const": "research_brief" },
+        "source_record_version": { "type": "string", "const": "1.0" }
+      },
+      "additionalProperties": false
+    },
+    "claims": {
+      "type": "array",
+      "description": "Explicit claim ledger. Each factual claim must carry source_refs.",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "claim_type"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+          "text": { "type": "string", "minLength": 1 },
+          "claim_type": {
+            "type": "string",
+            "enum": ["factual", "creative", "opinion", "instruction", "cta", "rhetorical", "unknown"]
+          },
+          "source_refs": { "type": "array", "items": { "type": "string" } },
+          "source_ref": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["supported", "contradicted", "uncertain", "unsupported", "missing_source", "creative", "opinion", "instruction"]
+          },
+          "verification_status": { "type": "string" },
+          "risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "category": { "type": "string" },
+          "critical": { "type": "boolean" },
+          "section_id": { "type": "string" },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
     "voice_performance": {
       "type": "object",
       "description": "Narration delivery contract used by TTS asset generation.",
@@ -27,7 +106,10 @@
         "provider_notes": {
           "type": "object",
           "additionalProperties": { "type": "string" }
-        }
+        },
+        "sample_approval_required": { "type": "boolean" },
+        "sample_approved": { "type": "boolean" },
+        "voice_identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "additionalProperties": false
     },
@@ -89,6 +171,20 @@
               "required": ["word", "phonetic"]
             }
           },
+          "claim_type": {
+            "type": "string",
+            "enum": ["factual", "creative", "opinion", "instruction", "cta", "rhetorical", "unknown"]
+          },
+          "claim_id": { "type": "string" },
+          "claim_ids": { "type": "array", "items": { "type": "string" } },
+          "source_refs": { "type": "array", "items": { "type": "string" } },
+          "factuality_status": {
+            "type": "string",
+            "enum": ["supported", "contradicted", "uncertain", "unsupported", "missing_source", "creative", "opinion", "instruction"]
+          },
+          "risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "category": { "type": "string" },
+          "critical": { "type": "boolean" },
           "source_ref": {
             "type": "string",
             "description": "Reference to the research_brief data point or URL that supports this claim. Every factual claim should be traceable."
@@ -99,6 +195,31 @@
       "minItems": 1
     },
     "metadata": { "type": "object" }
+  },
+  "$defs": {
+    "narration_segment": {
+      "type": "object",
+      "required": ["segment_id", "text", "start_seconds", "end_seconds", "voice_identity_key"],
+      "properties": {
+        "segment_id": { "type": "string", "minLength": 8 },
+        "id": { "type": "string" },
+        "ordinal": { "type": "integer", "minimum": 1 },
+        "section_id": { "type": "string" },
+        "text": { "type": "string", "minLength": 1 },
+        "text_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "voice_identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "voice_identity": { "type": "object", "additionalProperties": true },
+        "start_seconds": { "type": "number", "minimum": 0 },
+        "end_seconds": { "type": "number", "minimum": 0 },
+        "expected_duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "measured_duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "pronunciation_dictionary_version": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["pending", "running", "completed", "failed", "cached"] },
+        "audio_path": { "type": "string" },
+        "artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

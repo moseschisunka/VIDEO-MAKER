@@ -46,6 +46,11 @@
       </div>
     </header>
 
+    <div class="release-banner" id="releaseBanner" role="status" aria-live="polite">
+      <strong>Internal preview — production certification pending</strong>
+      · Production certification is locked until <b>PR-11G</b>. Rendered outputs remain uncertified while the readiness roadmap is in progress.
+    </div>
+
     <!-- Studio Metrics / Quick Stats -->
     <div class="metrics-banner">
       <div class="metric-card">
@@ -74,7 +79,7 @@
         </div>
         <div class="metric-data">
           <span class="metric-value" id="statCompletedVideos">-</span>
-          <span class="metric-label">Final Deliverables</span>
+          <span class="metric-label">Rendered Outputs (uncertified)</span>
         </div>
       </div>
 
@@ -94,7 +99,7 @@
       <div class="filter-tabs" id="filterTabs">
         <button class="tab-btn active" data-filter="all">All Productions <span class="tab-badge" id="badgeAll">0</span></button>
         <button class="tab-btn" data-filter="live">Active / In Progress <span class="tab-badge" id="badgeLive">0</span></button>
-        <button class="tab-btn" data-filter="completed">Ready Deliverables <span class="tab-badge" id="badgeCompleted">0</span></button>
+        <button class="tab-btn" data-filter="completed">Rendered Outputs (uncertified) <span class="tab-badge" id="badgeCompleted">0</span></button>
         <button class="tab-btn" data-filter="awaiting">Needs Approval <span class="tab-badge" id="badgeAwaiting">0</span></button>
       </div>
 
@@ -149,6 +154,7 @@
             <div class="selection-grid" id="pipelineSelectionGrid">
               <!-- Dynamically populated -->
             </div>
+            <div class="field-hint">Only launch-candidate workflows can be created from this wizard. Every pipeline remains non-production until <b>PR-11G</b> passes.</div>
           </div>
 
           <!-- Step 3: Style Playbook Selection -->
@@ -169,13 +175,18 @@
             </div>
 
             <div class="form-col">
-              <label class="form-label">Target Duration</label>
+              <label class="form-label">Planning Duration (not a maximum)</label>
               <select id="durationSelect" class="form-select">
                 <option value="15">15 Seconds (Short / Hook)</option>
                 <option value="30" selected>30 Seconds (Explainer Standard)</option>
                 <option value="60">60 Seconds (Deep Dive)</option>
                 <option value="90">90 Seconds (Full Lesson)</option>
+                <option value="300">5 Minutes (Lesson)</option>
+                <option value="600">10 Minutes (Extended Lesson)</option>
+                <option value="900">15 Minutes (Content-led)</option>
+                <option value="1200">20 Minutes (Content-led)</option>
               </select>
+              <div class="field-hint">The studio follows the teaching content and narration. There is no internal 10-minute ceiling; platform export profiles may still have their own upload limits.</div>
             </div>
           </div>
         </div>
@@ -184,7 +195,7 @@
           <button type="button" class="btn btn-secondary" id="cancelWizardBtn">Cancel</button>
           <button type="submit" class="btn btn-primary glow-button" id="submitCreateBtn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            <span>Initialize & Launch Video</span>
+            <span>Create Internal Preview</span>
           </button>
         </div>
       </form>

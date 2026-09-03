@@ -10,6 +10,13 @@ This stage is what separates an OpenMontage video from generic AI slop. Without 
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Every source record must include a
+stable ID, canonical locator, access date, relevant note, license/usage
+constraints, and the claim IDs it supports. Do not submit bare URLs as
+production evidence.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/research_brief.schema.json` | Artifact validation |

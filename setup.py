@@ -1,19 +1,12 @@
-from setuptools import setup, find_packages
+"""Legacy setuptools entry point.
 
-setup(
-    name="openmontage",
-    version="0.1.0",
-    description="AI-Orchestrated Video Production Platform",
-    packages=find_packages(),
-    python_requires=">=3.10",
-    install_requires=[
-        "pyyaml>=6.0",
-        "pydantic>=2.0",
-        "jsonschema>=4.20",
-        "python-dotenv>=1.0",
-        "Pillow>=10.0",
-        "requests>=2.31",
-        "google-genai>=1.0.0",
-        "openai>=2.44.0",
-    ],
-)
+All project metadata, dependencies, and package discovery live in
+``pyproject.toml``.  Keeping this shim allows older tooling that still invokes
+``python setup.py`` to use the same single source of truth without maintaining
+a second dependency list.
+"""
+
+from setuptools import setup
+
+
+setup()

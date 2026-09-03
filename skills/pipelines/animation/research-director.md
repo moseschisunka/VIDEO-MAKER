@@ -10,6 +10,12 @@ Animation videos differ from general explainers: the research must cover both **
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Keep mathematical, scientific, and
+technical assertions claim-level traceable to approved sources and preserve
+uncertainty instead of filling gaps with plausible-sounding text.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/research_brief.schema.json` | Artifact validation |

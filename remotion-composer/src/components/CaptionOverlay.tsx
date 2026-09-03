@@ -14,7 +14,14 @@ export interface WordCaption {
   endMs: number;
 }
 
-interface CaptionOverlayProps {
+export interface CaptionRenderContract {
+  safe_area?: {
+    pixels?: { left?: number; right?: number; top?: number; bottom?: number };
+  };
+  wrapping?: { max_chars_per_line?: number; max_lines?: number; font_size?: number };
+}
+
+export interface CaptionOverlayProps extends Record<string, unknown> {
   words: WordCaption[];
   // How many words to show at once in a "page"
   wordsPerPage?: number;
@@ -23,6 +30,7 @@ interface CaptionOverlayProps {
   highlightColor?: string;
   backgroundColor?: string;
   fontFamily?: string;
+  captionContract?: CaptionRenderContract;
 }
 
 interface CaptionPage {
@@ -52,7 +60,22 @@ const PageRenderer: React.FC<{
   highlightColor: string;
   backgroundColor: string;
   fontFamily: string;
-}> = ({ page, fontSize, color, highlightColor, backgroundColor, fontFamily }) => {
+  captionBottomPx?: number;
+  captionLeftPx?: number;
+  captionRightPx?: number;
+  captionMaxWidth?: string;
+}> = ({
+  page,
+  fontSize,
+  color,
+  highlightColor,
+  backgroundColor,
+  fontFamily,
+  captionBottomPx,
+  captionLeftPx,
+  captionRightPx,
+  captionMaxWidth,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -70,17 +93,26 @@ const PageRenderer: React.FC<{
       style={{
         justifyContent: "flex-end",
         alignItems: "center",
-        paddingBottom: 80,
+        paddingBottom: Math.max(8, captionBottomPx ?? 80),
+        paddingLeft: captionLeftPx ?? 40,
+        paddingRight: captionRightPx ?? 40,
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
           opacity: entrance,
           transform: `translateY(${interpolate(entrance, [0, 1], [20, 0])}px)`,
+          position: "absolute",
+          bottom: captionBottomPx ?? 80,
+          left: captionLeftPx ?? 40,
+          right: captionRightPx ?? 40,
           backgroundColor,
           borderRadius: 12,
           padding: "14px 28px",
-          maxWidth: "80%",
+          maxWidth: captionMaxWidth ?? "80%",
+          boxSizing: "border-box",
+          margin: "0 auto",
           textAlign: "center",
         }}
       >
@@ -125,9 +157,17 @@ export const CaptionOverlay: React.FC<CaptionOverlayProps> = ({
   highlightColor = "#22D3EE",
   backgroundColor = "rgba(15, 23, 42, 0.75)",
   fontFamily = "Space Grotesk, Inter, system-ui, sans-serif",
+  captionContract,
 }) => {
   const { fps } = useVideoConfig();
   const pages = buildPages(words, wordsPerPage);
+  const safePixels = captionContract?.safe_area?.pixels;
+  // Use the contract's pixel safe area at every output size. A fixed 80px
+  // floor pushed captions to the top of small 320x240 certification renders.
+  const captionBottomPx = Math.max(8, Number(safePixels?.bottom ?? 80));
+  const captionLeftPx = Math.max(8, Number(safePixels?.left ?? 40));
+  const captionRightPx = Math.max(8, Number(safePixels?.right ?? 40));
+  const captionMaxWidth = `calc(100% - ${captionLeftPx + captionRightPx}px)`;
 
   return (
     <AbsoluteFill>
@@ -148,6 +188,10 @@ export const CaptionOverlay: React.FC<CaptionOverlayProps> = ({
               highlightColor={highlightColor}
               backgroundColor={backgroundColor}
               fontFamily={fontFamily}
+              captionBottomPx={captionBottomPx}
+              captionLeftPx={captionLeftPx}
+              captionRightPx={captionRightPx}
+              captionMaxWidth={captionMaxWidth}
             />
           </Sequence>
         );

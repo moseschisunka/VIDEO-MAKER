@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/approvals/approval_record",
+  "title": "Immutable Human Approval Record",
+  "description": "Append-only human decision bound to one immutable project artifact version.",
+  "type": "object",
+  "required": [
+    "version",
+    "approval_id",
+    "project_id",
+    "pipeline_type",
+    "run_id",
+    "attempt",
+    "stage",
+    "artifact_ref",
+    "artifact_digest",
+    "artifact_version",
+    "approver_id",
+    "decision",
+    "recorded_at",
+    "record_digest"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "approval_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "stage": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "artifact_ref": { "type": "string", "minLength": 1 },
+    "artifact_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "artifact_version": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "approver_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "decision": { "type": "string", "enum": ["approve", "revise", "reject"] },
+    "recorded_at": { "type": "string", "format": "date-time" },
+    "notes": { "type": ["string", "null"], "maxLength": 5000 },
+    "supersedes": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "record_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

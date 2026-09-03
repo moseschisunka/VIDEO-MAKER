@@ -10,6 +10,12 @@ Unlike explainer research (which focuses on facts, data, and content gaps), cine
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Cinematic language may be creative, but
+any subject, historical, safety, or attribution claim still needs a source
+record with access date, note, license, and claim IDs.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/research_brief.schema.json` | Artifact validation |

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/media/generation_plan",
+  "title": "Generation Plan",
+  "type": "object",
+  "required": ["plan_id", "idempotency_key", "asset_request", "provider", "status"],
+  "properties": {
+    "plan_id": { "type": "string", "minLength": 1 },
+    "idempotency_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "asset_request": { "type": "object" },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": "string" },
+    "payload": { "type": "object", "additionalProperties": true },
+    "status": { "type": "string", "enum": ["planned", "approved", "running", "completed", "failed", "cached"] }
+  },
+  "additionalProperties": false
+}

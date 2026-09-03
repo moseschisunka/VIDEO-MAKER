@@ -178,21 +178,28 @@ class SunoMusic(BaseTool):
 
         duration = round(time.time() - start, 2)
 
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "suno",
+            "model": inputs.get("model", "V4"),
+            "prompt": inputs["prompt"],
+            "style": inputs.get("style"),
+            "title": track.get("title", inputs.get("title")),
+            "instrumental": inputs.get("instrumental", True),
+            "duration_seconds": track.get("duration"),
+            "output": str(output_path),
+            "format": "mp3",
+            "track_id": track.get("id"),
+            "tracks_generated": len(tracks),
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data, inputs, source_tool=self.name
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "suno",
-                "model": inputs.get("model", "V4"),
-                "prompt": inputs["prompt"],
-                "style": inputs.get("style"),
-                "title": track.get("title", inputs.get("title")),
-                "instrumental": inputs.get("instrumental", True),
-                "duration_seconds": track.get("duration"),
-                "output": str(output_path),
-                "format": "mp3",
-                "track_id": track.get("id"),
-                "tracks_generated": len(tracks),
-            },
+            data=result_data,
             artifacts=[str(output_path)],
             cost_usd=self.estimate_cost(inputs),
             duration_seconds=duration,

@@ -97,8 +97,21 @@ class CheckpointValidationError(ValueError):
 
 @lru_cache(maxsize=1)
 def _load_checkpoint_schema() -> dict[str, Any]:
-    with open(CHECKPOINT_SCHEMA_PATH) as f:
-        return json.load(f)
+    with open(CHECKPOINT_SCHEMA_PATH, encoding="utf-8") as f:
+        schema = json.load(f)
+    # Resolve the local approval schema eagerly.  ``jsonschema.validate`` is
+    # intentionally called with an in-memory schema throughout this module;
+    # embedding the small contract avoids a network/URI resolver dependency
+    # and keeps checkpoint validation deterministic offline.
+    approval_schema_path = CHECKPOINT_SCHEMA_PATH.parent.parent / "approvals" / "approval_record.schema.json"
+    if isinstance(schema.get("properties"), dict) and approval_schema_path.is_file():
+        try:
+            schema["properties"]["approval_record"] = json.loads(
+                approval_schema_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            pass
+    return schema
 
 
 def _validate_artifacts_for_stage(
@@ -170,6 +183,40 @@ def validate_checkpoint(checkpoint: dict[str, Any]) -> None:
     except jsonschema.ValidationError as exc:
         raise CheckpointValidationError(f"Checkpoint failed schema validation: {exc.message}") from exc
 
+    # A human-gated completion is authoritative only when the immutable
+    # approval record is present and bound to this exact artifact version.
+    # ``human_approved`` remains in the envelope for old readers, but it is a
+    # derived compatibility field rather than an approval authority.
+    approval_record = checkpoint.get("approval_record")
+    if approval_record is not None:
+        from lib.approval_contracts import (
+            ApprovalValidationError,
+            validate_checkpoint_approval,
+        )
+
+        try:
+            validate_checkpoint_approval(checkpoint, approval_record)
+        except ApprovalValidationError as exc:
+            raise CheckpointValidationError(
+                f"checkpoint approval record is invalid: {exc}"
+            ) from exc
+        if checkpoint.get("status") != "completed":
+            raise CheckpointValidationError(
+                "approval_record may only be attached to a completed checkpoint"
+            )
+        if checkpoint.get("human_approved") is not True:
+            raise CheckpointValidationError(
+                "completed checkpoint with an approval_record must expose human_approved=true"
+            )
+    elif checkpoint.get("status") == "completed" and checkpoint.get("human_approval_required"):
+        raise CheckpointValidationError(
+            "completed human-gated checkpoint requires an immutable approval_record"
+        )
+    if checkpoint.get("status") == "awaiting_human" and checkpoint.get("human_approved") is True:
+        raise CheckpointValidationError(
+            "awaiting_human checkpoint cannot be marked human_approved; use the approval transition"
+        )
+
 
 def _checkpoint_path(pipeline_dir: Path, project_id: str, stage: str) -> Path:
     return pipeline_dir / project_id / f"checkpoint_{stage}.json"
@@ -180,6 +227,7 @@ def init_project(
     *,
     title: str,
     pipeline_type: str,
+    run_id: Optional[str] = None,
     pipeline_dir: Optional[Path] = None,
     style_playbook: Optional[str] = None,
 ) -> Path:
@@ -218,6 +266,8 @@ def init_project(
     marker["project_id"] = project_id
     marker["title"] = title
     marker["pipeline_type"] = pipeline_type
+    if run_id is not None:
+        marker["run_id"] = str(run_id)
     if style_playbook is not None:
         marker["style_playbook"] = style_playbook
 
@@ -331,6 +381,21 @@ def _merge_decision_log(
                 "decisions": [],
             }
 
+        # Decision-log identity is part of the audit contract.  Backfill
+        # legacy logs that predate pipeline/run fields, but fail closed when a
+        # later stage attempts to merge a different project or execution.
+        for identity_field in ("project_id", "pipeline_type", "run_id"):
+            incoming = new_log.get(identity_field)
+            if incoming in (None, ""):
+                continue
+            current = existing.get(identity_field)
+            if current not in (None, "") and current != incoming:
+                raise CheckpointValidationError(
+                    f"decision log {identity_field} {current!r} does not match "
+                    f"incoming checkpoint identity {incoming!r}"
+                )
+            existing[identity_field] = incoming
+
         existing_ids = {d["decision_id"] for d in existing.get("decisions", [])}
         for decision in new_log.get("decisions", []):
             if decision.get("decision_id") not in existing_ids:
@@ -354,10 +419,16 @@ def write_checkpoint(
     artifacts: dict[str, Any],
     *,
     pipeline_type: Optional[str] = None,
+    run_id: Optional[str] = None,
+    attempt: Optional[int] = None,
+    producer_stage: Optional[str] = None,
+    producer_tool: Optional[str] = None,
     style_playbook: Optional[str] = None,
     checkpoint_policy: str = "guided",
     human_approval_required: bool = False,
     human_approved: bool = False,
+    approval_record: Optional[dict] = None,
+    timestamp: Optional[datetime | str] = None,
     review: Optional[dict] = None,
     cost_snapshot: Optional[dict] = None,
     error: Optional[str] = None,
@@ -377,6 +448,39 @@ def write_checkpoint(
                 marker = None
         if isinstance(marker, dict) and marker.get("pipeline_type"):
             pipeline_type = marker["pipeline_type"]
+
+    # The durable work order is the canonical run identity.  Fall back to the
+    # marker for internal/legacy fixtures so newly written checkpoints do not
+    # lose an already-persisted run id merely because the caller omitted it.
+    if not run_id:
+        for identity_path in (
+            pipeline_dir / project_id / "work_order.json",
+            pipeline_dir / project_id / PROJECT_MARKER_FILENAME,
+        ):
+            try:
+                with open(identity_path, encoding="utf-8") as handle:
+                    identity_payload = json.load(handle)
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(identity_payload, dict) and identity_payload.get("run_id"):
+                run_id = str(identity_payload["run_id"])
+                break
+
+    # Attempt is immutable run provenance.  Prefer the durable work order and
+    # only fall back to the marker for legacy/internal fixtures.
+    if attempt is None:
+        for identity_path in (
+            pipeline_dir / project_id / "work_order.json",
+            pipeline_dir / project_id / PROJECT_MARKER_FILENAME,
+        ):
+            try:
+                with open(identity_path, encoding="utf-8") as handle:
+                    identity_payload = json.load(handle)
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(identity_payload, dict) and identity_payload.get("attempt") is not None:
+                attempt = identity_payload["attempt"]
+                break
 
     valid_stages = (
         set(get_pipeline_stages(pipeline_type)) if pipeline_type
@@ -402,7 +506,11 @@ def write_checkpoint(
     gated = bool(manifest_gate) or human_approval_required
     if gated:
         human_approval_required = True
-        if status == "completed" and not human_approved:
+        if status == "awaiting_human" and (human_approved or approval_record is not None):
+            raise CheckpointValidationError(
+                "awaiting_human checkpoint cannot carry an approval; use the approve, revise, or reject transition"
+            )
+        if status == "completed" and approval_record is None:
             gate_source = (
                 f"human_approval_default: true in the {pipeline_type!r} manifest"
                 if manifest_gate
@@ -411,24 +519,52 @@ def write_checkpoint(
             raise CheckpointValidationError(
                 f"GATE VIOLATION: stage {stage!r} requires human approval "
                 f"({gate_source}) but status='completed' was written without "
-                f"human_approved=True. Correct protocol: write "
+                f"an immutable approval_record. Correct protocol: write "
                 f"status='awaiting_human', present the artifact summary to the "
                 f"user, END YOUR TURN, and only after the user approves "
-                f"re-write with status='completed', human_approved=True."
+                f"transition through the approval endpoint."
             )
 
+    if approval_record is not None and not isinstance(approval_record, dict):
+        raise CheckpointValidationError("approval_record must be an object")
+    # The boolean is derived from the immutable record for gated completions;
+    # a caller cannot make a gate pass by setting it independently.
+    if gated and status == "completed":
+        human_approved = bool(
+            isinstance(approval_record, dict)
+            and approval_record.get("decision") == "approve"
+        )
+
+    checkpoint_timestamp = (
+        timestamp.isoformat()
+        if isinstance(timestamp, datetime)
+        else str(timestamp)
+        if isinstance(timestamp, str) and timestamp.strip()
+        else datetime.now(timezone.utc).isoformat()
+    )
     checkpoint = {
         "version": "1.0",
         "project_id": project_id,
         "pipeline_type": pipeline_type or "unknown",
         "stage": stage,
         "status": status,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": checkpoint_timestamp,
         "checkpoint_policy": checkpoint_policy,
         "human_approval_required": human_approval_required,
         "human_approved": human_approved,
         "artifacts": artifacts,
     }
+    if approval_record is not None:
+        checkpoint["approval_record"] = dict(approval_record)
+    if run_id:
+        checkpoint["run_id"] = str(run_id)
+    if attempt is not None:
+        checkpoint["attempt"] = attempt
+    # A checkpoint is itself produced by the deterministic checkpoint writer
+    # when no more specific agent/tool identity is supplied.  Manifest-agent
+    # submissions pass their actual producer explicitly.
+    checkpoint["producer_stage"] = str(producer_stage or stage)
+    checkpoint["producer_tool"] = str(producer_tool or "checkpoint_writer")
     if style_playbook is not None:
         checkpoint["style_playbook"] = style_playbook
     if review is not None:
@@ -444,7 +580,13 @@ def write_checkpoint(
     # append them to the project-level decision log file, then write the
     # reference back into relevant artifacts so downstream consumers can find it.
     if "decision_log" in artifacts and isinstance(artifacts["decision_log"], dict):
-        _merge_decision_log(pipeline_dir, project_id, artifacts["decision_log"])
+        decision_payload = dict(artifacts["decision_log"])
+        decision_payload.setdefault("project_id", project_id)
+        if pipeline_type:
+            decision_payload.setdefault("pipeline_type", pipeline_type)
+        if run_id:
+            decision_payload.setdefault("run_id", str(run_id))
+        _merge_decision_log(pipeline_dir, project_id, decision_payload)
         log_ref = str(_decision_log_path(pipeline_dir, project_id))
 
         # Write decision_log_ref into proposal_packet and render_report
@@ -483,6 +625,16 @@ def write_checkpoint(
     except:
         os.unlink(tmp_path)
         raise
+
+    if approval_record is not None:
+        from lib.approval_contracts import append_approval_record
+
+        try:
+            append_approval_record(path.parent, approval_record)
+        except Exception as exc:
+            raise CheckpointValidationError(
+                f"checkpoint approval record could not be persisted: {exc}"
+            ) from exc
 
     return path
 

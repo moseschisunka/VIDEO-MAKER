@@ -1,0 +1,150 @@
+{
+  "elapsed_seconds": 9.654002,
+  "gate": "PR-1009",
+  "network_calls": 0,
+  "offline_only": true,
+  "paid_provider_calls": 0,
+  "results": {
+    "PERF-08": {
+      "completed": 4,
+      "contamination": [],
+      "elapsed_seconds": 3.001716,
+      "peak_python_memory_bytes": 136945,
+      "project_count": 4,
+      "results": [
+        {
+          "marker": {
+            "owner": "pr1009-agent-00",
+            "project_id": "pr1009-load-00",
+            "run_id": "14d59db5-27fb-4ced-bf69-6d3c003b2ff0"
+          },
+          "owner": "pr1009-agent-00",
+          "project_id": "pr1009-load-00",
+          "run_id": "14d59db5-27fb-4ced-bf69-6d3c003b2ff0",
+          "run_root": "C:\\Users\\PC\\AppData\\Local\\Temp\\openmontage-pr1009-loyafn7j\\projects\\pr1009-load-00\\runs\\14d59db5-27fb-4ced-bf69-6d3c003b2ff0",
+          "status": "running"
+        },
+        {
+          "marker": {
+            "owner": "pr1009-agent-01",
+            "project_id": "pr1009-load-01",
+            "run_id": "9ae3dbeb-f032-439a-93e1-92dd185e3f8e"
+          },
+          "owner": "pr1009-agent-01",
+          "project_id": "pr1009-load-01",
+          "run_id": "9ae3dbeb-f032-439a-93e1-92dd185e3f8e",
+          "run_root": "C:\\Users\\PC\\AppData\\Local\\Temp\\openmontage-pr1009-loyafn7j\\projects\\pr1009-load-01\\runs\\9ae3dbeb-f032-439a-93e1-92dd185e3f8e",
+          "status": "running"
+        },
+        {
+          "marker": {
+            "owner": "pr1009-agent-02",
+            "project_id": "pr1009-load-02",
+            "run_id": "910dbec8-9ffd-4ddc-9424-69884377915a"
+          },
+          "owner": "pr1009-agent-02",
+          "project_id": "pr1009-load-02",
+          "run_id": "910dbec8-9ffd-4ddc-9424-69884377915a",
+          "run_root": "C:\\Users\\PC\\AppData\\Local\\Temp\\openmontage-pr1009-loyafn7j\\projects\\pr1009-load-02\\runs\\910dbec8-9ffd-4ddc-9424-69884377915a",
+          "status": "running"
+        },
+        {
+          "marker": {
+            "owner": "pr1009-agent-03",
+            "project_id": "pr1009-load-03",
+            "run_id": "a06df3a6-bbc5-423c-aa68-006aa5d8af58"
+          },
+          "owner": "pr1009-agent-03",
+          "project_id": "pr1009-load-03",
+          "run_id": "a06df3a6-bbc5-423c-aa68-006aa5d8af58",
+          "run_root": "C:\\Users\\PC\\AppData\\Local\\Temp\\openmontage-pr1009-loyafn7j\\projects\\pr1009-load-03\\runs\\a06df3a6-bbc5-423c-aa68-006aa5d8af58",
+          "status": "running"
+        }
+      ],
+      "status": "PASS",
+      "workers": 4
+    },
+    "PERF-09": {
+      "added_orphans": [],
+      "after_orphans": [],
+      "before_orphans": [],
+      "iterations": 10,
+      "status": "PASS"
+    },
+    "PERF-10": {
+      "baseline_subscribers": 0,
+      "burst": 200,
+      "dropped_burst_events": 13600,
+      "final_subscribers": 0,
+      "max_queue": 64,
+      "queue_limit": 64,
+      "status": "PASS",
+      "subscriptions": 100
+    },
+    "PROVIDER-THROTTLE": {
+      "call_times": [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+        1.25
+      ],
+      "calls": 6,
+      "minimum_spacing_seconds": 0.25,
+      "rate_per_second": 4.0,
+      "required_spacing_seconds": 0.25,
+      "status": "PASS"
+    },
+    "QUEUE": {
+      "conflicts": 7,
+      "contenders": 8,
+      "outcomes": [
+        {
+          "agent": "pr1009-contender-00",
+          "outcome": "claimed",
+          "owner": "pr1009-contender-00"
+        },
+        {
+          "agent": "pr1009-contender-01",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        },
+        {
+          "agent": "pr1009-contender-02",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        },
+        {
+          "agent": "pr1009-contender-03",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        },
+        {
+          "agent": "pr1009-contender-04",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        },
+        {
+          "agent": "pr1009-contender-05",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        },
+        {
+          "agent": "pr1009-contender-06",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        },
+        {
+          "agent": "pr1009-contender-07",
+          "error": "work order is leased by another live agent: 'pr1009-contender-00'",
+          "outcome": "conflict"
+        }
+      ],
+      "status": "PASS",
+      "winners": 1
+    }
+  },
+  "schema_version": "1.0",
+  "status": "PASS"
+}

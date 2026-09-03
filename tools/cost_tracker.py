@@ -98,19 +98,49 @@ class CostTracker:
 
     # ---- Core operations ----
 
-    def estimate(self, tool: str, operation: str, estimated_usd: float) -> str:
-        """Record an estimate. Returns entry ID."""
+    def estimate(
+        self,
+        tool: str,
+        operation: str,
+        estimated_usd: float,
+        *,
+        idempotency_key: str | None = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> str:
+        """Record an estimate and return its stable entry ID.
+
+        Provider retries may re-enter the cost layer after a process restart.
+        When an idempotency key is supplied, an existing entry is reused
+        instead of creating a second reservation.
+        """
+        if isinstance(estimated_usd, bool) or not isinstance(estimated_usd, (int, float)):
+            raise ValueError("estimated_usd must be numeric")
+        if float(estimated_usd) < 0:
+            raise ValueError("estimated_usd must be non-negative")
+        if idempotency_key:
+            for existing in self.entries:
+                if existing.get("idempotency_key") == idempotency_key:
+                    if existing.get("tool") != tool or existing.get("operation") != operation:
+                        raise ValueError("idempotency key is already bound to another cost operation")
+                    if round(float(existing.get("estimated_usd", 0.0)), 4) != round(float(estimated_usd), 4):
+                        raise ValueError("idempotency key is already bound to another estimate")
+                    return str(existing["id"])
         entry_id = self._new_id()
-        self.entries.append({
+        entry = {
             "id": entry_id,
             "tool": tool,
             "operation": operation,
             "status": EntryStatus.ESTIMATED.value,
-            "estimated_usd": round(estimated_usd, 4),
+            "estimated_usd": round(float(estimated_usd), 4),
             "reserved_usd": 0.0,
             "actual_usd": 0.0,
             "timestamp": self._now(),
-        })
+        }
+        if idempotency_key:
+            entry["idempotency_key"] = idempotency_key
+        if metadata:
+            entry["metadata"] = dict(metadata)
+        self.entries.append(entry)
         self._save()
         return entry_id
 
@@ -121,6 +151,13 @@ class CostTracker:
         when the action exceeds the single-action approval threshold.
         """
         entry = self._find(entry_id)
+        status = entry.get("status")
+        if status == EntryStatus.RESERVED.value:
+            # A worker may replay the reserve call after a crash.  Returning
+            # successfully is safe because the hold already exists.
+            return
+        if status != EntryStatus.ESTIMATED.value:
+            raise ValueError(f"cannot reserve terminal cost entry in {status!r} state")
         estimated = entry["estimated_usd"]
 
         # Check single-action approval threshold
@@ -164,8 +201,25 @@ class CostTracker:
     def reconcile(self, entry_id: str, actual_usd: float, success: bool = True) -> None:
         """Reconcile actual spend after tool execution."""
         entry = self._find(entry_id)
-        entry["status"] = EntryStatus.COMPLETED.value if success else EntryStatus.FAILED.value
-        entry["actual_usd"] = round(actual_usd, 4)
+        if isinstance(actual_usd, bool) or not isinstance(actual_usd, (int, float)) or float(actual_usd) < 0:
+            raise ValueError("actual_usd must be a non-negative number")
+        terminal_status = EntryStatus.COMPLETED.value if success else EntryStatus.FAILED.value
+        if entry.get("status") in {
+            EntryStatus.COMPLETED.value,
+            EntryStatus.FAILED.value,
+        }:
+            # Reconciliation is idempotent, but a conflicting replay must be
+            # surfaced rather than silently rewriting financial history.
+            if (
+                entry.get("status") != terminal_status
+                or round(float(entry.get("actual_usd", 0.0)), 4) != round(float(actual_usd), 4)
+            ):
+                raise ValueError("cost entry was already reconciled with different values")
+            return
+        if entry.get("status") != EntryStatus.RESERVED.value:
+            raise ValueError(f"cannot reconcile cost entry in {entry.get('status')!r} state")
+        entry["status"] = terminal_status
+        entry["actual_usd"] = round(float(actual_usd), 4)
         entry["reserved_usd"] = 0.0
         entry["timestamp"] = self._now()
         self._save()
@@ -173,6 +227,10 @@ class CostTracker:
     def refund(self, entry_id: str) -> None:
         """Cancel a reservation without executing."""
         entry = self._find(entry_id)
+        if entry.get("status") == EntryStatus.REFUNDED.value:
+            return
+        if entry.get("status") != EntryStatus.RESERVED.value:
+            raise ValueError(f"cannot refund cost entry in {entry.get('status')!r} state")
         entry["status"] = EntryStatus.REFUNDED.value
         entry["reserved_usd"] = 0.0
         entry["timestamp"] = self._now()

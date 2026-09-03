@@ -215,6 +215,7 @@ def test_schema_snapshot_contains_phase1_contract_fields():
     assert data["core_field_enums"]["avatar_mode"] == ["std", "pro"]
 
 
+@pytest.mark.live_provider
 def test_optional_live_doc_snapshot_check():
     if os.environ.get("RUN_KLING_DOC_LIVE_CHECK") != "1":
         pytest.skip("Set RUN_KLING_DOC_LIVE_CHECK=1 to compare fixture against current Kling docs HTML.")

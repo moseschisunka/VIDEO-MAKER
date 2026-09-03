@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/evals/golden_scenario",
+  "title": "Production-readiness golden scenario",
+  "description": "A versioned, provider-agnostic brief and expected contract for replay evaluation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "pipeline_type",
+    "description",
+    "inputs",
+    "expected_artifacts",
+    "eval_mode",
+    "tolerance",
+    "profile",
+    "duration_seconds",
+    "duration_tolerance_seconds",
+    "voice_intent",
+    "visual_strategy",
+    "runtime_candidates",
+    "expected_approvals",
+    "prohibited_downgrade",
+    "tags"
+  ],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,80}$" },
+    "pipeline_type": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,60}$" },
+    "description": { "type": "string", "minLength": 20 },
+    "inputs": {
+      "type": "object",
+      "required": ["source_mode", "brief", "profile", "duration_seconds"],
+      "properties": {
+        "source_mode": { "type": "string", "minLength": 3 },
+        "brief": { "type": "string", "minLength": 10 },
+        "profile": { "type": "string", "minLength": 2 },
+        "duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "input_media": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "target_platform": { "type": "string", "minLength": 2 }
+      },
+      "additionalProperties": true
+    },
+    "expected_artifacts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["required_fields"],
+        "properties": {
+          "required_fields": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "assertions": { "type": "object", "additionalProperties": true },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "eval_mode": { "type": "string", "enum": ["deterministic", "stochastic"] },
+    "tolerance": { "type": "number", "minimum": 0 },
+    "profile": { "type": "string", "minLength": 2 },
+    "duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "duration_tolerance_seconds": { "type": "number", "minimum": 0 },
+    "voice_intent": {
+      "type": "object",
+      "required": ["mode", "provider_policy", "transcript_policy"],
+      "properties": {
+        "mode": { "type": "string", "minLength": 2 },
+        "provider_policy": { "type": "string", "minLength": 2 },
+        "transcript_policy": { "type": "string", "minLength": 2 },
+        "pronunciation_targets": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "visual_strategy": {
+      "type": "object",
+      "required": ["mode", "description", "asset_sources", "motion_requirement"],
+      "properties": {
+        "mode": { "type": "string", "minLength": 2 },
+        "description": { "type": "string", "minLength": 10 },
+        "asset_sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "motion_requirement": { "type": "string", "enum": ["required", "preferred", "not_required"] }
+      },
+      "additionalProperties": false
+    },
+    "runtime_candidates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["remotion", "hyperframes", "ffmpeg"] }
+    },
+    "expected_approvals": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 2 }
+    },
+    "prohibited_downgrade": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 10 }
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" }
+    }
+  }
+}

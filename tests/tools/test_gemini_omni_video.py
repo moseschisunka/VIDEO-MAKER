@@ -9,6 +9,7 @@ import types
 from pathlib import Path
 
 import pytest
+from unittest.mock import MagicMock, patch
 
 from tools.base_tool import ToolStatus
 
@@ -102,6 +103,34 @@ def test_gemini_omni_cost_estimate_clamps_duration_hint(gemini_env):
     assert tool.estimate_cost({"prompt": "x", "duration": "30"}) == pytest.approx(1.00)
 
 
+def test_gemini_omni_sdk_text_to_video_matches_official_interactions_shape(monkeypatch, tmp_path, gemini_env):
+    from tools.video.gemini_omni_video import GeminiOmniVideo
+
+    mock_client = MagicMock()
+    interaction = MagicMock()
+    interaction.id = "int_sdk_1"
+    interaction.output_video.data = base64.b64encode(b"sdk omni mp4").decode("ascii")
+    mock_client.interactions.create.return_value = interaction
+
+    output_path = tmp_path / "sdk-clip.mp4"
+    with patch("google.genai.Client", return_value=mock_client):
+        result = GeminiOmniVideo().execute(
+            {
+                "prompt": "A marble rolling fast on a chain reaction style track, continuous smooth shot.",
+                "output_path": str(output_path),
+            }
+        )
+
+    assert result.success, result.error
+    assert output_path.read_bytes() == b"sdk omni mp4"
+    assert result.data["model"] == "gemini-omni-1.1-flash"
+    assert result.data["transport"] == "sdk"
+    assert mock_client.interactions.create.call_args.kwargs == {
+        "model": "gemini-omni-1.1-flash",
+        "input": "A marble rolling fast on a chain reaction style track, continuous smooth shot.",
+    }
+
+
 def test_gemini_omni_text_to_video_via_uri_delivery(monkeypatch, tmp_path, gemini_env):
     from tools.video.gemini_omni_video import GeminiOmniVideo
 
@@ -121,6 +150,7 @@ def test_gemini_omni_text_to_video_via_uri_delivery(monkeypatch, tmp_path, gemin
         {
             "prompt": "A marble rolling on a track, single continuous shot.",
             "aspect_ratio": "9:16",
+            "transport": "rest",
             "output_path": str(output_path),
         }
     )
@@ -131,7 +161,7 @@ def test_gemini_omni_text_to_video_via_uri_delivery(monkeypatch, tmp_path, gemin
     assert result.data["editable"] is True
 
     payload = calls["post"][0]["json"]
-    assert payload["model"] == "gemini-omni-flash-preview"
+    assert payload["model"] == "gemini-omni-1.1-flash"
     assert payload["input"] == "A marble rolling on a track, single continuous shot."
     assert payload["response_format"] == {"type": "video", "aspect_ratio": "9:16", "delivery": "uri"}
     assert calls["post"][0]["headers"]["x-goog-api-key"] == "test-gemini-key"
@@ -156,7 +186,7 @@ def test_gemini_omni_uri_delivery_handles_full_download_url(monkeypatch, tmp_pat
     )
 
     output_path = tmp_path / "full.mp4"
-    result = GeminiOmniVideo().execute({"prompt": "A sunset.", "output_path": str(output_path)})
+    result = GeminiOmniVideo().execute({"prompt": "A sunset.", "transport": "rest", "output_path": str(output_path)})
 
     assert result.success, result.error
     assert output_path.read_bytes() == b"full url mp4"
@@ -191,7 +221,7 @@ def test_gemini_omni_inline_data_response_is_handled(monkeypatch, tmp_path, gemi
     )
 
     output_path = tmp_path / "inline.mp4"
-    result = GeminiOmniVideo().execute({"prompt": "A sunset.", "output_path": str(output_path)})
+    result = GeminiOmniVideo().execute({"prompt": "A sunset.", "transport": "rest", "output_path": str(output_path)})
 
     assert result.success, result.error
     assert output_path.read_bytes() == b"inline mp4"
@@ -213,6 +243,7 @@ def test_gemini_omni_edit_turn_sends_previous_interaction_id(monkeypatch, tmp_pa
             "prompt": "Make the violin invisible. Keep everything else the same.",
             "operation": "edit_video",
             "previous_interaction_id": "int_1",
+            "transport": "rest",
             "output_path": str(tmp_path / "edit.mp4"),
         }
     )
@@ -246,6 +277,7 @@ def test_gemini_omni_image_to_video_sends_typed_parts(monkeypatch, tmp_path, gem
             "prompt": "A cat <IMAGE_REF_0> playfully batting at yarn.",
             "operation": "image_to_video",
             "reference_image_path": str(ref),
+            "transport": "rest",
             "output_path": str(tmp_path / "cat.mp4"),
         }
     )
@@ -277,7 +309,7 @@ def test_gemini_omni_store_false_marks_result_not_editable(monkeypatch, tmp_path
     )
 
     result = GeminiOmniVideo().execute(
-        {"prompt": "A sunset.", "store": False, "output_path": str(tmp_path / "s.mp4")}
+        {"prompt": "A sunset.", "store": False, "transport": "rest", "output_path": str(tmp_path / "s.mp4")}
     )
 
     assert result.success, result.error

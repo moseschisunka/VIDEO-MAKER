@@ -18,10 +18,50 @@
     },
     "timestamp": { "type": "string", "format": "date-time" },
     "pipeline_type": { "type": "string", "description": "Pipeline manifest name" },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "UUIDv4 execution identity copied from the durable work order"
+    },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "producer_stage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Manifest stage that produced this checkpoint"
+    },
+    "producer_tool": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Tool or agent identity that produced this checkpoint"
+    },
     "style_playbook": { "type": "string" },
     "checkpoint_policy": { "type": "string", "enum": ["guided", "manual_all", "auto_noncreative"] },
     "human_approval_required": { "type": "boolean" },
     "human_approved": { "type": "boolean" },
+    "approval_record": {
+      "type": "object",
+      "description": "Immutable approval bound to this exact completed checkpoint artifact version",
+      "required": ["version", "approval_id", "project_id", "pipeline_type", "run_id", "attempt", "stage", "artifact_ref", "artifact_digest", "artifact_version", "approver_id", "decision", "recorded_at", "record_digest"],
+      "properties": {
+        "version": { "type": "string", "const": "1.0" },
+        "approval_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+        "pipeline_type": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "stage": { "type": "string", "minLength": 1 },
+        "artifact_ref": { "type": "string", "minLength": 1 },
+        "artifact_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "artifact_version": { "type": "string", "minLength": 1 },
+        "approver_id": { "type": "string", "minLength": 1 },
+        "decision": { "type": "string", "enum": ["approve", "revise", "reject"] },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "notes": { "type": ["string", "null"] },
+        "supersedes": { "type": ["string", "null"] },
+        "record_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "artifacts": {
       "type": "object",
       "description": "Map of artifact name to artifact data or file path",

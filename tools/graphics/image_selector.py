@@ -7,6 +7,7 @@ the tool file in tools/graphics/; no changes to this selector are needed.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from tools.base_tool import BaseTool, ToolResult, ToolRuntime, ToolStability, ToolStatus, ToolTier
@@ -175,6 +176,30 @@ class ImageSelector(BaseTool):
                 "description": "Optional provenance metadata for custom workflow dependencies.",
             },
             "output_path": {"type": "string"},
+            "asset_request": {
+                "type": "object",
+                "description": "Canonical scene asset request. Required for production mixed-media runs.",
+            },
+            "sample_required": {
+                "type": "boolean",
+                "default": False,
+                "description": "Require a reviewed sample before any batch generation.",
+            },
+            "sample_approval": {
+                "type": "object",
+                "description": "Immutable sample approval record for the selected generation plan.",
+            },
+            "batch": {"type": "boolean", "default": False},
+            "strict_media_validation": {
+                "type": "boolean",
+                "default": False,
+                "description": "Production mode: require local decoded output and requested dimensions.",
+            },
+            "production_mode": {"type": "boolean", "default": False},
+            "asset_cache_dir": {
+                "type": "string",
+                "description": "Optional run-local content-addressed cache for validated generated assets.",
+            },
         },
     }
 
@@ -222,10 +247,21 @@ class ImageSelector(BaseTool):
         # Rank mode — return scored provider rankings without generating
         if inputs.get("operation") == "rank":
             rankings = rank_providers(candidates, task_context)
+            serialized = self._serialize_rankings(candidates, rankings)
+            from lib.providers.plans import build_ranked_plan
+
+            plan = build_ranked_plan(
+                capability=self.capability,
+                operation="generate",
+                inputs=inputs,
+                rankings=serialized,
+                providers=candidates,
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "rankings": self._serialize_rankings(candidates, rankings),
+                    "rankings": serialized,
+                    "dry_run_plan": plan,
                     "explanation": "\n".join(r.explain() for r in rankings[:5]),
                     "normalized_task_context": task_context,
                 },
@@ -235,6 +271,74 @@ class ImageSelector(BaseTool):
         tool, score = self._select_best_tool(inputs, candidates, task_context)
         if tool is None:
             return ToolResult(success=False, error="No image provider available.")
+
+        from lib.media_contracts import AssetRequest, build_asset_request
+        from lib.media_generation import (
+            build_generation_plan,
+            collect_output_paths,
+            require_sample_approval,
+            validate_generation_output,
+        )
+
+        raw_request = inputs.get("asset_request")
+        if raw_request:
+            try:
+                asset_request = build_asset_request(raw_request)
+                if inputs.get("sample_required") or inputs.get("batch"):
+                    asset_request = replace(asset_request, sample_required=True)
+            except Exception as exc:
+                return ToolResult(success=False, error=f"Invalid asset_request: {exc}")
+        else:
+            asset_request = AssetRequest(
+                request_id=str(inputs.get("request_id") or f"image:{inputs.get('prompt', '')}"),
+                scene_id=str(inputs.get("scene_id") or "unspecified"),
+                intent=str(inputs.get("prompt") or "image"),
+                media_type="image",
+                strategy="ai",
+                constraints={
+                    key: inputs[key]
+                    for key in ("width", "height", "aspect_ratio")
+                    if inputs.get(key) is not None
+                },
+                sample_required=bool(inputs.get("sample_required") or inputs.get("batch")),
+            )
+        try:
+            plan = build_generation_plan(
+                asset_request,
+                provider=str(getattr(tool, "provider", "")),
+                model=str(inputs.get("model_name") or inputs.get("model") or getattr(tool, "version", "")),
+                inputs=inputs,
+            )
+            approval = require_sample_approval(
+                asset_request,
+                inputs.get("sample_approval") if isinstance(inputs.get("sample_approval"), dict) else None,
+                plan_id=plan["plan_id"],
+            )
+        except Exception as exc:
+            # Keep selector failures structured and prevent any provider call.
+            return ToolResult(success=False, error=f"Image generation plan blocked: {exc}")
+
+        cache = None
+        if inputs.get("asset_cache_dir"):
+            try:
+                from lib.asset_cache import AssetCache
+
+                cache = AssetCache(str(inputs["asset_cache_dir"]))
+                cached = cache.get(asset_request, destination=inputs.get("output_path"), validate=True)
+                if cached:
+                    return ToolResult(success=True, data={
+                        "output": cached["path"],
+                        "output_path": cached["path"],
+                        "selected_tool": tool.name,
+                        "selected_provider": tool.provider,
+                        "generation_plan": plan,
+                        "sample_approval": approval,
+                        "asset_request": asset_request.to_dict(),
+                        "asset_validation": cached.get("validation") or {},
+                        "cache_hit": True,
+                    }, artifacts=[cached["path"]])
+            except Exception as exc:
+                logger.warning("image_selector asset cache lookup skipped: %s", exc)
 
         # Adapt input keys: stock tools use 'query' while generators use 'prompt'
         adapted = dict(inputs)
@@ -254,6 +358,12 @@ class ImageSelector(BaseTool):
         # Strip selector-only keys that downstream tools don't understand
         adapted.pop("preferred_provider", None)
         adapted.pop("allowed_providers", None)
+        for control_key in (
+            "asset_request", "sample_required", "sample_approval", "batch",
+            "strict_media_validation", "production_mode", "request_id", "scene_id",
+            "asset_cache_dir",
+        ):
+            adapted.pop(control_key, None)
 
         # Pass through generation params only to tools that accept them.
         if hasattr(tool, 'input_schema'):
@@ -299,8 +409,40 @@ class ImageSelector(BaseTool):
                     tool.name, ", ".join(stripped),
                 )
 
-        result = tool.execute(adapted)
+        from lib.providers.bridge import execute_with_provider_executor
+
+        # All selector executions are kernel-governed; the bridge preserves
+        # direct-test compatibility while production identity calls stay
+        # approval-aware.
+        result = execute_with_provider_executor(tool, adapted)
         if result.success:
+            strict = bool(inputs.get("strict_media_validation") or inputs.get("production_mode"))
+            if strict:
+                try:
+                    validation = validate_generation_output(
+                        result,
+                        media_type="image",
+                        constraints=asset_request.constraints,
+                        strict=True,
+                    )
+                except Exception as exc:
+                    return ToolResult(success=False, data={"generation_plan": plan, "sample_approval": approval}, error=f"Generated image failed validation: {exc}")
+                result.data["asset_validation"] = validation
+                if cache:
+                    try:
+                        paths = [p for p in collect_output_paths(result) if p.is_file()]
+                        if paths:
+                            entry = cache.put(
+                                asset_request,
+                                paths[0],
+                                asset_id=f"asset_{validation['outputs'][0].get('sha256', '')[:16]}",
+                                media_type="image",
+                                validation=validation["outputs"][0],
+                                metadata={"generation_plan": plan},
+                            )
+                            result.data["asset_cache"] = {"request_key": entry.request_key, "sha256": entry.sha256, "path": entry.path}
+                    except Exception as exc:
+                        logger.warning("image_selector asset cache write skipped: %s", exc)
             result.data.setdefault("selected_tool", tool.name)
             result.data["selected_provider"] = tool.provider
             result.data["selection_reason"] = score.explain() if score else f"Selected {tool.provider} ({tool.name})"
@@ -311,6 +453,9 @@ class ImageSelector(BaseTool):
                 t.name for t in candidates
                 if t.name != tool.name and t.get_status().value == "available"
             ]
+            result.data["generation_plan"] = plan
+            result.data["sample_approval"] = approval
+            result.data["asset_request"] = asset_request.to_dict()
         return result
 
     def _select_best_tool(

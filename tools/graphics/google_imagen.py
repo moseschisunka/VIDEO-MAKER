@@ -118,9 +118,14 @@ class GoogleImagen(BaseTool):
                     "imagen-4.0-generate-001",
                     "imagen-4.0-fast-generate-001",
                     "imagen-4.0-ultra-generate-001",
+                    "gemini-2.5-flash-image",
                 ],
                 "default": "imagen-4.0-generate-001",
-                "description": "Imagen model variant",
+                "description": "Imagen or Gemini image-generation model",
+            },
+            "model_name": {
+                "type": "string",
+                "description": "Provider-neutral alias for model",
             },
             "number_of_images": {
                 "type": "integer",
@@ -174,8 +179,10 @@ class GoogleImagen(BaseTool):
         return ToolStatus.UNAVAILABLE
 
     def estimate_cost(self, inputs: dict[str, Any]) -> float:
-        model = inputs.get("model", "imagen-4.0-generate-001")
+        model = inputs.get("model") or inputs.get("model_name") or "imagen-4.0-generate-001"
         n = inputs.get("number_of_images", 1)
+        if model == "gemini-2.5-flash-image":
+            return 0.039 * n
         if "ultra" in model:
             return 0.06 * n
         if "fast" in model:
@@ -212,7 +219,7 @@ class GoogleImagen(BaseTool):
         import requests
 
         start = time.time()
-        model = inputs.get("model", "imagen-4.0-generate-001")
+        model = inputs.get("model") or inputs.get("model_name") or "imagen-4.0-generate-001"
         prompt = inputs["prompt"]
 
         import logging
@@ -234,6 +241,77 @@ class GoogleImagen(BaseTool):
             aspect_ratio = "1:1"
 
         number_of_images = inputs.get("number_of_images", 1)
+
+        # Gemini image models use the GenAI SDK's generate_content surface,
+        # not Imagen's REST :predict endpoint. Keep this branch before the
+        # REST request so selector-routed Gemini image jobs work offline in
+        # tests and use the correct production API contract.
+        if model.startswith("gemini-"):
+            try:
+                from google.genai import types
+                from tools.google_credentials import get_genai_client
+
+                client = get_genai_client()
+                config = types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
+                    image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+                )
+                predictions: list[bytes] = []
+                for _ in range(number_of_images):
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=config,
+                    )
+                    for candidate in getattr(response, "candidates", []) or []:
+                        content = getattr(candidate, "content", None)
+                        for part in getattr(content, "parts", []) or []:
+                            inline_data = getattr(part, "inline_data", None)
+                            image_data = getattr(inline_data, "data", None)
+                            if image_data:
+                                if isinstance(image_data, str):
+                                    image_data = base64.b64decode(image_data)
+                                predictions.append(bytes(image_data))
+                                break
+                        if predictions and len(predictions) >= _ + 1:
+                            break
+
+                if not predictions:
+                    return ToolResult(
+                        success=False,
+                        error="No image data returned from Gemini image model",
+                    )
+
+                output_paths = self._output_paths(
+                    inputs.get("output_path"), len(predictions)
+                )
+                outputs: list[str] = []
+                for image_data, out_path in zip(predictions, output_paths):
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    out_path.write_bytes(image_data)
+                    outputs.append(str(out_path))
+            except Exception as exc:
+                return ToolResult(
+                    success=False,
+                    error=f"Gemini image generation failed: {exc}",
+                )
+
+            return ToolResult(
+                success=True,
+                data={
+                    "provider": "google_imagen",
+                    "model": model,
+                    "prompt": prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "output": outputs[0],
+                    "outputs": outputs,
+                    "images_generated": len(outputs),
+                },
+                artifacts=outputs,
+                cost_usd=self.estimate_cost(inputs),
+                duration_seconds=round(time.time() - start, 2),
+                model=model,
+            )
 
         parameters: dict[str, Any] = {
             "sampleCount": number_of_images,

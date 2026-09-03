@@ -49,7 +49,7 @@ class TestTalkingHeadManifest:
 class TestGoldenScenarioArtifacts:
     """Validate golden scenario artifact samples against schemas."""
 
-    GOLDEN_PATH = PROJECT_ROOT / "eval" / "golden_scenarios" / "talking_head_basic.json"
+    GOLDEN_PATH = PROJECT_ROOT / "tests" / "eval" / "golden_scenarios" / "talking_head_basic.json"
 
     @pytest.fixture
     def golden(self):

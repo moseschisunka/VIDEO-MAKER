@@ -511,6 +511,15 @@ class VideoStitch(BaseTool):
                 return ToolResult(success=False, error=f"Failed to probe clip: {clip}")
             probes.append(info)
 
+        profile_name = inputs.get("profile")
+        if profile_name:
+            try:
+                from lib.media_profiles import validate_duration
+                planned_duration = sum(float(p.get("duration") or 0) for p in probes)
+                validate_duration(profile_name, planned_duration)
+            except (ImportError, ValueError) as exc:
+                return ToolResult(success=False, error=str(exc))
+
         needs_norm = self._needs_normalization(probes)
 
         # If clips are incompatible and auto_normalize is off, fail with advice

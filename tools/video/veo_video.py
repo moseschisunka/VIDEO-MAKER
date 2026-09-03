@@ -308,12 +308,10 @@ class VeoVideo(BaseTool):
                 client._api_client, "vertexai", False
             )
 
-        if is_vertex:
-            return ToolResult(
-                success=False,
-                error="Google Veo video generation via google-genai is only supported using the Gemini Developer API (API key) backend. "
-                "Please configure GEMINI_API_KEY/GOOGLE_API_KEY or use the FAL.ai backend.",
-            )
+        # Keep Vertex AI clients on the SDK path. Vertex returns model output
+        # as inline bytes in the same response contract; rejecting the client
+        # before inspecting the response hides actionable errors and prevents
+        # the configured Vertex backend from being used.
 
         prompt = inputs["prompt"]
         operation = inputs.get("operation", "text_to_video")
@@ -501,11 +499,25 @@ class VeoVideo(BaseTool):
                     success=False,
                     error="No video asset returned in the response.",
                 )
-            client.files.download(file=video_asset)
-
             output_path = Path(inputs.get("output_path", "veo_output.mp4"))
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            video_asset.save(str(output_path))
+            if is_vertex:
+                # Vertex responses are expected to carry the generated file
+                # inline. Do not call the Developer API file downloader on a
+                # Vertex asset; surface a precise provider error instead.
+                video_bytes = getattr(video_asset, "video_bytes", None)
+                if not video_bytes:
+                    return ToolResult(
+                        success=False,
+                        error=(
+                            "Vertex Veo response returned without inline bytes; "
+                            "the generated video cannot be saved."
+                        ),
+                    )
+                output_path.write_bytes(bytes(video_bytes))
+            else:
+                client.files.download(file=video_asset)
+                video_asset.save(str(output_path))
 
         except Exception as e:
             return ToolResult(

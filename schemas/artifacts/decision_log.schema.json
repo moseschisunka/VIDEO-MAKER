@@ -8,6 +8,24 @@
   "properties": {
     "version": { "type": "string", "const": "1.0" },
     "project_id": { "type": "string" },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "voice_identity": {
+      "type": "object",
+      "required": ["provider", "model", "voice_id", "locale", "identity_key"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "voice_id": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string", "minLength": 1 },
+        "settings": { "type": "object", "additionalProperties": true },
+        "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "decisions": {
       "type": "array",
       "items": {
@@ -38,6 +56,7 @@
               "motion_commitment",
               "concept_selection",
               "voice_selection",
+              "voice_sample_approval",
               "capability_extension",
               "playbook_override",
               "visual_accuracy_check"

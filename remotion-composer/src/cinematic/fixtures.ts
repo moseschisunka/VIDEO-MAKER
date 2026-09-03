@@ -81,3 +81,24 @@ export const signalFromTomorrowWithMusicFixture: CinematicRendererProps = {
     },
   ],
 };
+
+// The rich fixture above is an opt-in asset fixture. Those large video/audio
+// files are intentionally not shipped in the composer package. Keep the
+// checked-in composition previewable and CI-renderable without pretending
+// those external assets exist in `public/`.
+export const signalFromTomorrowPreviewFixture: CinematicRendererProps = {
+  titleFontSize: 78,
+  titleWidth: 1320,
+  signalLineCount: 18,
+  scenes: [
+    {
+      id: "preview-title",
+      kind: "title",
+      startSeconds: 0,
+      durationSeconds: 3,
+      text: "SIGNAL FROM TOMORROW",
+      accent: "#d6f1ff",
+      intensity: 0.9,
+    },
+  ],
+};

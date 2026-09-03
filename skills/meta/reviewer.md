@@ -1,5 +1,16 @@
 # Reviewer — Meta Skill
 
+## Production grounding gate
+
+For any research-backed or explanatory production, review the claim ledger
+before judging polish. Run `lib.grounding.validate_grounding` as specified in
+`skills/meta/claim-grounding.md` with `strict=True`. A factual claim without a
+resolvable source, or with `contradicted`, `uncertain`, `unsupported`, or
+`missing_source` status, must be marked `revise`; high-risk cases are
+`block`. Creative, opinion, instruction, and CTA copy is reviewed separately
+and must not be treated as a missing citation. Record the grounding report
+alongside the stage checkpoint.
+
 ## When to Use
 
 After completing any pipeline stage's work — before checkpointing. You are the quality gate between "work done" and "work accepted." This skill replaces the Python reviewer class with an instruction-driven self-review protocol.

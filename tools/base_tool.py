@@ -21,6 +21,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from lib.secrets import redact_text
+from lib.observability import metrics
+
 
 def _load_dotenv() -> None:
     """Load .env into os.environ once at import time.
@@ -137,6 +140,13 @@ class ToolResult:
     seed: Optional[int] = None
     model: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        # Provider exceptions often contain request URLs or echoed headers.
+        # Redact at the common result boundary before errors can reach an event
+        # log, run record, CLI, or Backlot response.
+        if self.error is not None:
+            self.error = redact_text(self.error)
+
 
 import threading as _threading
 
@@ -172,6 +182,8 @@ def _instrument_execute(fn: Callable) -> Callable:
         tool_name = getattr(self, "name", "") or self.__class__.__name__
         scene_id = inputs.get("scene_id") if isinstance(inputs, dict) else None
         output_path = inputs.get("output_path") if isinstance(inputs, dict) else None
+        stage = inputs.get("stage") if isinstance(inputs, dict) else None
+        agent_id = inputs.get("agent_id") if isinstance(inputs, dict) else None
         # Nesting depth: selector tools delegate to provider tools' execute().
         # Both emit (the ticker wants the provider name too), but depth lets
         # consumers dedupe — e.g. sum cost_usd only at depth 0.
@@ -182,6 +194,8 @@ def _instrument_execute(fn: Callable) -> Callable:
         base = {
             "tool": tool_name,
             "scene_id": scene_id,
+            "stage": stage,
+            "agent_id": agent_id,
             "depth": depth if depth else None,
         }
         if project_dir is not None:
@@ -192,12 +206,48 @@ def _instrument_execute(fn: Callable) -> Callable:
 
         started = time.monotonic()
         try:
-            result = fn(self, inputs, *args, **kwargs)
+            metrics.increment("openmontage_tool_calls_total", labels={"tool": tool_name, "status": "started"})
+        except Exception:
+            pass
+        try:
+            # Identity-bearing provider calls are automatically routed through
+            # the common kernel.  Selectors call the bridge explicitly, while
+            # a direct provider invocation in a production project/run cannot
+            # silently bypass timeout, idempotency, cost, and artifact policy.
+            # The bridge adds ``_provider_executor_bypass`` only for its
+            # implementation callback, so provider code itself is not
+            # recursively wrapped.
+            kernel_lane = (
+                isinstance(inputs, dict)
+                and getattr(self, "provider", "") not in {"", "openmontage", "selector"}
+                and not inputs.get("_provider_executor_bypass")
+                and (
+                    inputs.get("provider_kernel") is True
+                    or inputs.get("project_dir")
+                    or inputs.get("run_id")
+                )
+            )
+            if kernel_lane:
+                from lib.providers.bridge import execute_with_provider_executor
+
+                result = execute_with_provider_executor(
+                    self,
+                    inputs,
+                    implementation=lambda provider_inputs: fn(self, provider_inputs, *args, **kwargs),
+                )
+            else:
+                result = fn(self, inputs, *args, **kwargs)
         except Exception as exc:
+            elapsed = max(0.0, time.monotonic() - started)
+            try:
+                metrics.increment("openmontage_tool_calls_total", labels={"tool": tool_name, "status": "failed"})
+                metrics.observe("openmontage_tool_duration_seconds", elapsed, labels={"tool": tool_name})
+            except Exception:
+                pass
             if project_dir is not None:
                 emit_event(project_dir, {
                     **base, "event": "error",
-                    "error": str(exc)[:300],
+                    "error": redact_text(str(exc)[:300]),
                     "duration_s": round(time.monotonic() - started, 2),
                 })
             raise
@@ -209,7 +259,50 @@ def _instrument_execute(fn: Callable) -> Callable:
             # (first call of a run) — attribute the finish if possible.
             project_dir = infer_project_dir(inputs)
         if project_dir is not None:
+            # Attach durable run provenance to the result and register any
+            # local artifacts.  This is intentionally best-effort: telemetry
+            # must never turn a successful creative tool call into a failure.
+            try:
+                from lib.run_record import build_result_provenance, record_tool_result
+
+                provenance = build_result_provenance(
+                    project_dir,
+                    tool=tool_name,
+                    stage=stage,
+                    agent_id=agent_id,
+                )
+                record_tool_result(
+                    project_dir,
+                    result,
+                    tool=tool_name,
+                    inputs=inputs if isinstance(inputs, dict) else None,
+                    stage=stage,
+                )
+                if provenance is not None and hasattr(result, "data"):
+                    if not isinstance(result.data, dict):
+                        result.data = {}
+                    result.data["provenance"] = provenance
+            except Exception:
+                # The underlying ToolResult remains authoritative. A later
+                # run-record reconciliation can recover missing telemetry.
+                pass
             cost = getattr(result, "cost_usd", None)
+            try:
+                status = "succeeded" if getattr(result, "success", False) else "failed"
+                metrics.increment("openmontage_tool_calls_total", labels={"tool": tool_name, "status": status})
+                metrics.observe(
+                    "openmontage_tool_duration_seconds",
+                    max(0.0, time.monotonic() - started),
+                    labels={"tool": tool_name},
+                )
+                if isinstance(cost, (int, float)):
+                    metrics.increment(
+                        "openmontage_tool_cost_usd_total",
+                        float(cost),
+                        labels={"tool": tool_name},
+                    )
+            except Exception:
+                pass
             emit_event(project_dir, {
                 **base, "event": "finish",
                 "output_path": str(output_path) if output_path else None,
@@ -326,8 +419,13 @@ class BaseTool(ABC):
                         f"Python module {module_name!r} not installed. {self.install_instructions}"
                     )
 
-    def get_info(self) -> dict[str, Any]:
-        """Return full tool contract info for registry/discovery."""
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
+        """Return full tool contract info for registry/discovery.
+
+        ``include_status=False`` is used by fast catalog/preflight paths to
+        avoid invoking provider health checks.  The default remains the live
+        status behavior used by existing diagnostics and support reports.
+        """
         usage_location = inspect.getfile(self.__class__)
         return {
             "name": self.name,
@@ -336,7 +434,7 @@ class BaseTool(ABC):
             "capability": self.capability,
             "provider": self.provider,
             "stability": self.stability.value,
-            "status": self.get_status().value,
+            "status": self.get_status().value if include_status else ToolStatus.UNAVAILABLE.value,
             "execution_mode": self.execution_mode.value,
             "determinism": self.determinism.value,
             "runtime": self.runtime.value,

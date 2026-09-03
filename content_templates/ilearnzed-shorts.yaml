@@ -1,0 +1,65 @@
+version: "1.0"
+id: ilearnzed-shorts
+name: "iLearnZed Shorts"
+category: shorts
+description: "Self-contained vertical learning Short derived from a lesson or created as a compact exam, concept, or study-method story."
+
+audience:
+  primary: secondary_school_learners
+  secondary: [school_leavers]
+  need: "Understand one useful idea quickly and know what to practise or watch next."
+  levels: ["Form 1", "Form 2", "Form 3", "Form 4", "Form 5", "Form 6"]
+
+promise:
+  viewer_outcome: "The learner receives one complete, useful takeaway with a clear final answer or action."
+  central_question_required: true
+  misconception_required: true
+  truthfulness_rule: "The Short must fulfil its own promise without requiring the long-form video."
+
+structure:
+  opening:
+    must_show: "The question, result, object, wrong step, diagram, or teacher action in the first frame."
+    must_say: "State the premise in plain language and name what will be resolved."
+    max_seconds: 3
+  beats:
+    - {id: visual_hook, purpose: "Stop the scroll through immediate comprehension.", plot: A, visual_requirement: "Sound-off readable first frame.", viewer_question: "What is happening?", required: true}
+    - {id: payoff_preview, purpose: "Tell the viewer what they will learn or see.", plot: A, visual_requirement: "Short on-screen payoff label or result preview.", viewer_question: "Why should I stay?", required: true}
+    - {id: mechanism, purpose: "Create visible progress through steps, comparison, obstacle, or reveal.", plot: both, visual_requirement: "Change, demonstration, annotation, or countdown.", viewer_question: "How does it work?", required: true}
+    - {id: resolution, purpose: "Deliver the promised answer or result.", plot: A, visual_requirement: "Final correct answer, diagram, or action.", viewer_question: "What is the answer?", required: true}
+  ending:
+    payoff: "Stop immediately after the useful resolution; do not bury it under an outro."
+    next_step: "Use a brief relevant registration or next-video bridge only after the payoff."
+    outro_limit_seconds: 4
+
+production:
+  default_pipeline: clip-factory
+  formats: [shorts_vertical]
+  compatible_playbooks: [ilearnzed-education]
+  required_artifacts: [brief, thumbnail_package, script, scene_plan, asset_manifest, final_review, publish_log]
+  source_modes: [teacher_camera, diagram_animation, worked_question, lesson_derivative]
+  duration_guidance: "Use only the duration needed to establish, progress, and resolve one idea."
+
+thumbnail:
+  concepts: ["First-frame question", "Teacher action plus answer reveal", "Large concept word plus visual proof"]
+  on_image_word_target: "1-4 important words"
+  required_checks: [sound_off_comprehension, first_frame_is_specific, self_contained_payoff, captions_are_legible, logo_is_unobstructed]
+
+shorts:
+  derivative_allowed: true
+  self_contained_required: true
+  mechanisms: [one_question, common_trap, three_steps, before_after, reveal, mini_challenge]
+  first_frame_rule: "The first frame must explain the topic visually without audio or title context."
+
+localization:
+  supported: true
+  languages: [bem, nya]
+  priority: "Mathematics first, then Biology and general study/exam-preparation Shorts."
+  human_review_required: true
+
+consent:
+  teacher_consent_required: true
+  student_identifiable_consent_required: true
+  evidence_required_before_publish: true
+  scope: [youtube, shorts, social_media_repurposing, thumbnails, promotional_clips, ilearnzed_platform_use]
+
+quality_gates: [first_frame_is_understandable, premise_is_specific, payoff_is_self_contained, captions_are_synced, no_filler, consent_evidence_attached, end_after_resolution]

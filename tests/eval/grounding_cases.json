@@ -1,0 +1,69 @@
+[
+  {
+    "id": "supported-synthetic-fact",
+    "research_brief": {
+      "topic": "Synthetic topic",
+      "sources": [{
+        "id": "src-1",
+        "url": "https://example.test/source-1",
+        "title": "Synthetic source one",
+        "used_for": "c-1",
+        "accessed_at": "2026-09-02",
+        "excerpt_or_note": "The fixture supports c-1.",
+        "license": "synthetic-test",
+        "usage_constraints": "Fixture only",
+        "claim_ids": ["c-1"]
+      }]
+    },
+    "script": {"grounding_contract": {"required": true}, "claims": [{"id": "c-1", "text": "The fixture supports c-1.", "claim_type": "factual", "source_refs": ["src-1"]}]},
+    "expected_decision": "pass",
+    "expected_status": "supported"
+  },
+  {
+    "id": "contradicted-synthetic-fact",
+    "research_brief": {
+      "topic": "Synthetic topic",
+      "sources": [{
+        "id": "src-1",
+        "url": "https://example.test/source-1",
+        "title": "Synthetic source one",
+        "used_for": "c-2",
+        "accessed_at": "2026-09-02",
+        "excerpt_or_note": "The source contradicts c-2.",
+        "license": "synthetic-test",
+        "usage_constraints": "Fixture only",
+        "claim_ids": ["c-2"]
+      }]
+    },
+    "script": {"grounding_contract": {"required": true}, "claims": [{"id": "c-2", "text": "The source says the opposite.", "claim_type": "factual", "source_refs": ["src-1"], "status": "contradicted"}]},
+    "expected_decision": "revise",
+    "expected_status": "contradicted"
+  },
+  {
+    "id": "uncertain-medical-fact",
+    "research_brief": {
+      "topic": "Medical safety",
+      "sources": [{
+        "id": "src-1",
+        "url": "https://example.test/source-1",
+        "title": "Synthetic medical source",
+        "used_for": "c-3",
+        "accessed_at": "2026-09-02",
+        "excerpt_or_note": "The evidence is unsettled.",
+        "license": "synthetic-test",
+        "usage_constraints": "Fixture only",
+        "claim_ids": ["c-3"]
+      }]
+    },
+    "script": {"grounding_contract": {"required": true}, "claims": [{"id": "c-3", "text": "This treatment is safe for everyone.", "claim_type": "factual", "source_refs": ["src-1"], "status": "uncertain"}]},
+    "expected_decision": "block",
+    "expected_status": "uncertain"
+  },
+  {
+    "id": "missing-source-fact",
+    "research_brief": {"topic": "Synthetic topic", "sources": []},
+    "script": {"grounding_contract": {"required": true}, "claims": [{"id": "c-4", "text": "A factual statement with no source.", "claim_type": "factual"}]},
+    "expected_decision": "revise",
+    "expected_status": "missing_source"
+  }
+]

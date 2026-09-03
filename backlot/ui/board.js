@@ -47,14 +47,35 @@ applyTheme(currentTheme);
 // header slate
 // ---------------------------------------------------------------------------
 
+function renderReleaseBanner(s) {
+  const globalRelease = s.release || {};
+  const pipelineRelease = s.pipeline || {};
+  const gate = globalRelease.production_gate || pipelineRelease.production_gate || "PR-11G";
+  const label = pipelineRelease.release_label || globalRelease.label || "Internal preview — production certification pending";
+  return el("div", {
+    class: "release-banner board-release-banner",
+    role: "status",
+    "aria-live": "polite",
+  },
+    el("strong", {}, label),
+    " · Production certification is locked until ",
+    el("b", {}, gate),
+    ". This project is not production-certified."
+  );
+}
+
 function renderSlate(s) {
   const board = s.storyboard;
   const chips = [
     el("span", { class: "chip" }, `${s.pipeline.pipeline_type} pipeline`),
+    el("span", { class: "chip warn", title: s.pipeline.availability_reason || "Release status" },
+      s.pipeline.release_label || "Not production-certified"),
     board && board.total_duration_seconds
       ? el("span", { class: "chip" }, `${board.scenes.length} scenes · ${fmtDuration(board.total_duration_seconds)}`)
       : null,
     s.style_playbook ? el("span", { class: "chip" }, s.style_playbook) : null,
+    s.visual_variant ? el("span", { class: "chip" }, `visual · ${s.visual_variant}`) : null,
+    s.voiceover_reused ? el("span", { class: "chip chip-reused" }, "voiceover reused") : null,
   ];
 
   const awaiting = s.stages.find((x) => x.status === "awaiting_human");
@@ -94,26 +115,46 @@ function renderSlate(s) {
   if (awaiting) {
     const approveBtn = el("button", {
       class: "btn btn-primary glow-button",
-      onclick: async () => {
-        approveBtn.disabled = true;
-        approveBtn.textContent = "Approving...";
-        try {
-          await fetch(`/api/project/${encodedProjectId}/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stage: awaiting.name })
-          });
-        } catch (e) {
-          console.error("Approve failed:", e);
-          alert('Failed to approve stage. Please try again.');
-        } finally {
-          approveBtn.disabled = false;
-          approveBtn.textContent = '✓ Approve Stage';
-        }
-      }
+      onclick: () => submitHumanDecision(awaiting.name, "approve", "", approveBtn),
     }, `✓ Approve ${awaiting.name}`);
     actionsGroup.append(approveBtn);
   }
+
+  const variantSelect = el("select", {
+    class: "variant-select",
+    title: "Choose a new visual design while reusing this project's approved voiceover",
+    "aria-label": "Variant visual design",
+  },
+    el("option", { value: "balanced-grid" }, "Balanced grid"),
+    el("option", { value: "diagram-focus" }, "Diagram focus"),
+    el("option", { value: "minimal-lecture" }, "Minimal lecture"),
+  );
+  const variantBtn = el("button", {
+    class: "btn btn-secondary variant-button",
+    title: "Create a new visual variant using the existing voiceover. Variants can be created repeatedly without another TTS charge.",
+    onclick: async () => {
+      variantBtn.disabled = true;
+      variantBtn.textContent = "Creating variant...";
+      try {
+        const response = await fetch(`/api/project/${encodedProjectId}/variant`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ visual_variant: variantSelect.value }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) {
+          throw new Error(data.detail || data.error || "The visual variant could not be started.");
+        }
+        window.location.href = `/p/${encodeURIComponent(data.project_id)}`;
+      } catch (e) {
+        console.error("Create variant failed:", e);
+        alert(`Create Variant failed: ${e.message || e}`);
+        variantBtn.disabled = false;
+        variantBtn.textContent = "✦ Create Variant";
+      }
+    },
+  }, "✦ Create Variant");
+  actionsGroup.append(variantSelect, variantBtn);
 
   const runBtn = el("button", {
     class: "btn btn-secondary",
@@ -213,6 +254,7 @@ const STAGE_ARTIFACTS = {
   edit: ["edit_decisions"],
   compose: ["render_report", "final_review"],
   publish: ["publish_log"],
+  packaging: ["thumbnail_package"],
 };
 
 function artifactNamesForStage(st) {
@@ -363,8 +405,8 @@ function reviewFacts(items) {
   return facts.length ? el("div", { class: "approval-facts" }, facts) : null;
 }
 
-function titledItems(items, selectedId = null) {
-  const rows = (items || []).slice(0, 4).map((item, index) => {
+function titledItems(items, selectedId = null, limit = 4) {
+  const rows = (items || []).slice(0, limit).map((item, index) => {
     if (item == null) return null;
     if (typeof item !== "object") {
       return el("li", {}, shortText(item));
@@ -502,7 +544,97 @@ function artifactReviewContent(name, artifact) {
       }))),
     ].filter(Boolean);
   }
+  if (name === "thumbnail_package") {
+    return renderThumbnailPackageContent(artifact);
+  }
   return genericArtifactSummary(artifact);
+}
+
+function packagingStatusLabel(value) {
+  const text = String(value || "").trim();
+  return text ? text : "Not recorded";
+}
+
+function renderThumbnailConcept(variant, selected) {
+  const variantId = variant.id || "variant";
+  const support = Array.isArray(variant.supporting_elements) ? variant.supporting_elements : [];
+  const previewPath = String(variant.preview_path || "").trim();
+  return el("article", { class: `thumbnail-concept${selected ? " selected" : ""}` },
+    el("div", { class: "thumbnail-concept-preview", "aria-label": `Thumbnail concept ${variantId}` },
+      previewPath
+        ? el("img", {
+          class: "thumbnail-concept-image",
+          src: thumbURL(projectId, previewPath, 320),
+          alt: `${variantId} thumbnail preview`,
+        })
+        : el("div", { class: "thumbnail-concept-grid" }),
+      el("span", { class: "thumbnail-concept-badge" }, selected ? "RECOMMENDED" : (previewPath ? "PREVIEW" : variantId.toUpperCase())),
+      el("span", { class: "thumbnail-concept-wordmark" }, "iLearnZed"),
+      el("div", { class: "thumbnail-concept-copy" }, shortText(variant.on_image_text, 52)),
+      el("div", { class: "thumbnail-concept-subject" }, shortText(variant.focal_subject, 66)),
+    ),
+    el("div", { class: "thumbnail-concept-body" },
+      el("h3", {}, variantId),
+      reviewFacts([
+        reviewFact("visual proof", packagingStatusLabel(variant.visual_proof)),
+        reviewFact("mobile test", packagingStatusLabel(variant.mobile_readability)),
+        reviewFact("logo", packagingStatusLabel(variant.logo_treatment)),
+      ]),
+      variant.claim_review ? el("p", { class: "thumbnail-claim" },
+        el("b", {}, "CLAIM CHECK  "), shortText(variant.claim_review, 180)) : null,
+      support.length ? el("p", { class: "thumbnail-support" },
+        el("b", {}, "SUPPORT  "), support.join(" · ")) : null,
+    ),
+  );
+}
+
+function renderThumbnailPackageContent(artifact) {
+  const metadata = artifact.metadata || {};
+  const recommended = artifact.recommended_pair || {};
+  const variants = Array.isArray(artifact.thumbnail_variants) ? artifact.thumbnail_variants : [];
+  const selectedId = recommended.thumbnail_variant_id;
+  const gates = Array.isArray(artifact.quality_gates) ? artifact.quality_gates : [];
+  return [
+    artifact.viewer_promise ? el("p", { class: "approval-lead" }, artifact.viewer_promise) : null,
+    reviewFacts([
+      reviewFact("audience", artifact.target_audience),
+      reviewFact("language", artifact.language),
+      reviewFact("template", metadata.template_id),
+      reviewFact("pipeline", metadata.default_pipeline),
+      reviewFact("CTA", metadata.cta_text),
+    ]),
+    artifact.central_question || artifact.misconception || artifact.story_lens
+      ? el("div", { class: "thumbnail-context" },
+        artifact.central_question ? el("p", {}, el("b", {}, "QUESTION  "), artifact.central_question) : null,
+        artifact.misconception ? el("p", {}, el("b", {}, "MISCONCEPTION  "), artifact.misconception) : null,
+        artifact.story_lens ? el("p", {}, el("b", {}, "STORY LENS  "), artifact.story_lens) : null,
+      ) : null,
+    el("div", { class: "thumbnail-section-label" }, "TITLE OPTIONS · choose one truthful promise"),
+    titledItems((artifact.title_options || []).map((title) => ({
+      id: title,
+      title,
+      description: title === recommended.title ? (recommended.viewer_expectation || "Recommended title") : null,
+    })), recommended.title, 5),
+    el("div", { class: "thumbnail-section-label" }, "THUMBNAIL CONCEPTS · inspect at mobile size"),
+    variants.length
+      ? el("div", { class: "thumbnail-concepts" }, variants.map((variant) =>
+        renderThumbnailConcept(variant, variant.id === selectedId)))
+      : el("div", { class: "approval-missing", role: "alert" }, "No thumbnail concepts were supplied."),
+    recommended.title || selectedId
+      ? el("div", { class: "thumbnail-recommendation" },
+        el("div", { class: "thumbnail-section-label" }, "RECOMMENDED PAIR"),
+        el("strong", {}, recommended.title || "No title selected"),
+        el("span", {}, ` + ${selectedId || "no variant selected"}`),
+        recommended.viewer_expectation ? el("p", {}, recommended.viewer_expectation) : null,
+      ) : null,
+    el("div", { class: "thumbnail-section-label" }, "QUALITY GATES"),
+    gates.length ? el("div", { class: "thumbnail-gates" }, gates.map((gate) =>
+      el("span", { class: "thumbnail-gate" }, gate))) : el("p", { class: "approval-guidance" }, "No quality gates recorded."),
+    metadata.cta_destination || metadata.logo_asset
+      ? el("p", { class: "thumbnail-asset-note" },
+        metadata.cta_destination ? `CTA destination: ${metadata.cta_destination}` : "",
+        metadata.logo_asset ? ` · Logo: ${metadata.logo_asset}` : "") : null,
+  ].filter(Boolean);
 }
 
 function artifactReviewTitle(name, artifact, s) {
@@ -517,7 +649,63 @@ function artifactReviewTitle(name, artifact, s) {
   if (name === "edit_decisions") return "Edit decisions";
   if (name === "render_report") return "Render report";
   if (name === "publish_log") return "Publish plan";
+  if (name === "thumbnail_package") return "Title and thumbnail package";
   return artifact.title || artifact.name || s.title;
+}
+
+function renderPackagingReview(s) {
+  const artifact = s.artifacts.thumbnail_package;
+  if (!artifact || typeof artifact !== "object") return null;
+  return el("section", { class: "packaging-review" },
+    el("div", { class: "packaging-review-head" },
+      el("div", {},
+        el("div", { class: "approval-eyebrow" }, "PACKAGING CHECK"),
+        el("h2", {}, "Title and thumbnail package"),
+        el("p", {}, "Confirm that the click promise is clear, truthful, and matched by the lesson before production. The cards are concept previews until a final artwork file is attached."),
+      ),
+      el("span", { class: "packaging-status" }, "REVIEW BEFORE SCRIPT"),
+    ),
+    el("div", { class: "packaging-review-body" }, renderThumbnailPackageContent(artifact)),
+  );
+}
+
+async function submitHumanDecision(stage, decision, notes, button) {
+  const labels = {
+    approve: `✓ Approve ${stage}`,
+    revise: "↺ Request revision",
+    reject: "✕ Reject stage",
+  };
+  if (decision === "reject" && !window.confirm(
+    `Reject ${stage}? This stops the current run attempt and requires an explicit restart.`
+  )) return;
+  if (button) {
+    button.disabled = true;
+    button.textContent = decision === "approve" ? "Approving..." : decision === "revise" ? "Requesting revision..." : "Rejecting...";
+  }
+  try {
+    const endpoint = decision === "approve" ? "approve" : decision === "revise" ? "revise" : "reject";
+    const response = await fetch(`/api/project/${encodedProjectId}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        stage,
+        approver_id: "backlot-user",
+        notes: String(notes || "").trim() || null,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+    }
+    await refresh();
+  } catch (error) {
+    console.error(`${decision} stage failed:`, error);
+    alert(`${decision === "approve" ? "Approval" : decision === "revise" ? "Revision request" : "Rejection"} failed: ${error.message || error}`);
+    if (button) {
+      button.disabled = false;
+      button.textContent = labels[decision];
+    }
+  }
 }
 
 function renderApprovalReview(s) {
@@ -552,6 +740,29 @@ function renderApprovalReview(s) {
     ));
   }
 
+  const notesInput = el("textarea", {
+    class: "approval-notes",
+    rows: "2",
+    maxlength: "2000",
+    placeholder: "Optional reviewer note (required for a useful revision handoff)",
+    "aria-label": `Review notes for ${awaiting.name}`,
+  });
+  const approveButton = el("button", {
+    class: "btn btn-primary",
+    type: "button",
+    onclick: () => submitHumanDecision(awaiting.name, "approve", notesInput.value, approveButton),
+  }, "✓ Approve stage");
+  const reviseButton = el("button", {
+    class: "btn btn-secondary",
+    type: "button",
+    onclick: () => submitHumanDecision(awaiting.name, "revise", notesInput.value, reviseButton),
+  }, "↺ Request revision");
+  const rejectButton = el("button", {
+    class: "btn btn-danger",
+    type: "button",
+    onclick: () => submitHumanDecision(awaiting.name, "reject", notesInput.value, rejectButton),
+  }, "✕ Reject");
+
   return el("section", { class: "approval-review", "data-stage": awaiting.name },
     el("div", { class: "approval-review-head" },
       el("div", {},
@@ -565,10 +776,63 @@ function renderApprovalReview(s) {
       el("b", {}, "SELF-REVIEW  "), shortText(reviewSummary, 260)) : null,
     el("div", { class: "approval-artifacts" }, artifacts),
     el("div", { class: "approval-review-foot" },
-      el("span", {}, nextStage
+      el("div", { class: "approval-review-next" }, nextStage
         ? `Approval unlocks ${humanize(nextStage.name)}.`
-        : "This is the final approval gate."),
-      el("button", { type: "button", onclick: () => toggleDrawer(awaiting.name) }, "OPEN FULL ARTIFACT"),
+        : "This is the final approval gate.",
+        el("button", { type: "button", onclick: () => toggleDrawer(awaiting.name) }, "OPEN FULL ARTIFACT")),
+      el("div", { class: "approval-review-actions" },
+        notesInput,
+        el("div", { class: "approval-action-buttons" }, approveButton, reviseButton, rejectButton)),
+    ),
+  );
+}
+
+function renderQaEvidence(s) {
+  const qa = s.qa;
+  if (!qa || typeof qa !== "object") return null;
+  const status = String(qa.status || "unknown").toUpperCase();
+  const statusClass = status === "PASS" ? "ok" : status === "FAIL" ? "crit" : "warn";
+  const visual = qa.visual || {};
+  const audio = qa.audio || {};
+  const transcript = qa.transcript || {};
+  const voice = qa.voice || {};
+  const issues = Array.isArray(qa.issues) ? qa.issues : [];
+  const frames = Array.isArray(qa.frames) ? qa.frames : [];
+  const frameGrid = frames.length ? el("div", { class: "found-grid", style: "margin-top:10px" },
+    frames.slice(0, 12).map((frame, index) => el("figure", { class: "thumb", style: "margin:0" },
+      el("img", {
+        src: thumbURL(s.project_id, frame.path, 320),
+        loading: "lazy",
+        alt: frame.timestamp_seconds != null ? `Review frame at ${frame.timestamp_seconds}s` : `Review frame ${index + 1}`,
+      }),
+      el("figcaption", { style: "font-family:var(--mono);font-size:calc(9px * var(--fs-scale));color:var(--text-3);padding:4px 6px" },
+        frame.timestamp_seconds != null ? `${Number(frame.timestamp_seconds).toFixed(2)}s` : `frame ${index + 1}`),
+    ))) : el("div", { class: "hint" }, "No safe review frames are available.");
+  const quality = audio.quality && typeof audio.quality === "object" ? audio.quality : {};
+  const transcriptLine = transcript.matches_script == null
+    ? "not run"
+    : `${transcript.matches_script ? "match" : "drift"}${transcript.word_accuracy != null ? ` · ${Math.round(Number(transcript.word_accuracy) * 100)}% words` : ""}`;
+  const issueList = issues.length
+    ? el("ul", { style: "margin:8px 0 0 18px;color:var(--red);font-size:calc(11px * var(--fs-scale))" }, issues.slice(0, 12).map((item) => el("li", {}, item)))
+    : el("div", { style: "color:var(--green);font-size:calc(11px * var(--fs-scale))" }, "No issues reported by final review.");
+  const latestApproval = Array.isArray(qa.approval_records) && qa.approval_records.length
+    ? qa.approval_records[qa.approval_records.length - 1] : null;
+  return el("section", { class: "qa-evidence", style: "margin-top:20px" },
+    el("div", { class: "section-title" }, "Final QA evidence",
+      el("span", { class: `meta ${statusClass}`, style: "margin-left:10px" }, `${status} · ${qa.recommended_action || "action pending"}`)),
+    el("div", { class: "panel", style: "padding:14px" },
+      el("div", { style: "display:flex;gap:18px;flex-wrap:wrap;font-size:calc(11.5px * var(--fs-scale));color:var(--text-2)" },
+        el("span", {}, `Visual frames: ${visual.frames_sampled || 0}`),
+        el("span", {}, `Audio: ${audio.narration_present ? "present" : "not confirmed"}`),
+        el("span", {}, `Transcript: ${transcriptLine}`),
+        el("span", {}, `Language: ${voice.language_match === false ? "mismatch" : voice.language_match === true ? "match" : "not verified"}`),
+        quality.integrated_lufs != null ? el("span", {}, `LUFS: ${quality.integrated_lufs}`) : null,
+        quality.true_peak_db != null ? el("span", {}, `True peak: ${quality.true_peak_db} dBTP`) : null,
+      ),
+      frameGrid,
+      issueList,
+      latestApproval ? el("div", { style: "margin-top:10px;color:var(--text-3);font-size:calc(10px * var(--fs-scale))" },
+        `Latest human decision: ${latestApproval.decision || "—"} by ${latestApproval.approver_id || "—"}${latestApproval.notes ? ` · ${latestApproval.notes}` : ""}`) : null,
     ),
   );
 }
@@ -726,6 +990,22 @@ function sceneCard(s, card) {
     el("span", { class: "dur" }, fmtDuration(dur)),
   );
   wrap.append(slate);
+
+  // Phase 6: expose scene-linked stock/AI/user candidates before a batch is
+  // approved.  The board is read-only; approval remains an immutable backend
+  // record, but hiding these candidates made it easy to generate the wrong
+  // take or lose license/cost context.
+  if (Array.isArray(card.approval_candidates) && card.approval_candidates.length) {
+    const status = card.sample_approval_status || "pending";
+    const candidateText = card.approval_candidates.map((candidate) => {
+      const provenance = candidate.license || candidate.model || "provenance missing";
+      const cost = candidate.cost_usd != null ? ` · $${Number(candidate.cost_usd).toFixed(2)}` : "";
+      return `${candidate.provider || "provider"} · ${provenance}${cost}`;
+    }).join(" | ");
+    wrap.append(el("div", { class: "sample-review", title: candidateText },
+      el("span", { class: "sample-review-label" }, `SAMPLE ${String(status).toUpperCase()}`),
+      el("span", { class: "sample-review-copy" }, candidateText.slice(0, 150))));
+  }
 
   // visual slot
   let thumb;
@@ -1022,6 +1302,7 @@ function stateAt(s, T) {
   const composeStage = view.stages.find((x) => x.name === "compose");
   if (!(composeStage && composeStage.status === "completed")) {
     view.media.renders = [];
+    view.qa = null;
   }
   return view;
 }
@@ -1129,6 +1410,7 @@ function render() {
   const oldRenders = document.querySelector(".render-hero")?.parentElement;
 
   app.innerHTML = "";
+  app.append(renderReleaseBanner(s));
   app.append(renderSlate(s));
   app.append(renderRail(s));
   const replayBar = renderReplayBar(state);
@@ -1141,6 +1423,8 @@ function render() {
   if (noState) app.append(noState);
 
   const main = el("div", { class: "main-col" });
+  const packagingReview = renderPackagingReview(s);
+  if (packagingReview) main.append(packagingReview);
   const approvalReview = renderApprovalReview(s);
   if (approvalReview) main.append(approvalReview);
   const script = renderScriptCard(s);
@@ -1156,15 +1440,16 @@ function render() {
   const storyboard = renderStoryboard(s);
   const found = renderFoundMedia(s);
   const renders = renderRenders(s, oldRenders);
+  const qa = renderQaEvidence(s);
 
-  if (approvalReview || script || decisions || activity) {
-    for (const section of [storyboard, found, renders]) {
+  if (packagingReview || approvalReview || script || decisions || activity || qa) {
+    for (const section of [storyboard, found, renders, qa]) {
       if (section) main.append(section);
     }
     const hasAside = Boolean(decisions || activity);
     app.append(el("div", { class: `board${hasAside ? "" : " solo"}` }, main, hasAside ? aside : null));
   } else {
-    for (const section of [storyboard, found, renders]) {
+    for (const section of [storyboard, found, renders, qa]) {
       if (section) app.append(section);
     }
   }
@@ -1173,12 +1458,30 @@ function render() {
 // Defensive normalization (F-02): the server contract guarantees these
 // fields, but a sparse/legacy payload must degrade, never crash the board.
 function normalize(s) {
-  s.pipeline = s.pipeline || { pipeline_type: "unknown", stages: [], known: false };
+  s.release = {
+    status: "internal_preview",
+    label: "Internal preview — production certification pending",
+    production_ready: false,
+    production_gate: "PR-11G",
+    ...(s.release || {}),
+  };
+  s.pipeline = {
+    pipeline_type: "unknown",
+    stages: [],
+    known: false,
+    release_lane: "experimental",
+    release_label: "Experimental — internal preview only",
+    release_status: "not_certified",
+    production_ready: false,
+    production_gate: "PR-11G",
+    ...(s.pipeline || {}),
+  };
   s.stages = Array.isArray(s.stages) ? s.stages : [];
   for (const stage of s.stages) {
     stage.produces = Array.isArray(stage.produces) ? stage.produces : [];
   }
   s.artifacts = s.artifacts || {};
+  s.qa = s.qa || null;
   s.media = s.media || {};
   s.media.renders = Array.isArray(s.media.renders) ? s.media.renders : [];
   s.media.snapshots = Array.isArray(s.media.snapshots) ? s.media.snapshots : [];

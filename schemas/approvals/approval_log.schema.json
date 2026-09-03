@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/approvals/approval_log",
+  "title": "Immutable Approval Log",
+  "type": "object",
+  "required": ["version", "project_id", "records"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "approval_record.schema.json" }
+    }
+  },
+  "additionalProperties": false
+}

@@ -32,6 +32,7 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
+from lib.music_contracts import normalize_music_provenance
 
 # Repository root: tools/audio/music_library.py -> parents[2]
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -115,6 +116,7 @@ class MusicLibrary(BaseTool):
                         "path": {"type": "string"},
                         "size_bytes": {"type": "integer"},
                         "duration_seconds": {"type": ["number", "null"]},
+                        "music_provenance": {"type": "object"},
                     },
                 },
             },
@@ -205,6 +207,19 @@ class MusicLibrary(BaseTool):
                     "path": str(path),
                     "size_bytes": path.stat().st_size,
                     "duration_seconds": duration,
+                    "music_provenance": normalize_music_provenance(
+                        {
+                            "source_type": "user_library",
+                            "source_tool": self.name,
+                            "provider": self.provider,
+                            "license": "unverified",
+                            "duration_seconds": duration,
+                            "loop_allowed": None,
+                            "edit_rights": "unknown",
+                        },
+                        source_type="user_library",
+                        source_tool=self.name,
+                    ),
                 }
             )
 

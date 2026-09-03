@@ -1,4 +1,8 @@
-# Proposal Director — Animation Pipeline
+# Proposal Director - Animation Pipeline
+
+Before drafting the proposal, read `skills/meta/music-decision-contract.md`.
+Resolve and record `production_plan.music_source` before approval, including an
+explicit `none` decision and reason when no music is wanted.
 
 ## When to Use
 

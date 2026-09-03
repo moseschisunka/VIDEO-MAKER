@@ -70,6 +70,10 @@ def test_proposal_packet_schema_accepts_taste_profile():
             "pipeline": "animated-explainer",
             "stages": [{"stage": "proposal", "tools": [], "approach": "Plan the production."}],
             "render_runtime": "remotion",
+            "music_source": {
+                "source_type": "none",
+                "reason": "No music selected for this contract fixture.",
+            },
             "taste_profile": _taste_profile(),
         },
         "cost_estimate": {

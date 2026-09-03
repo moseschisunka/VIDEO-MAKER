@@ -155,6 +155,15 @@ class ComfyUIVideo(BaseTool):
             "width": {"type": "integer", "default": 832, "description": "T2V default 832, I2V default 640"},
             "height": {"type": "integer", "default": 480, "description": "T2V default 480, I2V default 640"},
             "num_frames": {"type": "integer", "default": 81, "description": "81 frames = 5s at 16fps"},
+            "timeout_seconds": {
+                "type": "integer",
+                "default": 1800,
+                "description": "How long to wait for the ComfyUI job before giving up. Long renders may need more time.",
+            },
+            "resume_prompt_id": {
+                "type": "string",
+                "description": "A prompt_id from a previous timed-out call; resumes waiting/downloading without resubmitting.",
+            },
             "seed": {"type": "integer", "description": "Random if omitted"},
             "output_path": {"type": "string", "description": "Where to save the video"},
             "workflow_json": {
@@ -198,7 +207,7 @@ class ComfyUIVideo(BaseTool):
     user_visible_verification = ["Watch generated clip for motion coherence and artifacts"]
 
     def __init__(self) -> None:
-        self._client = ComfyUIClient()
+        self._client = ComfyUIClient(capability="video")
 
     def get_status(self) -> ToolStatus:
         if not self._client.is_available():
@@ -230,9 +239,12 @@ class ComfyUIVideo(BaseTool):
             return False
         return self.operation_statuses().get(operation) == "available"
 
-    def get_info(self) -> dict[str, Any]:
-        info = super().get_info()
-        info["operation_statuses"] = self.operation_statuses()
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
+        info = super().get_info(include_status=include_status)
+        info["operation_statuses"] = self.operation_statuses() if include_status else {
+            "text_to_video": "untested",
+            "image_to_video": "untested",
+        }
         info["resource_profiles"] = _RESOURCE_PROFILES
         info["setup_offer"] = self.setup_offer
         info["bundled_model_stacks"] = {
@@ -320,12 +332,24 @@ class ComfyUIVideo(BaseTool):
                 workflow,
                 output_node=output_node,
                 dest=output_path,
-                timeout=900,
+                timeout=inputs.get("timeout_seconds", 1800),
                 interval=10,
+                resume_prompt_id=inputs.get("resume_prompt_id"),
             )
 
         except ComfyUIError as exc:
-            return ToolResult(success=False, error=str(exc))
+            data = {"prompt_id": exc.prompt_id} if exc.prompt_id else {}
+            if exc.prompt_id:
+                error_msg = (
+                    f"{exc}\n\nThis job was NOT cancelled and is very likely still "
+                    f"running server-side. To recover it without resubmitting, call "
+                    f"execute() again with resume_prompt_id={exc.prompt_id!r} "
+                    f"(and a longer timeout_seconds if it needs more time), or poll "
+                    f"GET {{COMFYUI_SERVER_URL}}/history/{exc.prompt_id} directly."
+                )
+            else:
+                error_msg = str(exc)
+            return ToolResult(success=False, error=error_msg, data=data)
         except Exception as exc:
             return ToolResult(success=False, error=f"ComfyUI video generation failed: {exc}")
 

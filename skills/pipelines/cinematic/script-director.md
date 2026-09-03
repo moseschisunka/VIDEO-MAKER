@@ -6,6 +6,12 @@ This stage builds the beat map, selected lines, title-card copy, and reveal stru
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Emotional writing may remain creative,
+but narration that states facts, dates, identities, or attributions must carry
+claim IDs and resolvable source references.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

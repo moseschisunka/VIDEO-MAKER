@@ -1,0 +1,79 @@
+version: "1.0"
+status: documented_contract
+
+event_stream:
+  file: events.jsonl
+  schema_version: "1.0"
+  append_only: true
+  required_fields:
+    - ts
+    - schema_version
+    - event_id
+    - span_id
+    - project_id
+    - event
+  correlation_fields:
+    - project_id
+    - pipeline_type
+    - run_id
+    - stage
+    - attempt
+    - agent_id
+    - tool
+    - provider
+    - trace_id
+  sensitive_content_policy:
+    credentials: redact
+    signed_urls: redact
+    prompts_and_scripts: hash_and_record_length_only
+    raw_provider_payloads: do_not_record
+
+structured_logs:
+  logger_names:
+    - openmontage.events
+    - openmontage.providers
+  encoding: json
+  default_level: DEBUG
+  aggregation: external_runtime_log_sink
+
+metrics:
+  endpoint: /api/metrics
+  storage: bounded_in_process_snapshot
+  slo_contract: config/slo.yaml
+  alert_contract: config/alerts.yaml
+  measurement_command: python scripts/measure_slos.py
+  names:
+    - openmontage_events_total
+    - openmontage_tool_calls_total
+    - openmontage_tool_duration_seconds
+    - openmontage_tool_cost_usd_total
+    - openmontage_provider_events_total
+    - openmontage_provider_latency_seconds
+    - openmontage_run_events_total
+    - openmontage_run_duration_seconds
+    - openmontage_queue_wait_seconds
+    - openmontage_queue_depth
+    - openmontage_qa_outcomes_total
+    - openmontage_quality_escapes_total
+    - openmontage_sse_subscribers
+    - openmontage_sse_events_dropped_total
+    - openmontage_auth_failures_total
+  labels:
+    - tool
+    - provider
+    - event
+    - status
+    - runtime
+    - pipeline_type
+    - stage
+    - outcome
+
+trace_reconstruction:
+  trace_id_format: project_id:run_id
+  span_id: opaque_per_event
+  durable_sources:
+    - work_order.json
+    - run.json
+    - events.jsonl
+    - checkpoint_*.json
+  restart_behavior: preserve_durable_sources_and_emit_new_attempt_context

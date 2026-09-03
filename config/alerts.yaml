@@ -1,0 +1,61 @@
+version: "1.0"
+status: documented_contract
+
+# These rules produce bounded, redacted alert records. A deployment must wire
+# the records to an approved paging/notification sink and execute the delivery
+# drill before OBS-03 can be marked complete.
+rules:
+  - id: unauthorized-access-burst
+    severity: P0
+    action: page
+    trigger:
+      type: event
+      name: auth_failure
+      count_at_least: 3
+      window_seconds: 300
+
+  - id: provider-circuit-open
+    severity: P1
+    action: page
+    trigger:
+      type: event
+      name: circuit_open
+      count_at_least: 1
+      window_seconds: 300
+
+  - id: duplicate-provider-charge
+    severity: P0
+    action: page
+    trigger:
+      type: event
+      name: duplicate_provider_charge
+      count_at_least: 1
+      window_seconds: 300
+
+  - id: durable-state-loss
+    severity: P0
+    action: page
+    trigger:
+      type: event
+      name: durable_state_loss
+      count_at_least: 1
+      window_seconds: 300
+
+  - id: critical-quality-escape
+    severity: P0
+    action: page
+    trigger:
+      type: event
+      name: quality_escape
+      count_at_least: 1
+      window_seconds: 300
+
+  - id: queue-start-latency
+    severity: P1
+    action: page
+    trigger:
+      type: metric
+      name: openmontage_queue_wait_seconds
+      field: p95
+      operator: ">"
+      threshold: 5.0

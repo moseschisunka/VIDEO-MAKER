@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "decision_id": "PR-002-SCOPE-2026-09-02",
+  "production_gate": "PR-11G",
+  "studio_release_status": "internal_preview",
+  "studio_release_label": "Internal preview — production certification pending",
+  "pipelines": {
+    "screen-demo": {
+      "lane": "launch",
+      "ui_visible": true,
+      "creation_enabled": true,
+      "launch_modes": ["real_capture", "synthetic_terminal"],
+      "boundary": "Launch candidate; only certified capture or synthetic-terminal modes may be used."
+    },
+    "talking-head": {
+      "lane": "launch",
+      "ui_visible": true,
+      "creation_enabled": true,
+      "launch_modes": ["source_footage"],
+      "boundary": "Launch candidate for user-supplied source footage only; avatar generation is not included."
+    },
+    "cinematic": {
+      "lane": "beta",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held for source, stock, music, and multi-clip certification."
+    },
+    "clip-factory": {
+      "lane": "beta",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held for batch idempotency, transcription, caption, and multi-output certification."
+    },
+    "podcast-repurpose": {
+      "lane": "beta",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held for transcript, audio-stem, caption, and derivative-output certification."
+    },
+    "hybrid": {
+      "lane": "beta",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held for mixed source and generated-asset consistency certification."
+    },
+    "animation": {
+      "lane": "beta",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held for full animation asset, voice, music, and runtime certification."
+    },
+    "character-animation": {
+      "lane": "beta",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held for deterministic rig, lip-sync, and visual-golden certification."
+    },
+    "animated-explainer": {
+      "lane": "experimental",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Experimental until image/video generation and voice-provider paths are certified."
+    },
+    "avatar-spokesperson": {
+      "lane": "experimental",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Experimental; avatar and lip-sync capabilities are not certified."
+    },
+    "localization-dub": {
+      "lane": "experimental",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Experimental until translation, pronunciation, timing, and optional lip-sync are certified."
+    },
+    "documentary-montage": {
+      "lane": "experimental",
+      "ui_visible": true,
+      "creation_enabled": false,
+      "boundary": "Held behind manifest/schema and corpus/clip-retrieval blockers."
+    },
+    "framework-smoke": {
+      "lane": "test",
+      "ui_visible": false,
+      "creation_enabled": false,
+      "boundary": "Internal contract fixture; never a user production workflow."
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/media/asset_result",
+  "title": "Canonical Asset Result",
+  "type": "object",
+  "required": ["asset_id", "request_id", "scene_id", "media_type", "strategy", "path", "provider", "sha256", "size_bytes", "mime_type"],
+  "properties": {
+    "asset_id": { "type": "string", "minLength": 1 },
+    "request_id": { "type": "string", "minLength": 1 },
+    "scene_id": { "type": "string", "minLength": 1 },
+    "media_type": { "type": "string", "enum": ["image", "video", "audio", "diagram", "animation", "user_media", "stock", "generated"] },
+    "strategy": { "type": "string", "enum": ["user", "stock", "ai", "diagram", "generated", "local", "source"] },
+    "path": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "size_bytes": { "type": "integer", "exclusiveMinimum": 0 },
+    "mime_type": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+    "source_url": { "type": "string" },
+    "creator": { "type": "string" },
+    "license": { "type": "string" },
+    "license_url": { "type": "string" },
+    "attribution_required": { "type": "boolean" },
+    "restrictions": { "type": "array", "items": { "type": "string" } },
+    "model": { "type": "string" },
+    "prompt": { "type": "string" },
+    "retrieved_at": { "type": "string" },
+    "validation_status": { "type": "string", "enum": ["validated", "pending", "rejected"] },
+    "metadata": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,46 @@
+{
+  "name": "mixed_media_45s",
+  "pipeline_type": "hybrid",
+  "description": "A forty-five-second mixed-media piece that combines supplied footage, stock support, and an approved designed visual.",
+  "inputs": {
+    "source_mode": "mixed_user_stock_ai",
+    "brief": "Explain a product workflow using an interview clip, one licensed support shot, and one diagram tied to the narration.",
+    "profile": "landscape_16_9",
+    "duration_seconds": 45,
+    "input_media": ["fixtures/media/interview_excerpt.mp4"],
+    "target_platform": "linkedin"
+  },
+  "expected_artifacts": {
+    "brief": { "required_fields": ["anchor_medium", "support_layers", "target_duration_seconds"] },
+    "script": { "required_fields": ["sections", "source_refs"] },
+    "scene_plan": { "required_fields": ["scenes"], "assertions": { "anchor_and_support_are_labeled": true } },
+    "asset_manifest": { "required_fields": ["assets"], "assertions": { "source_types_and_provenance_complete": true } },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "support_layers_are_justified": true } },
+    "render_report": { "required_fields": ["outputs", "media_probe"], "assertions": { "cross_medium_coherence_reviewed": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "stochastic",
+  "tolerance": 1.0,
+  "profile": "landscape_16_9",
+  "duration_seconds": 45,
+  "duration_tolerance_seconds": 2.25,
+  "voice_intent": {
+    "mode": "source_speech_with_optional_narration",
+    "provider_policy": "preserve_source_voice_and_log_any_synthesized_support_voice",
+    "transcript_policy": "source_speech_and_added_narration_have_separate_timestamps"
+  },
+  "visual_strategy": {
+    "mode": "source_anchor_with_support_layers",
+    "description": "Keep the interview as the narrative anchor; introduce stock or designed support only when it clarifies a spoken idea.",
+    "asset_sources": ["user_media", "licensed_stock", "diagram_generator"],
+    "motion_requirement": "preferred"
+  },
+  "runtime_candidates": ["remotion", "hyperframes", "ffmpeg"],
+  "expected_approvals": ["idea", "script", "scene_plan", "assets", "edit", "publish"],
+  "prohibited_downgrade": [
+    "replace the interview anchor with generic generated visuals without approval",
+    "mix stock or AI assets without recording source and license provenance",
+    "allow support overlays to obscure the speaker or change the spoken claim"
+  ],
+  "tags": ["phase0", "hybrid", "mixed-media", "provenance", "cross-medium"]
+}

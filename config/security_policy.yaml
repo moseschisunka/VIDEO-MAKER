@@ -1,0 +1,137 @@
+version: "1.0"
+policy_id: openmontage-security-privacy-retention
+status: documented_contract
+
+authentication:
+  host_env: BACKLOT_HOST
+  required_token_env: BACKLOT_AUTH_TOKEN
+  force_required_env: BACKLOT_AUTH_REQUIRED
+  loopback_default_hosts:
+    - 127.0.0.1
+    - localhost
+    - "::1"
+  remote_binding_requires_token: true
+  accepted_scheme: Bearer
+  query_string_tokens: forbidden
+
+authorization:
+  project_scope_env: BACKLOT_PROJECT_SCOPE
+  scope_rule_format: comma_separated_ids_or_trailing_star_prefixes
+  default_scope: all_local_projects
+  unauthorized_project_listing: hidden
+  unauthorized_project_access: deny
+
+web_boundary:
+  cors:
+    mode: same_origin_only
+    allow_origins: []
+    allow_credentials: false
+    remote_override: reverse_proxy_only
+  csrf:
+    mode: bearer_authorization_header_only
+    cookie_authentication: false
+    state_changing_methods_require_bearer: true
+    query_string_tokens: forbidden
+  request_rate_limit:
+    enforcement: trusted_reverse_proxy_required_for_remote
+    local_server_default: none
+    expected_rejection_status: 429
+    key: client_ip
+    distributed_store: edge_owned
+
+paths:
+  projects_root_env: OPENMONTAGE_PROJECTS_DIR
+  allowed_media_directories:
+    - assets
+    - renders
+  project_root_symlinks: forbidden
+  resolved_path_must_remain_under_project_root: true
+  unsafe_uploads: reject_before_persist
+
+secrets:
+  source: environment_or_external_secret_manager
+  local_env_file: allowed_for_unpublished_development_only
+  never_commit:
+    - .env
+    - service_account_json
+    - private_keys
+    - provider_tokens
+  never_log:
+    - environment_values
+    - authorization_headers
+    - provider_request_headers
+    - raw_service_account_material
+    - signed_media_urls
+  redaction_boundary: events_provider_errors_tool_results
+
+retention:
+  enforcement_status: policy_defaults_pending_automated_purge
+  defaults:
+    user_source_media_days_after_terminal_run: 30
+    generated_derivatives_days_after_terminal_run: 30
+    final_outputs_days_after_terminal_run: 90
+    events_and_diagnostics_days_after_terminal_run: 90
+    provider_result_cache_days: 30
+    failed_run_workspace_hours: 24
+    backups_days: 180
+  backup:
+    format: zip_with_sha256_manifest
+    project_state: include_control_state_and_history
+    media_default: include
+    state_only_option: exclude_assets_and_renders
+    secret_files: never_copy
+    symlinks: reject
+    encryption: external_encrypted_storage_required
+    restore: verify_manifest_then_atomic_staging_promotion
+    overwrite_default: refuse_and_preserve_previous_tree
+  deletion:
+    user_request: required_for_source_and_derived_media
+    preserve_minimal_audit_record: true
+    preserve_audit_fields:
+      - project_id
+      - run_id
+      - deletion_requested_at
+      - deletion_completed_at
+      - deletion_scope
+      - artifact_hashes_only
+    history_and_approval_records: preserve_until_audit_retention_expiry
+    provider_side_deletion: best_effort_and_subject_to_provider_terms
+    self_service_endpoint: not_available_until_deletion_workflow_is_certified
+  safeguards:
+    never_delete_another_project: true
+    require_exact_project_root: true
+    stop_active_runs_before_deletion: true
+    backup_or_export_before_material_deletion: true
+
+provider_disclosure:
+  required_before_external_transfer: true
+  record_per_asset_or_operation:
+    - strategy
+    - provider
+    - model
+    - data_sent_class
+    - source_url_or_task_id
+    - retrieval_or_generation_timestamp
+    - license_or_provider_terms_reference
+    - user_approval_when_user_media_leaves_local_runtime
+  retention_statement: provider_retention_is_not_guaranteed_by_openmontage
+  classes:
+    local_runtime:
+      examples: [ffmpeg, remotion, hyperframes, piper, comfyui_local]
+      external_transfer: false
+    stock_search_and_download:
+      examples: [pexels, pixabay, archive_org, nasa, wikimedia, unsplash]
+      data_sent: search_query_and_request_metadata
+      user_media_transfer: false_by_default
+    ai_image_or_video:
+      examples: [openai, google, fal, runway, kling, heygen, higgsfield, xai]
+      data_sent: prompt_and_any_declared_reference_media
+      user_media_transfer: requires_explicit_approval
+    speech_and_transcription:
+      examples: [openai_tts, google_tts, elevenlabs, azure_stt, dashscope]
+      data_sent: script_or_audio_as_declared_by_operation
+      user_media_transfer: requires_explicit_approval
+    avatar_and_lip_sync:
+      examples: [heygen, kling_avatar, kling_lip_sync, sadtalker_local]
+      data_sent: face_or_voice_media_when_selected
+      user_media_transfer: requires_explicit_approval

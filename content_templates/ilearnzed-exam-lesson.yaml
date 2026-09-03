@@ -1,0 +1,66 @@
+version: "1.0"
+id: ilearnzed-exam-lesson
+name: "iLearnZed Exam Lesson"
+category: exam_lesson
+description: "Teacher-led curriculum and examination lesson built around a real question, worked method, and learner practice."
+
+audience:
+  primary: secondary_school_learners
+  secondary: [school_leavers]
+  need: "Solve a curriculum or examination problem clearly and avoid a common mark-losing mistake."
+  levels: ["Form 1", "Form 2", "Form 3", "Form 4", "Form 5", "Form 6"]
+
+promise:
+  viewer_outcome: "The learner can explain the method and attempt a similar question independently."
+  central_question_required: true
+  misconception_required: true
+  truthfulness_rule: "Use only verified syllabus, exam-board, year, mark-scheme, and answer claims."
+
+structure:
+  opening:
+    must_show: "The actual question, diagram, data, or mark-losing step."
+    must_say: "State what the learner will be able to solve by the end."
+    max_seconds: 20
+  beats:
+    - {id: diagnose, purpose: "Expose the likely trap or misconception.", plot: A, visual_requirement: "Highlighted question and tempting wrong move.", viewer_question: "Why does this answer lose marks?", required: true}
+    - {id: method, purpose: "Give the smallest reliable method.", plot: A, visual_requirement: "Numbered method or worked structure.", viewer_question: "What should I do first?", required: true}
+    - {id: worked_example, purpose: "Walk through the solution with reasoning.", plot: both, visual_requirement: "Teacher plus legible progressive annotation.", viewer_question: "How does each step follow?", required: true}
+    - {id: variation, purpose: "Test transfer to a changed question.", plot: B, visual_requirement: "Second question or quick learner pause.", viewer_question: "Can I use this method again?", required: true}
+    - {id: exam_action, purpose: "Leave the learner with a practice action.", plot: A, visual_requirement: "Final checklist or practice prompt.", viewer_question: "What should I practise next?", required: true}
+  ending:
+    payoff: "Return to the opening question and show the complete correct reasoning."
+    next_step: "Invite registration at https://ilearnzed.org and link a verified related course when available."
+    outro_limit_seconds: 8
+
+production:
+  default_pipeline: talking-head
+  formats: [long_form]
+  compatible_playbooks: [ilearnzed-education]
+  required_artifacts: [brief, thumbnail_package, script, scene_plan, asset_manifest, final_review, publish_log]
+  source_modes: [teacher_camera, document_camera, screen_or_tablet_annotation]
+  duration_guidance: "Use the time required for understanding; long-form lessons have no internal studio duration ceiling and must not be padded to an arbitrary length."
+
+thumbnail:
+  concepts: ["Teacher plus real exam question", "Large topic label plus worked answer", "Common trap contrasted with correct method"]
+  on_image_word_target: "2-5 important words"
+  required_checks: [clear_exam_context, one_focal_question, legible_at_mobile_size, truthful_subject_or_exam_label]
+
+shorts:
+  derivative_allowed: true
+  self_contained_required: true
+  mechanisms: [common_trap, one_step_method, quick_before_after, challenge_question]
+  first_frame_rule: "Show the question, wrong step, or answer reveal before explanation."
+
+localization:
+  supported: true
+  languages: [bem, nya]
+  priority: "Mathematics first, especially difficult concepts and foundational numeracy."
+  human_review_required: true
+
+consent:
+  teacher_consent_required: true
+  student_identifiable_consent_required: true
+  evidence_required_before_publish: true
+  scope: [youtube, shorts, social_media_repurposing, thumbnails, promotional_clips, ilearnzed_platform_use]
+
+quality_gates: [question_is_verified, solution_is_checked, teacher_audio_is_clear, all_diagrams_are_legible, consent_evidence_attached, payoff_resolves_opening_question]

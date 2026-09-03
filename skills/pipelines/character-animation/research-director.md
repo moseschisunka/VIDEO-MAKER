@@ -2,6 +2,12 @@
 
 ## Goal
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Separate character/animation invention
+from factual anatomy, movement, historical, or safety claims; cite approved
+sources and label uncertain evidence explicitly.
+
 Ground the character-animation plan in real references and current technique.
 For reference videos, start from `video_analysis_brief`: content, pacing, motion
 classification, keyframes, color, and production complexity.

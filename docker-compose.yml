@@ -1,0 +1,38 @@
+services:
+  openmontage-backlot:
+    build: .
+    ports:
+      # Local-only by default. Configure an authenticated reverse proxy before
+      # deliberately publishing Backlot beyond the workstation.
+      - "127.0.0.1:4750:4750"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BACKLOT_HOST: 0.0.0.0
+      BACKLOT_PORT: 4750
+    volumes:
+      - ./projects:/app/projects:rw
+      - ./output:/app/output:rw
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.backlot
+      - /home/node/.npm
+      # Remotion's baked browser lives at
+      # /app/remotion-composer/node_modules/.remotion; this runtime cache is
+      # only for npm/browser profiles and must not mask the baked binary.
+      - /home/node/.cache
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "const t=process.env.BACKLOT_AUTH_TOKEN; const headers=t?{authorization:'Bearer '+t}:{}; fetch('http://127.0.0.1:4750/api/health',{headers}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped

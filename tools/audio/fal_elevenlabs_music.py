@@ -213,17 +213,24 @@ class FalElevenLabsMusic(BaseTool):
                 duration_seconds=round(time.time() - started, 2),
             )
 
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "fal.ai",
+            "model": self._MODEL,
+            "prompt": inputs["prompt"],
+            "duration_seconds": duration,
+            "force_instrumental": payload["force_instrumental"],
+            "output": str(output_path),
+            "format": "mp3",
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data, inputs, source_tool=self.name
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "fal.ai",
-                "model": self._MODEL,
-                "prompt": inputs["prompt"],
-                "duration_seconds": duration,
-                "force_instrumental": payload["force_instrumental"],
-                "output": str(output_path),
-                "format": "mp3",
-            },
+            data=result_data,
             artifacts=[str(output_path)],
             cost_usd=self.estimate_cost(inputs),
             duration_seconds=round(time.time() - started, 2),

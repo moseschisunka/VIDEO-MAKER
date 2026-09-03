@@ -1,0 +1,47 @@
+{
+  "name": "lesson_5m",
+  "pipeline_type": "animated-explainer",
+  "description": "A five-minute lesson that tests long-form section planning, factual grounding, voice continuity, captions, and chapter-level recovery.",
+  "inputs": {
+    "source_mode": "research_to_generated",
+    "brief": "Teach one exam-relevant concept in five minutes with a clear explanation, worked example, recap, and learner check.",
+    "profile": "landscape_16_9",
+    "duration_seconds": 300,
+    "target_platform": "youtube"
+  },
+  "expected_artifacts": {
+    "research_brief": { "required_fields": ["topic", "sources", "data_points", "audience_questions"] },
+    "proposal_packet": { "required_fields": ["concept_options", "production_plan", "approval"] },
+    "script": { "required_fields": ["sections", "total_duration_seconds", "chapter_markers"], "assertions": { "has_recap": true, "has_learner_check": true } },
+    "scene_plan": { "required_fields": ["scenes"], "assertions": { "chapter_boundaries_explicit": true, "visual_repetition_checked": true } },
+    "asset_manifest": { "required_fields": ["assets"], "assertions": { "asset_provenance_complete": true } },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "all_chapters_cover_duration": true } },
+    "render_report": { "required_fields": ["outputs", "media_probe", "chapter_checks"], "assertions": { "audio_video_sync_verified": true, "captions_verified": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "stochastic",
+  "tolerance": 2.0,
+  "profile": "landscape_16_9",
+  "duration_seconds": 300,
+  "duration_tolerance_seconds": 9.0,
+  "voice_intent": {
+    "mode": "continuous_narrated_lesson",
+    "provider_policy": "voice_identity_must_remain_consistent_across_resumable_segments",
+    "transcript_policy": "verified_transcript_drives_captions_and_chapter_timing",
+    "pronunciation_targets": ["technical_terms", "named_examples"]
+  },
+  "visual_strategy": {
+    "mode": "chaptered_diagram_and_example_led_explainer",
+    "description": "Alternate explanation, worked example, diagram, and learner-check scenes with intentional visual resets at chapter boundaries.",
+    "asset_sources": ["research_sources", "diagram_generator", "image_selector", "structured_visuals"],
+    "motion_requirement": "required"
+  },
+  "runtime_candidates": ["remotion", "hyperframes"],
+  "expected_approvals": ["research", "proposal", "script", "scene_plan", "assets", "edit", "compose", "publish"],
+  "prohibited_downgrade": [
+    "truncate or pad the lesson without recording a duration decision and approval",
+    "reuse one visual for an entire chapter while claiming the lesson is fully designed",
+    "lose voice identity or caption timing across resumed narration segments"
+  ],
+  "tags": ["phase0", "long-form", "lesson", "grounding", "chapters", "voice-continuity"]
+}

@@ -102,10 +102,20 @@
       "items": {
         "type": "object",
         "required": ["claim", "source_url", "credibility"],
-        "properties": {
+          "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "description": "Stable source identifier used by claim-level grounding"
+          },
           "claim": { "type": "string", "description": "The specific fact, statistic, or data point" },
           "source_url": { "type": "string", "format": "uri" },
           "source_name": { "type": "string", "description": "e.g., 'Stack Overflow 2025 Developer Survey'" },
+          "claim_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Stable claim identifiers supported by this data point"
+          },
           "credibility": {
             "type": "string",
             "enum": ["primary_source", "secondary_source", "anecdotal"],
@@ -220,11 +230,52 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["url", "title", "used_for"],
+        "required": ["title", "used_for"],
+        "anyOf": [
+          { "required": ["url"] },
+          { "required": ["canonical_locator"] }
+        ],
         "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "description": "Stable source identifier used by claim-level grounding"
+          },
           "url": { "type": "string", "format": "uri" },
+          "canonical_locator": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Canonical URL, URI, or project-relative source path"
+          },
           "title": { "type": "string" },
           "used_for": { "type": "string", "description": "Which section of the brief this source supports" },
+          "accessed_at": {
+            "type": "string",
+            "description": "Date or date-time when the source was retrieved"
+          },
+          "retrieved_at": { "type": "string" },
+          "excerpt_or_note": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short relevant excerpt or structured note; do not embed copyrighted documents"
+          },
+          "excerpt": { "type": "string" },
+          "structured_note": { "type": "string" },
+          "license": {
+            "type": "string",
+            "minLength": 1,
+            "description": "License or usage basis for the source"
+          },
+          "usage_constraints": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Attribution, territory, transformation, or other usage restrictions"
+          },
+          "claim_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Stable claims supported by this source"
+          },
           "reliability": {
             "type": "string",
             "enum": ["primary", "secondary", "anecdotal"]
@@ -238,6 +289,16 @@
     "research_summary": {
       "type": "string",
       "description": "One paragraph: the single most important insight from this research and why it matters for the video"
+    },
+    "grounding_contract": {
+      "type": "object",
+      "description": "Controls whether source metadata and claim traceability are required for production",
+      "properties": {
+        "required": { "type": "boolean", "default": true },
+        "policy": { "type": "string", "enum": ["block", "revise", "warn"] },
+        "source_record_version": { "type": "string", "const": "1.0" }
+      },
+      "additionalProperties": false
     },
     "metadata": { "type": "object" }
   },

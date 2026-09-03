@@ -35,6 +35,8 @@ from tools.video.hyperframes_compose import HyperFramesCompose
 OUT = Path(__file__).resolve().parent / "output"
 OUT.mkdir(parents=True, exist_ok=True)
 
+pytestmark = pytest.mark.hyperframes_qa
+
 
 _SKIP_REASON = (
     "HyperFrames QA is opt-in. Set HYPERFRAMES_QA=1 to run scaffold+lint+validate, "
@@ -42,9 +44,31 @@ _SKIP_REASON = (
 )
 
 
+def _offline_enabled() -> bool:
+    """Use only locally cached HyperFrames when explicitly requested.
+
+    CI can keep the default online resolution path, while a workstation or
+    air-gapped release check can certify the exact cached runtime without a
+    five-second npm registry probe or an accidental download.
+    """
+
+    return os.environ.get("HYPERFRAMES_QA_OFFLINE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _tool() -> HyperFramesCompose:
+    tool = HyperFramesCompose()
+    tool._offline_mode = _offline_enabled()
+    return tool
+
+
 def _runtime_ready() -> bool:
     """Cheap check — don't bother launching the CLI if the floor isn't met."""
-    return HyperFramesCompose()._runtime_check()["runtime_available"]
+    return _tool()._runtime_check()["runtime_available"]
 
 
 def _make_fixture_asset(dest_dir: Path, name: str = "hero.png") -> Path:
@@ -100,6 +124,7 @@ def _minimal_scenario(workspace: Path, asset: Path) -> dict:
         "quality": "draft",
         "fps": 30,
         "skip_contrast": False,
+        "offline": _offline_enabled(),
     }
 
 
@@ -113,7 +138,7 @@ def test_hyperframes_scaffold_lint_validate(tmp_path: Path):
     inputs = _minimal_scenario(workspace, asset)
 
     # 1. Scaffold
-    scaffold = HyperFramesCompose().execute(
+    scaffold = _tool().execute(
         {**inputs, "operation": "scaffold_workspace"}
     )
     assert scaffold.success, scaffold.error
@@ -122,7 +147,7 @@ def test_hyperframes_scaffold_lint_validate(tmp_path: Path):
     assert (workspace / "hyperframes.json").is_file()
 
     # 2. Lint — the CLI fetch happens here on cold cache. Allow plenty of time.
-    lint = HyperFramesCompose().execute(
+    lint = _tool().execute(
         {"operation": "lint", "workspace_path": str(workspace)}
     )
     # A fresh scaffold should lint clean; if it doesn't, the generator has a bug.
@@ -135,7 +160,7 @@ def test_hyperframes_scaffold_lint_validate(tmp_path: Path):
 
     # 3. Validate — browser-based. Skip contrast since our placeholder colors
     # aren't tuned for WCAG.
-    validate = HyperFramesCompose().execute(
+    validate = _tool().execute(
         {
             "operation": "validate",
             "workspace_path": str(workspace),
@@ -165,7 +190,7 @@ def test_hyperframes_full_render(tmp_path: Path):
     inputs = _minimal_scenario(workspace, asset)
     inputs["skip_contrast"] = True  # placeholder palette isn't WCAG-tuned
 
-    result = HyperFramesCompose().execute(inputs)
+    result = _tool().execute(inputs)
     assert result.success, (
         f"Full render failed: {result.error}\n"
         f"Steps: {result.data.get('steps')}"

@@ -345,6 +345,45 @@ def test_hyperframes_lint_requires_workspace():
     assert "workspace_path" in (result.error or "")
 
 
+def test_direct_hyperframes_operations_honor_offline_mode(tmp_path, monkeypatch):
+    """The public offline flag must reach every CLI-backed operation.
+
+    Without this regression guard, only ``doctor`` and ``render`` set the
+    instance flag; direct lint/validate/inspect/add calls silently use
+    ``npx --yes`` and can hang or mutate the npm cache in an air-gapped
+    production run.
+    """
+    import subprocess
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "index.html").write_text("<html></html>", encoding="utf-8")
+    tool = HyperFramesCompose()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(tool, "_runtime_check", lambda: {"runtime_available": True})
+
+    def run_hf(args, *, cwd, timeout, check):
+        calls.append(list(args))
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="{}", stderr="")
+
+    monkeypatch.setattr(tool, "_run_hf", run_hf)
+
+    for operation, extra in (
+        ("lint", {}),
+        ("validate", {}),
+        ("inspect", {}),
+        ("add_block", {"block_name": "grain-overlay"}),
+    ):
+        result = tool.execute(
+            {"operation": operation, "workspace_path": str(workspace), "offline": True, **extra}
+        )
+        assert result.success, result.error
+        assert tool._offline_mode is True
+
+    assert len(calls) == 4
+
+
 def test_hyperframes_render_requires_workspace():
     result = HyperFramesCompose().execute({"operation": "render"})
     assert not result.success

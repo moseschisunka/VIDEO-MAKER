@@ -1,0 +1,104 @@
+{
+  "version": "1.0",
+  "name": "phase9_final_review_fault_corpus",
+  "description": "Deterministic local media and artifact defects used to prove that final QA blocks unsafe output and routes the correct next action.",
+  "provider_access": "offline_only",
+  "cases": [
+    {
+      "id": "missing_media",
+      "family": "technical",
+      "fixture": "missing-output.mp4",
+      "expected_status": "fail",
+      "expected_action": "re_render",
+      "required_signal": "video file not found"
+    },
+    {
+      "id": "black_video",
+      "family": "visual",
+      "fixture": "black.mp4",
+      "expected_status": "revise",
+      "expected_action": "re_render",
+      "required_signal": "decoded black"
+    },
+    {
+      "id": "frozen_video",
+      "family": "visual",
+      "fixture": "frozen-tail.mp4",
+      "expected_status": "revise",
+      "expected_action": "re_render",
+      "required_signal": "freezedetect"
+    },
+    {
+      "id": "duplicate_shots",
+      "family": "visual",
+      "fixture": "duplicate-shots.mp4",
+      "expected_status": "revise",
+      "expected_action": "re_render",
+      "required_signal": "duplicate sampled frames"
+    },
+    {
+      "id": "wrong_profile",
+      "family": "technical",
+      "fixture": "wrong-profile.mp4",
+      "expected_status": "revise",
+      "expected_action": "re_render",
+      "required_signal": "does not match profile"
+    },
+    {
+      "id": "silent_audio",
+      "family": "audio",
+      "fixture": "silent-audio.mp4",
+      "expected_status": "revise",
+      "expected_action": "re_render",
+      "required_signal": "effectively silent"
+    },
+    {
+      "id": "clipped_audio",
+      "family": "audio",
+      "fixture": "clipped-audio.mp4",
+      "expected_status": "revise",
+      "expected_action": "re_render",
+      "required_signal": "clipping"
+    },
+    {
+      "id": "transcript_drift",
+      "family": "content",
+      "fixture": "transcript-drift.json",
+      "expected_status": "revise",
+      "expected_action": "revise_edit",
+      "required_signal": "Low transcript-to-script match"
+    },
+    {
+      "id": "language_voice_mismatch",
+      "family": "content",
+      "fixture": "transcript-language-voice-drift.json",
+      "expected_status": "revise",
+      "expected_action": "revise_edit",
+      "required_signal": "voice identity"
+    },
+    {
+      "id": "broken_overlay_bounds",
+      "family": "editorial",
+      "fixture": "edit-bounds.json",
+      "expected_status": "revise",
+      "expected_action": "revise_edit",
+      "required_signal": "outside the frame"
+    },
+    {
+      "id": "missing_visual_source",
+      "family": "editorial",
+      "fixture": "edit-missing-source.json",
+      "expected_status": "revise",
+      "expected_action": "revise_assets",
+      "required_signal": "missing local visual asset"
+    },
+    {
+      "id": "placeholder_copy",
+      "family": "editorial",
+      "fixture": "edit-placeholder.json",
+      "expected_status": "revise",
+      "expected_action": "re_author",
+      "required_signal": "placeholder copy"
+    }
+  ]
+}

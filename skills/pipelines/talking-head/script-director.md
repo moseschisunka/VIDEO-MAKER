@@ -8,6 +8,12 @@ Unlike the explainer pipeline (which writes a script from scratch), you're extra
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Separate the speaker's opinion and
+personal experience from factual claims, preserving citations and uncertainty
+when narration is edited or condensed.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

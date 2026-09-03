@@ -1,5 +1,9 @@
 # Proposal Director - Character Animation Pipeline
 
+Before drafting the proposal, read `skills/meta/music-decision-contract.md`.
+The music plan must resolve to `user_library`, `ai_generated`, `bring_your_own`,
+or an explicit `none` decision with a reason before asset generation.
+
 ## Goal
 
 Present character-animation concepts that are honest about local rigged motion,

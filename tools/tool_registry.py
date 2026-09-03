@@ -214,7 +214,10 @@ class ToolRegistry:
         self.ensure_discovered()
         grouped: dict[str, list[dict[str, Any]]] = {}
         for tool in self._tools.values():
-            grouped.setdefault(tool.capability, []).append(tool.get_info())
+            # Catalog discovery is a planning operation.  Do not run a live
+            # provider health probe (some tools historically perform network
+            # requests from get_status); deep diagnostics are explicit.
+            grouped.setdefault(tool.capability, []).append(tool.get_info(include_status=False))
         for items in grouped.values():
             items.sort(key=lambda item: (item["provider"], item["name"]))
         return dict(sorted(grouped.items()))
@@ -224,7 +227,7 @@ class ToolRegistry:
         self.ensure_discovered()
         grouped: dict[str, list[dict[str, Any]]] = {}
         for tool in self._tools.values():
-            grouped.setdefault(tool.provider, []).append(tool.get_info())
+            grouped.setdefault(tool.provider, []).append(tool.get_info(include_status=False))
         for items in grouped.values():
             items.sort(key=lambda item: (item["capability"], item["name"]))
         return dict(sorted(grouped.items()))
@@ -246,7 +249,7 @@ class ToolRegistry:
                 summary[tier.value] = counts
         return summary
 
-    def provider_menu(self) -> dict[str, dict[str, Any]]:
+    def provider_menu(self, *, live: bool = True) -> dict[str, dict[str, Any]]:
         """Generate a capability-grouped provider menu for user-facing display.
 
         Returns a dict like:
@@ -275,8 +278,21 @@ class ToolRegistry:
             if cap not in menu:
                 menu[cap] = {"available": [], "unavailable": [], "total": 0, "configured": 0}
 
-            info = tool.get_info()
-            status = tool.get_status()
+            info = tool.get_info(include_status=live)
+            status = tool.get_status() if live else None
+            fast_status = None
+            if not live:
+                from lib.providers.preflight import fast_preflight
+
+                # Fast reports are local-only and can be reused across all
+                # entries; this branch is intentionally outside the normal
+                # live menu path to preserve its historical API semantics.
+                if "_fast_statuses" not in locals():
+                    _fast_statuses = {
+                        item["tool"]: item["status"]
+                        for item in fast_preflight(self).get("records", [])
+                    }
+                fast_status = _fast_statuses.get(tool.name, "untested")
             entry = {
                 "name": tool.name,
                 "provider": tool.provider,
@@ -284,7 +300,8 @@ class ToolRegistry:
                 "best_for": tool.best_for,
                 "dependencies": info.get("dependencies", []),
                 "install_instructions": tool.install_instructions,
-                "status": status.value,
+                "status": status.value if status is not None else fast_status,
+                "preflight_status": fast_status if fast_status is not None else None,
             }
             for extra_key in (
                 "source_provider_menu",
@@ -300,7 +317,8 @@ class ToolRegistry:
                 if extra_key in info:
                     entry[extra_key] = info[extra_key]
 
-            if status == ToolStatus.AVAILABLE:
+            available_fast = fast_status in {"configured", "available_local", "requires_live_probe"}
+            if status == ToolStatus.AVAILABLE or (status is None and available_fast):
                 menu[cap]["available"].append(entry)
                 menu[cap]["configured"] += 1
             else:
@@ -351,7 +369,9 @@ class ToolRegistry:
         raw. See AGENT_GUIDE.md > "Provider Menu (Mandatory at Preflight)".
         """
         self.ensure_discovered()
-        menu = self.provider_menu()
+        # Summary is shown during Studio open; it must not synchronously run
+        # the live/network status probes that the legacy menu uses.
+        menu = self.provider_menu(live=False)
 
         # Composition runtimes — lift from video_compose.get_info() since
         # they're the signal the runtime-selection contract depends on.
@@ -359,14 +379,14 @@ class ToolRegistry:
         runtime_warnings: list[str] = []
         vc = self._tools.get("video_compose")
         if vc is not None:
-            info = vc.get_info()
+            info = vc.get_info(include_status=False)
             engines = info.get("render_engines") or {}
             comp_runtimes = {k: bool(v) for k, v in engines.items()}
         # If hyperframes_compose is registered, surface its npm-resolve reasons
         # explicitly — those are the "looks available but isn't" failures.
         hf = self._tools.get("hyperframes_compose")
         if hf is not None:
-            hf_info = hf.get_info()
+            hf_info = hf.get_info(include_status=False)
             rc = hf_info.get("hyperframes_runtime") or {}
             for reason in rc.get("reasons") or []:
                 runtime_warnings.append(f"hyperframes: {reason}")
@@ -486,6 +506,23 @@ class ToolRegistry:
             t.name for t in self._tools.values()
             if t.resource_profile.network_required
         ]
+
+    def fast_preflight(self, *, cache_path: Any = None, ttl_seconds: float = 30.0) -> dict[str, Any]:
+        """Return a local-only provider preflight report.
+
+        This deliberately does not call ``get_status``. Use
+        :meth:`deep_preflight` when a live network/provider diagnostic is
+        explicitly requested.
+        """
+        from lib.providers.preflight import fast_preflight
+
+        return fast_preflight(self, cache_path=cache_path, ttl_seconds=ttl_seconds)
+
+    def deep_preflight(self, *, timeout_seconds: float = 3.0) -> dict[str, Any]:
+        """Run bounded live diagnostics for every registered tool."""
+        from lib.providers.preflight import deep_preflight
+
+        return deep_preflight(self, timeout_seconds=timeout_seconds)
 
 
 # Singleton registry instance

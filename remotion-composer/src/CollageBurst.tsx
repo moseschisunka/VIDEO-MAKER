@@ -11,16 +11,8 @@ import {
   useVideoConfig,
 } from "remotion";
 import React from "react";
-import { loadFont as loadPlayfair } from "@remotion/google-fonts/PlayfairDisplay";
-
-const { fontFamily: playfairFamily } = loadPlayfair("normal", {
-  weights: ["400", "700"],
-  subsets: ["latin"],
-});
-const { fontFamily: playfairItalic } = loadPlayfair("italic", {
-  weights: ["400", "700"],
-  subsets: ["latin"],
-});
+const playfairFamily = "Playfair Display, Georgia, serif";
+const playfairItalic = "Playfair Display, Georgia, serif";
 
 function resolveAsset(src: string): string {
   if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) return src;
@@ -63,7 +55,7 @@ export interface CollageClip {
   seed?: number;
 }
 
-export interface CollageBurstProps {
+export interface CollageBurstProps extends Record<string, unknown> {
   backgroundSrc: string;
   backgroundInSeconds?: number;
   curtainStartSeconds: number;

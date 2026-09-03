@@ -7,6 +7,7 @@ the tool file in tools/video/; no changes to this selector are needed.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import os
 
 from tools.base_tool import BaseTool, ToolResult, ToolRuntime, ToolStability, ToolStatus, ToolTier
@@ -208,6 +209,31 @@ class VideoSelector(BaseTool):
                 "description": "Optional provenance metadata for custom workflow dependencies.",
             },
             "output_path": {"type": "string"},
+            "asset_request": {
+                "type": "object",
+                "description": "Canonical scene asset request. Required for production mixed-media runs.",
+            },
+            "sample_required": {
+                "type": "boolean",
+                "default": False,
+                "description": "Require a reviewed sample before any batch generation.",
+            },
+            "sample_approval": {
+                "type": "object",
+                "description": "Immutable sample approval record for the selected generation plan.",
+            },
+            "batch": {"type": "boolean", "default": False},
+            "motion_required": {"type": "boolean", "default": False, "description": "Fail closed if the generated video is visually static."},
+            "strict_media_validation": {
+                "type": "boolean",
+                "default": False,
+                "description": "Production mode: require decoded video output and motion verification.",
+            },
+            "production_mode": {"type": "boolean", "default": False},
+            "asset_cache_dir": {
+                "type": "string",
+                "description": "Optional run-local content-addressed cache for validated generated assets.",
+            },
         },
     }
 
@@ -282,10 +308,21 @@ class VideoSelector(BaseTool):
             task_context = self._prepare_task_context(rank_inputs)
             candidates = self._filter_candidates(rank_inputs, candidates)
             rankings = rank_providers(candidates, task_context)
+            serialized = self._serialize_rankings(candidates, rankings)
+            from lib.providers.plans import build_ranked_plan
+
+            plan = build_ranked_plan(
+                capability=self.capability,
+                operation=str(rank_inputs.get("operation") or "text_to_video"),
+                inputs=rank_inputs,
+                rankings=serialized,
+                providers=candidates,
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "rankings": self._serialize_rankings(candidates, rankings),
+                    "rankings": serialized,
+                    "dry_run_plan": plan,
                     "explanation": "\n".join(r.explain() for r in rankings[:5]),
                     "normalized_task_context": task_context,
                 },
@@ -297,12 +334,83 @@ class VideoSelector(BaseTool):
         if tool is None:
             return ToolResult(success=False, error="No video generation provider available.")
 
+        from lib.media_contracts import AssetRequest, build_asset_request
+        from lib.media_generation import build_generation_plan, collect_output_paths, require_sample_approval, validate_generation_output
+
+        operation = str(inputs.get("operation") or "text_to_video")
+        raw_request = inputs.get("asset_request")
+        if raw_request:
+            try:
+                asset_request = build_asset_request(raw_request)
+                if inputs.get("sample_required") or inputs.get("batch"):
+                    asset_request = replace(asset_request, sample_required=True)
+            except Exception as exc:
+                return ToolResult(success=False, error=f"Invalid asset_request: {exc}")
+        else:
+            asset_request = AssetRequest(
+                request_id=str(inputs.get("request_id") or f"video:{inputs.get('prompt', '')}"),
+                scene_id=str(inputs.get("scene_id") or "unspecified"),
+                intent=str(inputs.get("prompt") or "video"),
+                media_type="video",
+                strategy="ai",
+                constraints={
+                    "min_duration_seconds": float(inputs["duration"]) if str(inputs.get("duration", "")).replace(".", "", 1).isdigit() else 0,
+                    "orientation": "portrait" if inputs.get("aspect_ratio") == "9:16" else "square" if inputs.get("aspect_ratio") == "1:1" else "landscape",
+                },
+                sample_required=bool(inputs.get("sample_required") or inputs.get("batch")),
+            )
+        try:
+            plan = build_generation_plan(
+                asset_request,
+                provider=str(getattr(tool, "provider", "")),
+                model=str(inputs.get("model_name") or inputs.get("model") or getattr(tool, "version", "")),
+                inputs=inputs,
+            )
+            approval = require_sample_approval(
+                asset_request,
+                inputs.get("sample_approval") if isinstance(inputs.get("sample_approval"), dict) else None,
+                plan_id=plan["plan_id"],
+            )
+        except Exception as exc:
+            return ToolResult(success=False, error=f"Video generation plan blocked: {exc}")
+
+        cache = None
+        if inputs.get("asset_cache_dir"):
+            try:
+                from lib.asset_cache import AssetCache
+
+                cache = AssetCache(str(inputs["asset_cache_dir"]))
+                cached = cache.get(asset_request, destination=inputs.get("output_path"), validate=True)
+                if cached:
+                    return ToolResult(success=True, data={
+                        "output": cached["path"],
+                        "output_path": cached["path"],
+                        "selected_tool": tool.name,
+                        "selected_provider": tool.provider,
+                        "generation_plan": plan,
+                        "sample_approval": approval,
+                        "asset_request": asset_request.to_dict(),
+                        "asset_validation": cached.get("validation") or {},
+                        "cache_hit": True,
+                    }, artifacts=[cached["path"]])
+            except Exception as exc:
+                # A cache fault must not hide a provider failure or block a
+                # fresh generation; the cache remains an optimization.
+                pass
+
         # Adapt input keys: stock tools use 'query' while generators use 'prompt'
         adapted = dict(inputs)
         if hasattr(tool, 'input_schema'):
             required = tool.input_schema.get("properties", {})
             if "query" in required and "query" not in adapted:
                 adapted["query"] = adapted.get("prompt", "")
+        for control_key in (
+            "asset_request", "sample_required", "sample_approval", "batch",
+            "strict_media_validation", "production_mode", "request_id", "scene_id",
+            "asset_cache_dir",
+            "motion_required",
+        ):
+            adapted.pop(control_key, None)
 
         # Auto-resolve reference_image_path to a URL for providers that need it
         if adapted.get("operation") == "image_to_video" and adapted.get("reference_image_path"):
@@ -315,8 +423,47 @@ class VideoSelector(BaseTool):
                 except Exception as e:
                     return ToolResult(success=False, error=f"Failed to upload reference image: {e}")
 
-        result = tool.execute(adapted)
+        from lib.providers.bridge import execute_with_provider_executor
+
+        # All selector executions are kernel-governed; production callers with
+        # run identity must explicitly approve paid provider execution.
+        result = execute_with_provider_executor(tool, adapted)
         if result.success:
+            # A motion-required brief must never be satisfied by an image-only
+            # downgrade, even if a provider reports success.
+            if operation in self.MOTION_REQUIRED_OPERATIONS:
+                data = result.data if isinstance(result.data, dict) else {}
+                declared_type = str(data.get("media_type") or data.get("output_type") or "").lower()
+                if tool.name == "image_selector" or declared_type in {"image", "still", "photo"}:
+                    return ToolResult(success=False, data={"generation_plan": plan, "sample_approval": approval}, error="Motion-required video request was downgraded to a still image")
+            strict = bool(inputs.get("strict_media_validation") or inputs.get("production_mode"))
+            if strict:
+                try:
+                    validation = validate_generation_output(
+                        result,
+                        media_type="video",
+                        constraints=asset_request.constraints,
+                        motion_required=operation in self.MOTION_REQUIRED_OPERATIONS or bool(inputs.get("motion_required")),
+                        strict=True,
+                    )
+                except Exception as exc:
+                    return ToolResult(success=False, data={"generation_plan": plan, "sample_approval": approval}, error=f"Generated video failed validation: {exc}")
+                result.data["asset_validation"] = validation
+                if cache:
+                    try:
+                        paths = [p for p in collect_output_paths(result) if p.is_file()]
+                        if paths:
+                            entry = cache.put(
+                                asset_request,
+                                paths[0],
+                                asset_id=f"asset_{validation['outputs'][0].get('sha256', '')[:16]}",
+                                media_type="video",
+                                validation=validation["outputs"][0],
+                                metadata={"generation_plan": plan},
+                            )
+                            result.data["asset_cache"] = {"request_key": entry.request_key, "sha256": entry.sha256, "path": entry.path}
+                    except Exception:
+                        pass
             result.data.setdefault("selected_tool", tool.name)
             result.data["selected_provider"] = tool.provider
             result.data["selection_reason"] = score.explain() if score else f"Selected {tool.provider} ({tool.name})"
@@ -329,6 +476,9 @@ class VideoSelector(BaseTool):
             ]
             # Input-aware fallback list (drops image_selector for motion-required briefs).
             result.data.setdefault("fallback_tools", self.fallback_tools_for(inputs))
+            result.data["generation_plan"] = plan
+            result.data["sample_approval"] = approval
+            result.data["asset_request"] = asset_request.to_dict()
         return result
 
     def _select_best_tool(

@@ -6,6 +6,11 @@ Turn the approved localization brief into a transcript-backed, reviewable script
 
 ## Reference Inputs
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Translation may preserve an authored
+claim but may not strengthen uncertainty or remove its source reference.
+
 - `docs/localization-dubbing-best-practices.md`
 - `skills/creative/storytelling.md`
 

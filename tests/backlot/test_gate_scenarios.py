@@ -7,7 +7,8 @@ import pytest
 
 from backlot import state as state_mod
 from backlot.state import load_board_state
-from lib.checkpoint import CheckpointValidationError, write_checkpoint
+from lib.approval_contracts import build_checkpoint_approval
+from lib.checkpoint import CheckpointValidationError, read_checkpoint, write_checkpoint
 
 
 def _script_artifact() -> dict:
@@ -80,6 +81,14 @@ def test_awaiting_then_approved_archives_history_without_gate_skip(tmp_path):
         "awaiting_human",
         {"asset_manifest": _manifest_artifact()},
         pipeline_type="cinematic",
+        run_id="12345678-1234-4234-8234-123456789abc",
+    )
+    checkpoint = read_checkpoint(tmp_path, "film", "assets")
+    assert checkpoint is not None
+    approval = build_checkpoint_approval(
+        checkpoint,
+        approver_id="reviewer-1",
+        decision="approve",
     )
     write_checkpoint(
         tmp_path,
@@ -88,7 +97,9 @@ def test_awaiting_then_approved_archives_history_without_gate_skip(tmp_path):
         "completed",
         {"asset_manifest": _manifest_artifact()},
         pipeline_type="cinematic",
-        human_approved=True,
+        run_id="12345678-1234-4234-8234-123456789abc",
+        approval_record=approval,
+        timestamp=checkpoint["timestamp"],
     )
 
     state = load_board_state(tmp_path / "film")

@@ -31,13 +31,19 @@ the agent to re-ask the user rather than substituting a different engine.
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
+import math
 import os
+import re
+import shutil
 import subprocess
 import sys
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 from tools.base_tool import (
     BaseTool,
@@ -49,6 +55,10 @@ from tools.base_tool import (
     ToolResult,
     ToolStability,
     ToolTier,
+)
+from lib.video_timeline import (
+    validate_narration_timeline,
+    validate_visual_timeline,
 )
 
 
@@ -93,6 +103,14 @@ class VideoCompose(BaseTool):
             },
             "input_path": {"type": "string"},
             "output_path": {"type": "string"},
+            "project_dir": {
+                "type": "string",
+                "description": (
+                    "Project workspace containing project.json/work_order.json. "
+                    "Manifest asset, audio, and subtitle paths are resolved "
+                    "relative to this directory."
+                ),
+            },
             "edit_decisions": {
                 "type": "object",
                 "description": "Full edit_decisions artifact (required for compose/render)",
@@ -142,6 +160,30 @@ class VideoCompose(BaseTool):
                 ),
             },
             "subtitle_path": {"type": "string"},
+            "captions": {
+                "type": "array",
+                "description": "Neutral caption cues with start/end/text for runtime certification.",
+            },
+            "transcript": {
+                "type": "object",
+                "description": "Canonical verified narration transcript used to derive captions.",
+            },
+            "require_verified_transcript": {
+                "type": "boolean",
+                "default": False,
+                "description": "Fail closed unless transcript approval/verification is explicit.",
+            },
+            "expected_language": {"type": "string"},
+            "expected_text": {"type": "string"},
+            "caption_mode": {
+                "type": "string",
+                "enum": ["burn_in", "sidecar"],
+                "default": "burn_in",
+                "description": "Burn captions into the video or retain a sidecar for packaging.",
+            },
+            "safe_area": {"type": "object"},
+            "max_lines": {"type": "integer", "default": 2, "minimum": 1, "maximum": 4},
+            "max_chars_per_line": {"type": "integer", "default": 42, "minimum": 1, "maximum": 200},
             "subtitle_style": {
                 "type": "object",
                 "description": "ASS subtitle styling. Also extracted from edit_decisions.subtitles if not provided.",
@@ -190,7 +232,10 @@ class VideoCompose(BaseTool):
             },
             "codec": {"type": "string", "default": "libx264"},
             "crf": {"type": "integer", "default": 23},
-            "preset": {"type": "string", "default": "medium"},
+            # ``fast`` keeps CRF quality while meeting the interactive local
+            # render SLO on the supported reference workload. Callers may
+            # explicitly request ``medium``/``slow`` for a quality-size trade.
+            "preset": {"type": "string", "default": "fast"},
             "remotion_timeout_ms": {
                 "type": "integer",
                 "description": (
@@ -199,6 +244,25 @@ class VideoCompose(BaseTool):
                     "Raise this when the browser is slow to start (e.g. restricted "
                     "networks). The subprocess timeout is widened to match."
                 ),
+            },
+            "render_timeout_seconds": {
+                "type": "integer",
+                "description": (
+                    "Overall Remotion subprocess timeout in seconds. This is a "
+                    "render-process safety timeout, not a video-duration limit."
+                ),
+            },
+            "render_concurrency": {
+                "type": "integer",
+                "description": (
+                    "Optional Remotion worker request. Production policy caps or "
+                    "reduces it from the machine/resource profile; it is never "
+                    "passed through as an unbounded worker count."
+                ),
+            },
+            "workers": {
+                "type": "integer",
+                "description": "Compatibility alias for render_concurrency.",
             },
         },
     }
@@ -261,17 +325,20 @@ class VideoCompose(BaseTool):
         except Exception:
             return False
 
-    def get_info(self) -> dict[str, Any]:
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
         """Extend base get_info to surface all available render runtimes.
 
         Preflight reports each runtime's availability separately so the agent
         can choose an appropriate `render_runtime` at proposal stage. Silent
         fallback between runtimes is forbidden.
         """
-        info = super().get_info()
+        info = super().get_info(include_status=include_status)
         ffmpeg_ok = self._ffmpeg_available()
         remotion_ok = self._remotion_available()
-        hyperframes_ok = self._hyperframes_available()
+        # The full HyperFrames check includes an npm registry lookup.  Fast
+        # catalog/preflight calls report the local prerequisite only and defer
+        # package reachability to explicit deep diagnostics.
+        hyperframes_ok = self._hyperframes_available() if include_status else False
         info["render_engines"] = {
             "ffmpeg": ffmpeg_ok,
             "remotion": remotion_ok,
@@ -356,7 +423,7 @@ class VideoCompose(BaseTool):
         result.duration_seconds = round(time.time() - start, 2)
         return result
 
-    _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
+    _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp", ".svg"}
 
     @staticmethod
     def _is_image(path: Path) -> bool:
@@ -389,6 +456,219 @@ class VideoCompose(BaseTool):
         except Exception:
             return False
 
+    @staticmethod
+    def _project_root_for_inputs(
+        inputs: dict[str, Any], output_path: Path | None = None
+    ) -> Path | None:
+        """Find the canonical project root for project-relative media paths.
+
+        Artifact schemas deliberately store paths such as
+        ``assets/video/source.mp4`` relative to a project directory.  Render
+        tools are often invoked from the repository root, a worker directory,
+        or a temporary test directory, so resolving those strings with
+        ``Path.cwd()`` is not deterministic.  Prefer an explicit project
+        directory and otherwise walk the output path ancestors looking for
+        the project marker/work order.
+        """
+        for key in ("project_dir", "project_path"):
+            raw = inputs.get(key)
+            if raw:
+                try:
+                    candidate = Path(raw).expanduser().resolve()
+                    if candidate.is_dir():
+                        return candidate
+                except (OSError, TypeError, ValueError):
+                    pass
+
+        if output_path is not None:
+            try:
+                resolved_output = Path(output_path).expanduser().resolve()
+                # Include the output parent and all ancestors.  The output
+                # file may not exist yet, which is why this checks marker
+                # files rather than the output itself.
+                for candidate in (resolved_output.parent, *resolved_output.parents):
+                    if any(
+                        (candidate / marker).is_file()
+                        for marker in ("project.json", "work_order.json")
+                    ):
+                        return candidate
+            except (OSError, TypeError, ValueError):
+                pass
+        return None
+
+    @staticmethod
+    def _resolve_project_path(
+        value: Any, *, project_root: Path | None
+    ) -> Any:
+        """Resolve one local project-relative path without changing URLs.
+
+        When a project root is known, a relative path is resolved *only*
+        against that root (with a compatibility candidate for the historical
+        ``projects/<id>/...`` spelling).  Falling back to the current working
+        directory in that case could select a stale file from another project
+        and silently render the wrong visuals.  If no project root is known,
+        legacy cwd-relative calls remain supported.
+        """
+        if not isinstance(value, str) or not value:
+            return value
+        if value.startswith(("http://", "https://", "file://")):
+            return value
+
+        raw = Path(value).expanduser()
+        if raw.is_absolute():
+            return str(raw)
+
+        if project_root is not None:
+            candidates = [project_root / raw]
+            parts = raw.parts
+            if len(parts) > 1 and parts[0].lower() == "projects":
+                # Compatibility with repo-relative manifests.  Only the
+                # project-root candidate above is used for the normal schema.
+                candidates.append(project_root.parent / Path(*parts[1:]))
+            for candidate in candidates:
+                try:
+                    if candidate.is_file():
+                        return str(candidate.resolve())
+                except OSError:
+                    continue
+            # Keep the error deterministic and anchored to the project rather
+            # than accidentally probing a same-named cwd file.
+            return str((project_root / raw).resolve())
+
+        candidate = Path.cwd() / raw
+        try:
+            if candidate.is_file():
+                return str(candidate.resolve())
+        except OSError:
+            pass
+        return value
+
+    @staticmethod
+    def _resolve_output_path(value: Any, *, project_root: Path | None) -> Path:
+        """Resolve an output path against the current project when known."""
+        raw = Path(value or "renders/output.mp4").expanduser()
+        if project_root is not None and not raw.is_absolute():
+            raw = project_root / raw
+        return raw.resolve() if project_root is not None else raw
+
+    @staticmethod
+    def _run_paths_for_inputs(inputs: dict[str, Any], project_root: Path | None):
+        """Create the isolated run envelope when a durable project run exists."""
+        if project_root is None:
+            return None
+
+        requested = inputs.get("run_id")
+        persisted = None
+        for identity_name in ("work_order.json", "project.json"):
+            try:
+                payload = json.loads(
+                    (project_root / identity_name).read_text(encoding="utf-8")
+                )
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict) and payload.get("run_id"):
+                persisted = str(payload["run_id"])
+                break
+        if persisted and requested and str(requested).lower() != persisted.lower():
+            raise ValueError(
+                "run_id does not match the durable project work-order identity"
+            )
+        resolved = str(requested or persisted or "").strip()
+        if not resolved:
+            return None
+        from lib.paths import run_paths
+
+        return run_paths(project_root, resolved)
+
+    @staticmethod
+    def _candidate_output_for_run(run_envelope: Any, final_path: Path) -> Path | None:
+        if run_envelope is None:
+            return None
+        from lib.output_promotion import candidate_path
+
+        return candidate_path(run_envelope.candidates, final_path)
+
+    @staticmethod
+    def _expected_duration(
+        edit_decisions: Mapping[str, Any] | None,
+        inputs: Mapping[str, Any] | None = None,
+    ) -> float | None:
+        edit_decisions = edit_decisions or {}
+        inputs = inputs or {}
+        declared = (
+            inputs.get("expected_duration_seconds")
+            or edit_decisions.get("total_duration_seconds")
+            or (edit_decisions.get("metadata") or {}).get("target_duration_seconds")
+        )
+        try:
+            return float(declared) if declared is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _promote_run_output(
+        self,
+        *,
+        candidate: Path,
+        final_path: Path,
+        run_envelope: Any,
+        inputs: Mapping[str, Any],
+        profile: str | None,
+        expected_duration_seconds: float | None,
+        stage: str,
+        tool: str,
+    ) -> dict[str, Any]:
+        """Probe and atomically adopt a run candidate into the final path."""
+        from lib.output_promotion import promote_candidate
+
+        attempt = inputs.get("attempt")
+        if attempt is None:
+            try:
+                order_payload = json.loads(
+                    (run_envelope.root.parent.parent / "work_order.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                attempt = order_payload.get("attempt")
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                attempt = None
+        provenance = {
+            "project_id": run_envelope.root.parent.parent.name,
+            "run_id": run_envelope.run_id,
+            "attempt": attempt,
+            "stage": stage,
+            "tool": tool,
+            "run_record_ref": f"runs/{run_envelope.run_id}/run.json",
+        }
+        # Freshness is anchored to the durable run record, not to the final
+        # path.  The attempt timestamp is preferred when present so a retry
+        # cannot claim an artifact that predates the active attempt; the
+        # original started_at remains a safe compatibility fallback for older
+        # records.
+        run_started_at = None
+        try:
+            from lib.run_record import read_run_record
+
+            record = read_run_record(run_envelope.root.parent.parent, run_envelope.run_id)
+            metadata = record.get("metadata") if isinstance(record, dict) else {}
+            run_started_at = (
+                (metadata or {}).get("attempt_started_at")
+                or record.get("started_at")
+            )
+        except Exception:
+            # A durable render without a readable run record must not silently
+            # turn a stale final into success.  Leave the timestamp unset only
+            # for legacy test doubles that provide a run envelope but no record;
+            # production manifest runs always persist the record before render.
+            run_started_at = None
+        return promote_candidate(
+            candidate,
+            final_path,
+            profile=profile,
+            expected_duration_seconds=expected_duration_seconds,
+            provenance=provenance,
+            run_started_at=run_started_at,
+        )
+
     def _compose(self, inputs: dict[str, Any]) -> ToolResult:
         """FFmpeg composition: concat video cuts, add audio, burn subtitles.
 
@@ -400,13 +680,26 @@ class VideoCompose(BaseTool):
         if not edit_decisions:
             return ToolResult(success=False, error="edit_decisions required for compose")
 
-        output_path = Path(inputs.get("output_path", "composed_output.mp4"))
+        raw_output_path = inputs.get("output_path", "composed_output.mp4")
+        project_root = self._project_root_for_inputs(inputs, Path(raw_output_path))
+        output_path = self._resolve_output_path(raw_output_path, project_root=project_root)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        audio_path = inputs.get("audio_path")
-        subtitle_path = inputs.get("subtitle_path")
+        run_envelope = self._run_paths_for_inputs(inputs, project_root)
+        final_output_path = output_path
+        candidate_output_path = self._candidate_output_for_run(run_envelope, final_output_path)
+        if candidate_output_path is not None:
+            output_path = candidate_output_path
+        audio_path = self._resolve_project_path(
+            inputs.get("audio_path"), project_root=project_root
+        )
+        subtitle_path = self._resolve_project_path(
+            inputs.get("subtitle_path"), project_root=project_root
+        )
         codec = inputs.get("codec", "libx264")
         crf = inputs.get("crf", 23)
-        preset = inputs.get("preset", "medium")
+        # Interactive composition defaults to a bounded fast preset. The
+        # quality control remains CRF-based and an explicit preset is honored.
+        preset = inputs.get("preset", "fast")
         profile_name = inputs.get("profile")
 
         # Resolve target resolution + fit mode. Priority: explicit `profile`
@@ -437,9 +730,18 @@ class VideoCompose(BaseTool):
         except ValueError:
             target_w, target_h = 1920, 1080
 
-        cuts = edit_decisions.get("cuts", [])
+        cuts = [dict(cut) for cut in edit_decisions.get("cuts", [])]
         if not cuts:
             return ToolResult(success=False, error="No cuts in edit_decisions")
+
+        # Artifact contracts store media paths relative to the project root.
+        # Resolve them here as well as in the high-level render path so direct
+        # ``operation='compose'`` calls cannot accidentally depend on the
+        # process working directory.
+        for cut in cuts:
+            cut["source"] = self._resolve_project_path(
+                cut.get("source"), project_root=project_root
+            )
 
         # Resolve subtitle style using the layered priority resolver
         # (explicit > edit_decisions > playbook > defaults)
@@ -454,10 +756,47 @@ class VideoCompose(BaseTool):
 
         ed_subs = edit_decisions.get("subtitles", {})
         if ed_subs.get("source") and not subtitle_path:
-            subtitle_path = ed_subs["source"]
+            subtitle_path = self._resolve_project_path(ed_subs["source"], project_root=project_root)
 
-        temp_dir = output_path.parent / ".compose_tmp"
+        caption_contract = None
+        transcript_verification = None
+        caption_mode = str(inputs.get("caption_mode", "burn_in")).strip().lower()
+        if subtitle_path or inputs.get("captions") is not None or inputs.get("transcript") is not None or ed_subs.get("enabled"):
+            try:
+                caption_contract, transcript_verification = self._caption_contract_for_inputs(
+                    inputs,
+                    subtitle_path=subtitle_path,
+                    width=target_w,
+                    height=target_h,
+                    duration_seconds=max(float(c.get("out_seconds", 0) or 0) for c in cuts),
+                    runtime="ffmpeg",
+                    mode=caption_mode,
+                    style=resolved_sub_style,
+                )
+            except Exception as exc:
+                return ToolResult(success=False, error=f"Caption render contract rejected: {exc}")
+            if ed_subs.get("enabled") and caption_contract is None:
+                return ToolResult(
+                    success=False,
+                    error="subtitles are enabled but no certified caption source was provided",
+                )
+            if caption_contract is not None:
+                resolved_sub_style["margin_v"] = max(
+                    int(resolved_sub_style.get("margin_v", 0) or 0),
+                    int(caption_contract["safe_area"]["pixels"]["bottom"]),
+                )
+                inputs["subtitle_style"] = resolved_sub_style
+
+        caption_source_path = subtitle_path
+
+        temp_dir = (
+            run_envelope.work / f"ffmpeg-{uuid.uuid4().hex}"
+            if run_envelope is not None
+            else output_path.parent / ".compose_tmp"
+        )
         temp_dir.mkdir(parents=True, exist_ok=True)
+        if caption_contract is not None and caption_mode == "burn_in" and caption_source_path is None:
+            caption_source_path = self._write_caption_srt(caption_contract, temp_dir / "captions.srt")
         temp_segments: list[Path] = []
         concat_path: Path | None = None
         concat_out: Path | None = None
@@ -620,10 +959,10 @@ class VideoCompose(BaseTool):
             final_input = concat_out
             vfilters = []
 
-            if subtitle_path and Path(subtitle_path).exists():
+            if caption_contract is not None and caption_contract.get("mode") == "burn_in" and caption_source_path and Path(caption_source_path).exists():
                 style = inputs.get("subtitle_style", {})
                 ass_style = self._build_subtitle_style(style)
-                sub_escaped = str(Path(subtitle_path).resolve()).replace("\\", "/").replace(":", "\\:")
+                sub_escaped = str(Path(caption_source_path).resolve()).replace("\\", "/").replace(":", "\\:")
                 vfilters.append(f"subtitles='{sub_escaped}':force_style='{ass_style}'")
 
             cmd = ["ffmpeg", "-y", "-i", str(final_input)]
@@ -664,17 +1003,57 @@ class VideoCompose(BaseTool):
             cmd.append(str(output_path))
             self.run_command(cmd, timeout=600)
 
+            promotion = None
+            if candidate_output_path is not None:
+                promotion = self._promote_run_output(
+                    candidate=output_path,
+                    final_path=final_output_path,
+                    run_envelope=run_envelope,
+                    inputs=inputs,
+                    profile=profile_name,
+                    expected_duration_seconds=self._expected_duration(edit_decisions, inputs),
+                    stage=str(inputs.get("stage") or "compose"),
+                    tool=self.name,
+                )
+            # Direct/non-durable compose calls still receive the same
+            # ffprobe-backed contract. Durable calls use the probe performed
+            # during atomic promotion; a test double without that field is
+            # intentionally left alone so isolation tests can use byte stubs.
+            media_probe = promotion.get("probe") if isinstance(promotion, dict) else None
+            if candidate_output_path is None:
+                try:
+                    from lib.output_promotion import probe_media, validate_media_contract
+
+                    media_probe = probe_media(final_output_path)
+                    validate_media_contract(
+                        media_probe,
+                        profile=profile_name,
+                        expected_duration_seconds=self._expected_duration(edit_decisions, inputs),
+                    )
+                except Exception as exc:
+                    return ToolResult(
+                        success=False,
+                        error=f"FFmpeg output media validation failed: {exc}",
+                    )
             return ToolResult(
                 success=True,
                 data={
                     "operation": "compose",
                     "cut_count": len(cuts),
                     "has_subtitles": subtitle_path is not None,
+                    "caption_render_contract": caption_contract,
+                    "transcript_verification": transcript_verification,
+                    "caption_mode": caption_mode if caption_contract is not None else None,
+                    "caption_sidecar": str(subtitle_path) if caption_contract is not None and caption_mode == "sidecar" else None,
                     "has_mixed_audio": audio_path is not None,
                     "profile": profile_name,
-                    "output": str(output_path),
+                    "output": str(final_output_path),
+                    "run_dir": str(run_envelope.root) if run_envelope else None,
+                    "staging_dir": str(temp_dir),
+                    "output_promotion": promotion,
+                    "media_probe": media_probe,
                 },
-                artifacts=[str(output_path)],
+                artifacts=[str(final_output_path)],
             )
         finally:
             # Cleanup temp files
@@ -685,8 +1064,11 @@ class VideoCompose(BaseTool):
                 if f is not None and f.exists():
                     f.unlink()
             if temp_dir.exists():
+                import shutil as _shutil
+                _shutil.rmtree(temp_dir, ignore_errors=True)
+            if candidate_output_path is not None and candidate_output_path.exists():
                 try:
-                    temp_dir.rmdir()
+                    candidate_output_path.unlink()
                 except OSError:
                     pass
 
@@ -797,9 +1179,24 @@ class VideoCompose(BaseTool):
         # remotion-composer/projects/<slug>/ → projects/<slug>/ so the bundler sees
         # the entry inside the composer tree without us copying files. Junctions are
         # weightless, idempotent across renders, and need no admin/dev-mode on Windows.
+        project_root = self._project_root_for_inputs(
+            inputs, Path(inputs.get("output_path", "renders/output.mp4"))
+        )
+        run_envelope = self._run_paths_for_inputs(inputs, project_root)
         try:
-            entry_path.relative_to(composer_dir)
-            effective_entry = entry_path
+            # Even an entry already inside remotion-composer gets a run-local
+            # source copy for durable runs. This prevents concurrent agents
+            # from overwriting the same bespoke tree while webpack is reading.
+            if run_envelope is not None:
+                staging_root = (
+                    composer_dir / "projects" / ".run_staging" / run_envelope.run_id
+                )
+                effective_entry = self._stage_atelier_project(
+                    entry_path, composer_dir, staging_root=staging_root
+                )
+            else:
+                entry_path.relative_to(composer_dir)
+                effective_entry = entry_path
         except ValueError:
             try:
                 effective_entry = self._stage_atelier_project(entry_path, composer_dir)
@@ -813,7 +1210,10 @@ class VideoCompose(BaseTool):
                     ),
                 )
 
-        output_path = Path(inputs.get("output_path", "renders/output.mp4")).resolve()
+        output_path = self._resolve_output_path(
+            inputs.get("output_path", "renders/output.mp4"),
+            project_root=project_root,
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         cmd = ["npx", "remotion", "render", str(effective_entry), str(comp_id), str(output_path)]
@@ -831,6 +1231,10 @@ class VideoCompose(BaseTool):
             pd = Path(public_dir).resolve()
             if pd.exists():
                 cmd.append(f"--public-dir={pd}")
+        elif run_envelope is not None:
+            pd = run_envelope.inputs / "atelier-public"
+            pd.mkdir(parents=True, exist_ok=True)
+            cmd.append(f"--public-dir={pd.resolve()}")
 
         if bespoke.get("scale"):
             cmd.append(f"--scale={bespoke['scale']}")
@@ -864,6 +1268,7 @@ class VideoCompose(BaseTool):
             output_path=output_path,
             edit_decisions=edit_decisions,
             proposal_packet=inputs.get("proposal_packet"),
+            asset_manifest=inputs.get("asset_manifest"),
             narration_transcript_path=inputs.get("narration_transcript_path"),
             script_text=inputs.get("script_text"),
         )
@@ -885,15 +1290,16 @@ class VideoCompose(BaseTool):
             "effective_entry": str(effective_entry) if effective_entry != entry_path else None,
             "composition_id": comp_id,
             "output": str(output_path),
+            "run_dir": str(run_envelope.root) if run_envelope else None,
             "final_review": final_review,
             "final_review_status": final_review.get("status"),
         }
 
-        if final_review.get("status") == "fail":
+        if final_review.get("status") != "pass":
             return ToolResult(
                 success=False,
                 error=(
-                    "Atelier render produced an invalid output:\n"
+                    "Atelier render did not pass final review:\n"
                     + "\n".join(f"  • {i}" for i in final_review.get("issues_found", []))
                 ),
                 data=data,
@@ -907,7 +1313,13 @@ class VideoCompose(BaseTool):
     # artifacts) and is referenced via --public-dir or absolute paths.
     _ATELIER_STAGE_EXTS = {".tsx", ".ts", ".jsx", ".js", ".css"}
 
-    def _stage_atelier_project(self, entry_path: Path, composer_dir: Path) -> Path:
+    def _stage_atelier_project(
+        self,
+        entry_path: Path,
+        composer_dir: Path,
+        *,
+        staging_root: Path | None = None,
+    ) -> Path:
         """Auto-stage a bespoke project under remotion-composer/projects/<slug>/.
 
         The source of truth lives under the repo-root `projects/<slug>/` (where
@@ -941,7 +1353,7 @@ class VideoCompose(BaseTool):
         except Exception:
             pass
 
-        staging_root = composer_dir / "projects"
+        staging_root = staging_root or composer_dir / "projects"
         staging_root.mkdir(parents=True, exist_ok=True)
         staging_dir = staging_root / slug
 
@@ -1218,6 +1630,45 @@ class VideoCompose(BaseTool):
         warnings: list[str] = []
         blocks: list[str] = []
 
+        # --- 0. Editorial visual-beat and narration alignment gate ---
+        # The cadence is opt-in at the artifact level so legacy low-level
+        # compositions remain readable, while creator profiles can make the
+        # policy mandatory by writing it into edit_decisions.metadata.
+        metadata = edit_decisions.get("metadata") or {}
+        cadence = metadata.get("visual_beat_cadence_seconds")
+        timeline_report: dict[str, Any] | None = None
+        narration_report: dict[str, Any] | None = None
+        if cadence is not None:
+            declared_duration = (
+                edit_decisions.get("total_duration_seconds")
+                or metadata.get("target_duration_seconds")
+                or max((float(c.get("out_seconds", 0) or 0) for c in resolved_cuts), default=0.0)
+            )
+            try:
+                timeline_report = validate_visual_timeline(
+                    resolved_cuts,
+                    duration_seconds=float(declared_duration),
+                    beat_seconds=float(cadence),
+                    minimum_beats=metadata.get("minimum_visual_beats"),
+                )
+                for warning in timeline_report.get("warnings", []):
+                    warnings.append(f"Visual timeline: {warning}")
+                for error in timeline_report.get("errors", []):
+                    blocks.append(f"Visual timeline violation: {error}")
+
+                narration = (edit_decisions.get("audio") or {}).get("narration")
+                if isinstance(narration, dict):
+                    narration_report = validate_narration_timeline(
+                        narration,
+                        float(declared_duration),
+                    )
+                    for warning in narration_report.get("warnings", []):
+                        warnings.append(f"Narration timeline: {warning}")
+                    for error in narration_report.get("errors", []):
+                        blocks.append(f"Narration timeline violation: {error}")
+            except (TypeError, ValueError) as exc:
+                blocks.append(f"Visual timeline policy is invalid: {exc}")
+
         # --- 1. Delivery promise check ---
         delivery_data = edit_decisions.get("metadata", {}).get("delivery_promise")
         if not delivery_data:
@@ -1371,11 +1822,28 @@ class VideoCompose(BaseTool):
         if not asset_manifest:
             return ToolResult(success=False, error="asset_manifest required for render")
 
-        output_path = Path(inputs.get("output_path", "renders/output.mp4"))
+        raw_output_path = inputs.get("output_path", "renders/output.mp4")
+        project_root = self._project_root_for_inputs(inputs, Path(raw_output_path))
+        output_path = self._resolve_output_path(raw_output_path, project_root=project_root)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Keep the manifest immutable for callers, but give each runtime a
+        # path-normalized view.  The canonical asset-manifest schema stores
+        # local paths relative to the project; every renderer must receive a
+        # concrete path tied to this run's project workspace.
+        resolved_asset_manifest = dict(asset_manifest)
+        resolved_assets: list[dict[str, Any]] = []
+        for asset in asset_manifest.get("assets", []) or []:
+            resolved_asset = dict(asset)
+            if "path" in resolved_asset:
+                resolved_asset["path"] = self._resolve_project_path(
+                    resolved_asset.get("path"), project_root=project_root
+                )
+            resolved_assets.append(resolved_asset)
+        resolved_asset_manifest["assets"] = resolved_assets
+
         # Build asset lookup: id -> asset info
-        asset_lookup = {a["id"]: a for a in asset_manifest.get("assets", [])}
+        asset_lookup = {a["id"]: a for a in resolved_assets if "id" in a}
 
         cuts = edit_decisions.get("cuts", [])
         if not cuts:
@@ -1388,10 +1856,33 @@ class VideoCompose(BaseTool):
             resolved_cut = dict(cut)
             if source_id in asset_lookup:
                 resolved_cut["source"] = asset_lookup[source_id]["path"]
+            else:
+                resolved_cut["source"] = self._resolve_project_path(
+                    resolved_cut.get("source"), project_root=project_root
+                )
             resolved_cuts.append(resolved_cut)
 
+        # Audio/subtitle paths are also project-relative artifact references.
+        # Normalize them once so all three runtime adapters receive the same
+        # paths and no adapter depends on its own working directory.
+        normalized_inputs = dict(inputs)
+        for key in ("audio_path", "subtitle_path", "narration_transcript_path", "script_path"):
+            if normalized_inputs.get(key):
+                normalized_inputs[key] = self._resolve_project_path(
+                    normalized_inputs[key], project_root=project_root
+                )
+        inputs = normalized_inputs
+
         # --- Pre-compose validation gate ---
-        scene_plan = inputs.get("scene_plan")
+        scene_plan_input = inputs.get("scene_plan")
+        # Callers may pass the complete scene_plan artifact or its scenes list.
+        # Normalize here so slideshow-risk scoring never iterates artifact keys
+        # as if they were scene objects.
+        scene_plan = (
+            scene_plan_input.get("scenes", [])
+            if isinstance(scene_plan_input, dict)
+            else scene_plan_input
+        )
         validation_block = self._pre_compose_validation(edit_decisions, resolved_cuts, scene_plan)
         if validation_block is not None:
             return validation_block
@@ -1399,11 +1890,22 @@ class VideoCompose(BaseTool):
         # Also accept profile as "output_profile" (skill convention) or "profile"
         profile = inputs.get("profile") or inputs.get("output_profile")
 
+        planned_duration = (
+            edit_decisions.get("total_duration_seconds")
+            or (edit_decisions.get("metadata") or {}).get("target_duration_seconds")
+        )
+        if profile and planned_duration:
+            try:
+                from lib.media_profiles import validate_duration
+                validate_duration(profile, float(planned_duration))
+            except (ImportError, ValueError) as exc:
+                return ToolResult(success=False, error=str(exc))
+
         if render_runtime == "hyperframes":
             return self._render_via_hyperframes(
                 inputs=inputs,
                 edit_decisions=edit_decisions,
-                asset_manifest=asset_manifest,
+                asset_manifest=resolved_asset_manifest,
                 resolved_cuts=resolved_cuts,
                 output_path=output_path,
                 profile=profile,
@@ -1413,6 +1915,7 @@ class VideoCompose(BaseTool):
             return self._render_via_ffmpeg(
                 inputs=inputs,
                 edit_decisions=edit_decisions,
+                asset_manifest=resolved_asset_manifest,
                 resolved_cuts=resolved_cuts,
                 output_path=output_path,
                 profile=profile,
@@ -1423,17 +1926,32 @@ class VideoCompose(BaseTool):
                 "edit_decisions": dict(edit_decisions, cuts=resolved_cuts),
                 "output_path": str(output_path),
             }
+            for key in ("project_dir", "project_path", "run_id", "stage", "agent_id"):
+                if inputs.get(key) is not None:
+                    remotion_inputs[key] = inputs[key]
             if profile:
                 remotion_inputs["profile"] = profile
             if inputs.get("audio_path") is not None:
                 remotion_inputs["audio_path"] = inputs["audio_path"]
             if inputs.get("audio") is not None:
                 remotion_inputs["audio"] = inputs["audio"]
+            for key in (
+                "subtitle_path", "captions", "transcript", "verified_transcript", "require_verified_transcript",
+                "transcript_verified", "expected_language", "expected_text", "caption_mode",
+                "safe_area", "max_lines", "max_chars_per_line", "caption_font_size",
+            ):
+                if inputs.get(key) is not None:
+                    remotion_inputs[key] = inputs[key]
             # Forward the creator-facing render timeout through the high-level
             # render path (execute(operation="render") -> _render), otherwise it
             # would only take effect on a direct _remotion_render() call.
             if inputs.get("remotion_timeout_ms") is not None:
                 remotion_inputs["remotion_timeout_ms"] = inputs["remotion_timeout_ms"]
+            if inputs.get("render_timeout_seconds") is not None:
+                remotion_inputs["render_timeout_seconds"] = inputs["render_timeout_seconds"]
+            for key in ("render_concurrency", "workers", "production_mode", "resource_budget"):
+                if inputs.get(key) is not None:
+                    remotion_inputs[key] = inputs[key]
             render_result = self._remotion_render(remotion_inputs)
 
             # Governance: NEVER silently fall back to FFmpeg when Remotion fails.
@@ -1473,6 +1991,14 @@ class VideoCompose(BaseTool):
                 compose_inputs["subtitle_path"] = subtitle_path
             if profile:
                 compose_inputs["profile"] = profile
+            for key in (
+                "captions", "transcript", "verified_transcript", "require_verified_transcript",
+                "transcript_verified", "expected_language", "expected_text", "caption_mode",
+                "safe_area", "max_lines", "max_chars_per_line", "caption_font_size",
+                "max_words_per_cue",
+            ):
+                if inputs.get(key) is not None:
+                    compose_inputs[key] = inputs[key]
 
             render_result = self._compose(compose_inputs)
 
@@ -1482,6 +2008,7 @@ class VideoCompose(BaseTool):
                 output_path,
                 edit_decisions,
                 inputs.get("proposal_packet"),
+                asset_manifest=resolved_asset_manifest,
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
@@ -1496,7 +2023,7 @@ class VideoCompose(BaseTool):
             render_result.data["final_review_status"] = final_review["status"]
 
             # If the self-review says fail, downgrade the ToolResult
-            if final_review["status"] == "fail":
+            if final_review["status"] != "pass":
                 return ToolResult(
                     success=False,
                     error=(
@@ -1546,9 +2073,19 @@ class VideoCompose(BaseTool):
                 error=f"Could not import hyperframes_compose: {e}",
             )
 
+        project_root = self._project_root_for_inputs(inputs, output_path)
+        run_envelope = self._run_paths_for_inputs(inputs, project_root)
+        final_output_path = output_path
+        candidate_output_path = self._candidate_output_for_run(run_envelope, final_output_path)
+        if candidate_output_path is not None:
+            output_path = candidate_output_path
         workspace_path = (
             inputs.get("workspace_path")
-            or str(output_path.parent.parent / "hyperframes")
+            or str(
+                run_envelope.work / "hyperframes"
+                if run_envelope is not None
+                else output_path.parent.parent / "hyperframes"
+            )
         )
 
         # Pass the playbook through so the style bridge can emit CSS vars.
@@ -1572,6 +2109,10 @@ class VideoCompose(BaseTool):
             "edit_decisions": dict(edit_decisions, cuts=resolved_cuts),
             "asset_manifest": asset_manifest,
         }
+        if project_root is not None:
+            hf_inputs["project_dir"] = str(project_root)
+        if run_envelope is not None:
+            hf_inputs["run_id"] = run_envelope.run_id
         if playbook_data:
             hf_inputs["playbook"] = playbook_data
         if profile:
@@ -1582,12 +2123,25 @@ class VideoCompose(BaseTool):
             hf_inputs["fps"] = inputs["fps"]
         if "strict" in inputs:
             hf_inputs["strict"] = inputs["strict"]
+        for key in ("production_mode", "offline", "workers", "resource_budget"):
+            if key in inputs:
+                hf_inputs[key] = inputs[key]
         if "skip_contrast" in inputs:
             hf_inputs["skip_contrast"] = inputs["skip_contrast"]
+        for key in (
+            "subtitle_path", "captions", "transcript", "verified_transcript",
+            "require_verified_transcript", "transcript_verified", "expected_language",
+            "expected_text", "caption_mode", "safe_area", "max_lines",
+            "max_chars_per_line", "caption_font_size", "max_words_per_cue",
+        ):
+            if inputs.get(key) is not None:
+                hf_inputs[key] = inputs[key]
 
         render_result = HyperFramesCompose().execute(hf_inputs)
 
         if not render_result.success:
+            if candidate_output_path is not None and candidate_output_path.exists():
+                candidate_output_path.unlink(missing_ok=True)
             return ToolResult(
                 success=False,
                 error=(
@@ -1605,6 +2159,7 @@ class VideoCompose(BaseTool):
                 output_path,
                 edit_decisions,
                 inputs.get("proposal_packet"),
+                asset_manifest=asset_manifest,
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
@@ -1614,7 +2169,9 @@ class VideoCompose(BaseTool):
                 render_result.data = {}
             render_result.data["final_review"] = final_review
             render_result.data["final_review_status"] = final_review["status"]
-            if final_review["status"] == "fail":
+            if final_review["status"] != "pass":
+                if candidate_output_path is not None and candidate_output_path.exists():
+                    candidate_output_path.unlink(missing_ok=True)
                 return ToolResult(
                     success=False,
                     error=(
@@ -1624,6 +2181,34 @@ class VideoCompose(BaseTool):
                     data=render_result.data,
                 )
 
+        promotion = None
+        if candidate_output_path is not None:
+            try:
+                promotion = self._promote_run_output(
+                    candidate=output_path,
+                    final_path=final_output_path,
+                    run_envelope=run_envelope,
+                    inputs=inputs,
+                    profile=profile,
+                    expected_duration_seconds=self._expected_duration(edit_decisions, inputs),
+                    stage=str(inputs.get("stage") or "compose"),
+                    tool="hyperframes_compose",
+                )
+            except Exception as exc:
+                if candidate_output_path.exists():
+                    candidate_output_path.unlink(missing_ok=True)
+                return ToolResult(
+                    success=False,
+                    error=f"HyperFrames output promotion failed: {exc}",
+                    data=render_result.data,
+                )
+            if isinstance(render_result.data, dict):
+                render_result.data["output"] = str(final_output_path)
+                render_result.data["output_promotion"] = promotion
+                review = render_result.data.get("final_review")
+                if isinstance(review, dict):
+                    review["output_path"] = str(final_output_path)
+
         return render_result
 
     def _render_via_ffmpeg(
@@ -1631,6 +2216,7 @@ class VideoCompose(BaseTool):
         *,
         inputs: dict[str, Any],
         edit_decisions: dict[str, Any],
+        asset_manifest: dict[str, Any] | None = None,
         resolved_cuts: list[dict],
         output_path: Path,
         profile: Optional[str],
@@ -1655,6 +2241,14 @@ class VideoCompose(BaseTool):
         compose_inputs["output_path"] = str(output_path)
         if subtitle_path:
             compose_inputs["subtitle_path"] = subtitle_path
+        for key in (
+            "captions", "transcript", "verified_transcript", "require_verified_transcript",
+            "transcript_verified", "expected_language", "expected_text", "caption_mode",
+            "safe_area", "max_lines", "max_chars_per_line", "caption_font_size",
+            "max_words_per_cue",
+        ):
+            if inputs.get(key) is not None:
+                compose_inputs[key] = inputs[key]
         if profile:
             compose_inputs["profile"] = profile
 
@@ -1665,6 +2259,7 @@ class VideoCompose(BaseTool):
                 output_path,
                 edit_decisions,
                 inputs.get("proposal_packet"),
+                asset_manifest=asset_manifest,
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
@@ -1674,7 +2269,7 @@ class VideoCompose(BaseTool):
                 render_result.data = {}
             render_result.data["final_review"] = final_review
             render_result.data["final_review_status"] = final_review["status"]
-            if final_review["status"] == "fail":
+            if final_review["status"] != "pass":
                 return ToolResult(
                     success=False,
                     error=(
@@ -1685,6 +2280,156 @@ class VideoCompose(BaseTool):
                 )
 
         return render_result
+
+    def _prepare_remotion_captions(
+        self, props: dict[str, Any], inputs: dict[str, Any]
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Attach word props plus the shared caption contract to Remotion."""
+
+        from lib.caption_contracts import (
+            CaptionContractError,
+            build_caption_render_contract,
+            cues_from_transcript,
+            load_caption_cues,
+            validate_verified_transcript,
+        )
+
+        transcript = inputs.get("transcript") or inputs.get("verified_transcript")
+        verification: dict[str, Any] | None = None
+        words: list[dict[str, Any]] = []
+        raw_cues: list[dict[str, Any]] | None = None
+
+        def words_from_transcript(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+            output: list[dict[str, Any]] = []
+            for segment in payload.get("segments") or payload.get("word_timestamps") or []:
+                if not isinstance(segment, Mapping):
+                    continue
+                segment_words = segment.get("words")
+                if isinstance(segment_words, list) and segment_words:
+                    for item in segment_words:
+                        if not isinstance(item, Mapping):
+                            continue
+                        text = str(item.get("word") or item.get("text") or "").strip()
+                        if not text:
+                            continue
+                        output.append({
+                            "word": text,
+                            "startMs": int(round(float(item.get("start", 0)) * 1000)),
+                            "endMs": int(round(float(item.get("end", 0)) * 1000)),
+                        })
+                elif segment.get("text"):
+                    text_words = str(segment["text"]).split()
+                    start = float(segment.get("start", 0) or 0)
+                    end = float(segment.get("end", start) or start)
+                    per_word = max(0.001, (end - start) / max(len(text_words), 1))
+                    for index, text in enumerate(text_words):
+                        output.append({
+                            "word": text,
+                            "startMs": int(round((start + index * per_word) * 1000)),
+                            "endMs": int(round((start + (index + 1) * per_word) * 1000)),
+                        })
+            return output
+
+        if isinstance(transcript, dict):
+            if bool(inputs.get("require_verified_transcript", False)):
+                payload = dict(transcript)
+                payload.setdefault("segments", [])
+                if "verified" not in payload and "verification_status" not in payload:
+                    payload["verified"] = bool(inputs.get("transcript_verified", False))
+                verification = validate_verified_transcript(
+                    payload,
+                    expected_language=inputs.get("expected_language"),
+                    expected_text=inputs.get("expected_text"),
+                )
+                if verification.get("valid") is not True:
+                    raise CaptionContractError(
+                        "; ".join(verification.get("errors") or ["verified transcript validation failed"])
+                    )
+            words = words_from_transcript(transcript)
+            raw_cues = cues_from_transcript(
+                transcript,
+                max_words_per_cue=int(inputs.get("max_words_per_cue", 6) or 6),
+                max_chars_per_line=int(inputs.get("max_chars_per_line", 42) or 42),
+            )
+        elif isinstance(props.get("captions"), list) and props.get("captions"):
+            words = [dict(item) for item in props["captions"] if isinstance(item, Mapping)]
+            raw_cues = []
+            page_size = int(inputs.get("max_words_per_cue", props.get("wordsPerPage", 6)) or 6)
+            for offset in range(0, len(words), page_size):
+                page = words[offset : offset + page_size]
+                if not page:
+                    continue
+                raw_cues.append({
+                    "index": len(raw_cues) + 1,
+                    "start": float(page[0].get("startMs", 0)) / 1000,
+                    "end": float(page[-1].get("endMs", 0)) / 1000,
+                    "text": " ".join(str(item.get("word") or "") for item in page).strip(),
+                    "words": [
+                        {
+                            "word": str(item.get("word") or ""),
+                            "start": float(item.get("startMs", 0)) / 1000,
+                            "end": float(item.get("endMs", 0)) / 1000,
+                        }
+                        for item in page
+                    ],
+                })
+        else:
+            subtitle_path = inputs.get("subtitle_path")
+            if subtitle_path:
+                raw_cues = load_caption_cues(subtitle_path)
+                for cue in raw_cues:
+                    start = float(cue["start"])
+                    end = float(cue["end"])
+                    text_words = str(cue.get("text") or "").split()
+                    per_word = max(0.001, (end - start) / max(len(text_words), 1))
+                    words.extend(
+                        {
+                            "word": text,
+                            "startMs": int(round((start + index * per_word) * 1000)),
+                            "endMs": int(round((start + (index + 1) * per_word) * 1000)),
+                        }
+                        for index, text in enumerate(text_words)
+                    )
+
+        if not words or not raw_cues:
+            if bool((props.get("subtitles") or {}).get("enabled")) or bool(inputs.get("require_verified_transcript")):
+                raise CaptionContractError("captions are expected but no renderable caption cues were provided")
+            return None, verification
+        props["captions"] = words
+        profile_name = inputs.get("profile")
+        width, height, fps = 1920, 1080, int(inputs.get("fps", 30) or 30)
+        if profile_name:
+            try:
+                from lib.media_profiles import get_profile
+                profile = get_profile(profile_name)
+                width, height, fps = int(profile.width), int(profile.height), int(profile.fps)
+            except (ImportError, ValueError):
+                pass
+        cuts = props.get("cuts") or []
+        duration = max((float(cut.get("out_seconds") or 0) for cut in cuts if isinstance(cut, Mapping)), default=0.0)
+        if duration <= 0:
+            duration = max(float(cue.get("end") or 0) for cue in raw_cues)
+        max_lines = int(inputs.get("max_lines", 2) or 2)
+        max_chars = int(inputs.get("max_chars_per_line", 42) or 42)
+        font_size = int(inputs.get("caption_font_size", props.get("fontSize", 42)) or 42)
+        contract = build_caption_render_contract(
+            runtime="remotion",
+            mode="burn_in",
+            cues=raw_cues,
+            width=width,
+            height=height,
+            duration_seconds=duration,
+            fps=fps,
+            safe_area=inputs.get("safe_area"),
+            max_chars_per_line=max_chars,
+            max_lines=max_lines,
+            font_size=font_size,
+            style={"words_per_page": props.get("wordsPerPage", 6), "caption_position": "bottom-center"},
+            transcript_verification=verification,
+            profile_name=profile_name,
+        )
+        props["captionContract"] = contract
+        return contract, verification
 
     def _remotion_render(self, inputs: dict[str, Any]) -> ToolResult:
         """Render via Remotion (requires Node.js + npx).
@@ -1709,32 +2454,63 @@ class VideoCompose(BaseTool):
             )
 
         import os as _os
-        output_path = Path(inputs.get("output_path", "renders/remotion_output.mp4"))
+        raw_output_path = inputs.get("output_path", "renders/remotion_output.mp4")
+        project_root = self._project_root_for_inputs(inputs, Path(raw_output_path))
+        output_path = self._resolve_output_path(raw_output_path, project_root=project_root)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        run_envelope = self._run_paths_for_inputs(inputs, project_root)
+        final_output_path = output_path
+        candidate_output_path = self._candidate_output_for_run(run_envelope, final_output_path)
+        if candidate_output_path is not None:
+            output_path = candidate_output_path
         # Absolutise so the CLI can resolve the output regardless of cwd.
         output_path = output_path.resolve()
 
         # Deep-copy props so we don't mutate the original
         props = json.loads(json.dumps(composition_data))
+        try:
+            caption_contract, transcript_verification = self._prepare_remotion_captions(props, inputs)
+        except Exception as exc:
+            return ToolResult(success=False, error=f"Caption render contract rejected: {exc}")
 
         # remotion-composer lives at project root
         composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
         repo_root = composer_dir.parent
-        public_dir = composer_dir / "public"
+        if run_envelope is not None:
+            # Never share public/staged assets between projects or runs. The
+            # run envelope is retained for replay and audit; only legacy,
+            # non-project calls use the composer-level scratch directory.
+            public_dir = run_envelope.inputs / f"remotion-public-{uuid.uuid4().hex}"
+        else:
+            public_dir = composer_dir / "public"
         staged_dir = public_dir / "staged_assets"
         staged_dir.mkdir(parents=True, exist_ok=True)
-        import shutil
+        staged_names: dict[str, str] = {}
+
+        def _staged_name(source_path: Path) -> str:
+            key = str(source_path.resolve())
+            existing = staged_names.get(key)
+            if existing:
+                return existing
+            # Prefixing with the first source index prevents two different
+            # assets named ``logo.png`` from silently overwriting each other.
+            name = f"{len(staged_names):04d}_{source_path.name}"
+            staged_names[key] = name
+            return name
 
         for cut in props.get("cuts", []):
             source = cut.get("source", "")
             if source and not source.startswith(("http://", "https://")):
-                resolved = Path(source).resolve()
+                resolved = Path(
+                    self._resolve_project_path(source, project_root=project_root)
+                ).resolve()
                 if resolved.exists():
                     try:
-                        staged_file = staged_dir / resolved.name
+                        staged_name = _staged_name(resolved)
+                        staged_file = staged_dir / staged_name
                         if not staged_file.exists() or staged_file.stat().st_mtime < resolved.stat().st_mtime:
                             shutil.copy2(resolved, staged_file)
-                        cut["source"] = f"staged_assets/{resolved.name}"
+                        cut["source"] = f"staged_assets/{staged_name}"
                     except Exception:
                         posix = resolved.as_posix()
                         cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
@@ -1742,9 +2518,12 @@ class VideoCompose(BaseTool):
         # Handle narration audio staging
         audio_input = inputs.get("audio_path") or inputs.get("audio")
         if audio_input and isinstance(audio_input, str):
-            audio_resolved = Path(audio_input).resolve()
+            audio_resolved = Path(
+                self._resolve_project_path(audio_input, project_root=project_root)
+            ).resolve()
             if audio_resolved.exists():
-                staged_audio = staged_dir / audio_resolved.name
+                staged_name = _staged_name(audio_resolved)
+                staged_audio = staged_dir / staged_name
                 if not staged_audio.exists() or staged_audio.stat().st_mtime < audio_resolved.stat().st_mtime:
                     shutil.copy2(audio_resolved, staged_audio)
                 props.setdefault("audio", {})
@@ -1753,7 +2532,7 @@ class VideoCompose(BaseTool):
                 props["audio"].setdefault("narration", {})
                 if not isinstance(props["audio"]["narration"], dict):
                     props["audio"]["narration"] = {}
-                props["audio"]["narration"]["src"] = f"staged_assets/{audio_resolved.name}"
+                props["audio"]["narration"]["src"] = f"staged_assets/{staged_name}"
                 props["audio"]["narration"]["volume"] = props["audio"]["narration"].get("volume", 1.0)
 
         # Build a custom themeConfig from the playbook's actual colors.
@@ -1769,10 +2548,15 @@ class VideoCompose(BaseTool):
             if theme_config:
                 props["themeConfig"] = theme_config
 
-        # Write props to temp file inside composer_dir so --props path is simple and safe on Windows
-        out_dir = composer_dir / "out"
+        # Durable runs keep their props in the run envelope. Legacy direct
+        # calls retain the historical composer-level scratch location.
+        out_dir = run_envelope.props if run_envelope is not None else composer_dir / "out"
         out_dir.mkdir(parents=True, exist_ok=True)
-        props_path = out_dir / f"props_{output_path.stem}.json"
+        props_path = out_dir / (
+            f"props_{output_path.stem}_{uuid.uuid4().hex}.json"
+            if run_envelope is not None
+            else f"props_{output_path.stem}.json"
+        )
         with open(props_path, "w", encoding="utf-8") as f:
             json.dump(props, f)
 
@@ -1787,6 +2571,35 @@ class VideoCompose(BaseTool):
         # This prevents all pipelines from collapsing into the Explainer visual grammar.
         renderer_family = (composition_data or {}).get("renderer_family", "explainer-data")
         composition_id = self._get_composition_id(renderer_family)
+
+        # Remotion's browser workers consume real CPU/RAM.  The old fixed
+        # ``--concurrency=8`` ignored the host profile and could saturate a
+        # two-vCPU runner while four independent projects were in flight.  Use
+        # the same conservative policy as HyperFrames, with an explicit
+        # bounded override for operators who have measured a larger machine.
+        profile_name = inputs.get("profile") or composition_data.get("profile")
+        planned_duration_seconds = max(
+            (float(cut.get("out_seconds") or 0) for cut in composition_data.get("cuts", [])),
+            default=0.0,
+        )
+        requested_concurrency = inputs.get("render_concurrency")
+        if requested_concurrency is None:
+            requested_concurrency = inputs.get("workers")
+        if requested_concurrency is None:
+            requested_concurrency = composition_data.get("concurrency")
+        try:
+            from lib.hyperframes_contracts import select_worker_policy
+
+            worker_policy = select_worker_policy(
+                {
+                    "cuts": composition_data.get("cuts", []),
+                    "duration_seconds": planned_duration_seconds,
+                    "profile": profile_name,
+                },
+                requested_workers=requested_concurrency,
+            )
+        except Exception as exc:
+            return ToolResult(success=False, error=f"Remotion worker policy failed: {exc}")
 
         remotion_bin = composer_dir / "node_modules" / ".bin" / ("remotion.cmd" if sys.platform == "win32" else "remotion")
         bin_cmd = str(remotion_bin) if remotion_bin.exists() else "npx"
@@ -1803,13 +2616,12 @@ class VideoCompose(BaseTool):
             composition_id,
             str(output_path),
             f"--props={props_abs}",
-            "--public-dir=public",
+            f"--public-dir={str(public_dir.resolve()) if run_envelope is not None else 'public'}",
             "--gl=angle",
-            "--concurrency=8",
+            f"--concurrency={worker_policy['workers']}",
         ])
 
         # Apply media profile dimensions
-        profile_name = inputs.get("profile")
         if profile_name:
             try:
                 from lib.media_profiles import get_profile
@@ -1824,7 +2636,18 @@ class VideoCompose(BaseTool):
         # opaque failure. Pass it through and give the subprocess enough headroom
         # so run_command() does not kill Remotion before its own timeout fires.
         remotion_timeout_ms = inputs.get("remotion_timeout_ms")
-        subprocess_timeout = 600
+        if profile_name == "ilearnzed_long_form":
+            # Rendering cost grows with the authored timeline. Keep a generous
+            # baseline, then scale the process safety window for longer lessons
+            # so duration itself never becomes an implicit studio limit.
+            subprocess_timeout = max(1800, int(planned_duration_seconds * 4 + 300))
+        else:
+            subprocess_timeout = 600
+        if inputs.get("render_timeout_seconds") is not None:
+            try:
+                subprocess_timeout = max(1, int(inputs["render_timeout_seconds"]))
+            except (TypeError, ValueError):
+                pass
         if remotion_timeout_ms:
             try:
                 ms = int(remotion_timeout_ms)
@@ -1833,12 +2656,14 @@ class VideoCompose(BaseTool):
             except (TypeError, ValueError):
                 pass
 
+        render_completed = False
         try:
             # Invoke from inside the composer dir so npx can resolve the
             # local remotion binary via node_modules/.bin. Without this,
             # Windows npx cannot locate the CLI and returns "could not
             # determine executable to run".
             self.run_command(cmd, timeout=subprocess_timeout, cwd=composer_dir)
+            render_completed = True
         except subprocess.CalledProcessError as e:
             # run_command uses check=True + capture_output, so the useful
             # Remotion diagnostics live in stderr/stdout — surface the tail
@@ -1860,26 +2685,87 @@ class VideoCompose(BaseTool):
         except Exception as e:
             return ToolResult(success=False, error=f"Remotion render failed: {e}")
         finally:
-            if props_path.exists():
-                props_path.unlink()
-            if staged_dir.exists():
-                import shutil
-                shutil.rmtree(staged_dir, ignore_errors=True)
+            if run_envelope is None:
+                if props_path.exists():
+                    props_path.unlink()
+                if staged_dir.exists():
+                    import shutil as _shutil
+                    _shutil.rmtree(staged_dir, ignore_errors=True)
+            if (
+                candidate_output_path is not None
+                and candidate_output_path.exists()
+                and not render_completed
+            ):
+                try:
+                    candidate_output_path.unlink()
+                except OSError:
+                    pass
 
         if not output_path.exists():
+            if candidate_output_path is not None and candidate_output_path.exists():
+                try:
+                    candidate_output_path.unlink()
+                except OSError:
+                    pass
             return ToolResult(
                 success=False,
                 error=f"Remotion render completed but output file missing: {output_path}",
             )
 
+        promotion = None
+        if candidate_output_path is not None:
+            try:
+                promotion = self._promote_run_output(
+                    candidate=output_path,
+                    final_path=final_output_path,
+                    run_envelope=run_envelope,
+                    inputs=inputs,
+                    profile=profile_name,
+                    expected_duration_seconds=self._expected_duration(composition_data, inputs),
+                    stage=str(inputs.get("stage") or "compose"),
+                    tool=self.name,
+                )
+            except Exception:
+                if candidate_output_path.exists():
+                    try:
+                        candidate_output_path.unlink()
+                    except OSError:
+                        pass
+                raise
+
+        media_probe = promotion.get("probe") if isinstance(promotion, dict) else None
+        if candidate_output_path is None:
+            try:
+                from lib.output_promotion import probe_media, validate_media_contract
+
+                media_probe = probe_media(final_output_path)
+                validate_media_contract(
+                    media_probe,
+                    profile=profile_name,
+                    expected_duration_seconds=self._expected_duration(composition_data, inputs),
+                )
+            except Exception as exc:
+                return ToolResult(
+                    success=False,
+                    error=f"Remotion output media validation failed: {exc}",
+                )
+
         return ToolResult(
             success=True,
             data={
                 "operation": "remotion_render",
-                "output": str(output_path),
+                "output": str(final_output_path),
                 "profile": profile_name,
+                "run_dir": str(run_envelope.root) if run_envelope else None,
+                "props_path": str(props_path),
+                "public_dir": str(public_dir),
+                "worker_policy": worker_policy,
+                "output_promotion": promotion,
+                "media_probe": media_probe,
+                "caption_render_contract": caption_contract,
+                "transcript_verification": transcript_verification,
             },
-            artifacts=[str(output_path)],
+            artifacts=[str(final_output_path)],
         )
 
     # ------------------------------------------------------------------
@@ -1921,11 +2807,254 @@ class VideoCompose(BaseTool):
         cleaned = re.sub(r"[^A-Za-z0-9\-' ]+", " ", text.lower())
         return [t for t in cleaned.split() if t and t != "-"]
 
+    @staticmethod
+    def _normalise_language(value: Any) -> str | None:
+        """Return a comparable BCP-47-ish language code.
+
+        Providers and STT engines use a mixture of ``language``, ``locale``
+        and ``language_code`` fields.  The release gate compares the language
+        tag and its base language (``en-US`` and ``en`` are compatible) while
+        preserving the original value in the evidence record.
+        """
+        if value in (None, ""):
+            return None
+        raw = str(value).strip().replace("_", "-")
+        if not raw:
+            return None
+        return raw.lower()
+
+    @classmethod
+    def _language_matches(cls, expected: Any, observed: Any) -> bool | None:
+        expected_code = cls._normalise_language(expected)
+        observed_code = cls._normalise_language(observed)
+        if not expected_code or not observed_code:
+            return None
+        return observed_code == expected_code or observed_code.split("-", 1)[0] == expected_code.split("-", 1)[0]
+
+    @staticmethod
+    def _voice_identity_from_payload(payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
+        """Extract one declared immutable voice identity from an artifact."""
+        if not isinstance(payload, Mapping):
+            return None
+        candidates: list[Mapping[str, Any]] = []
+        for key in ("voice_identity", "voice_selection", "voice_contract"):
+            value = payload.get(key)
+            if isinstance(value, Mapping):
+                candidates.append(value)
+        production_plan = payload.get("production_plan")
+        if isinstance(production_plan, Mapping):
+            for key in ("voice_identity", "voice_selection", "voice_contract"):
+                value = production_plan.get(key)
+                if isinstance(value, Mapping):
+                    candidates.append(value)
+        performance = payload.get("voice_performance")
+        if isinstance(performance, Mapping):
+            candidates.append(performance)
+        metadata = payload.get("metadata")
+        if isinstance(metadata, Mapping):
+            candidates.append(metadata)
+        # Legacy edit artifacts persist the three provider fields in metadata.
+        if any(payload.get(key) not in (None, "") for key in ("provider", "tts_provider", "voice_id", "tts_voice", "voice")):
+            candidates.append(payload)
+        try:
+            from lib.voice_contracts import normalize_voice_identity, VoiceContractError
+
+            for candidate in candidates:
+                try:
+                    return normalize_voice_identity(candidate).contract()
+                except VoiceContractError:
+                    continue
+        except Exception:
+            return None
+        return None
+
+    @classmethod
+    def _expected_voice_identity(
+        cls,
+        edit_decisions: Mapping[str, Any] | None,
+        proposal_packet: Mapping[str, Any] | None,
+        asset_manifest: Mapping[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        for payload in (edit_decisions, proposal_packet, asset_manifest):
+            identity = cls._voice_identity_from_payload(payload)
+            if identity:
+                return identity
+        return None
+
+    @classmethod
+    def _expected_language(
+        cls,
+        edit_decisions: Mapping[str, Any] | None,
+        proposal_packet: Mapping[str, Any] | None,
+        expected_language: Any = None,
+    ) -> str | None:
+        candidates: list[Any] = [expected_language]
+        for payload in (edit_decisions, proposal_packet):
+            if not isinstance(payload, Mapping):
+                continue
+            candidates.extend([
+                payload.get("expected_language"),
+                payload.get("language"),
+                payload.get("locale"),
+                payload.get("language_code"),
+            ])
+            metadata = payload.get("metadata")
+            if isinstance(metadata, Mapping):
+                candidates.extend([
+                    metadata.get("expected_language"),
+                    metadata.get("language"),
+                    metadata.get("locale"),
+                    metadata.get("language_code"),
+                ])
+            identity = cls._voice_identity_from_payload(payload)
+            if identity:
+                candidates.extend([identity.get("locale"), identity.get("language")])
+            if isinstance(payload.get("production_plan"), Mapping):
+                plan = payload["production_plan"]
+                candidates.extend([plan.get("expected_language"), plan.get("language"), plan.get("locale")])
+        for value in candidates:
+            normalized = cls._normalise_language(value)
+            if normalized and normalized not in {"und", "unknown"}:
+                return normalized
+        return None
+
+    @classmethod
+    def _editorial_visual_contract(
+        cls,
+        edit_decisions: Mapping[str, Any] | None,
+        asset_manifest: Mapping[str, Any] | None,
+        *,
+        output_path: Path,
+        duration_seconds: float,
+        width: int = 0,
+        height: int = 0,
+    ) -> dict[str, Any]:
+        """Validate declared visual bounds, source paths, and placeholders.
+
+        Decoded frame analysis can prove what pixels were emitted, but it
+        cannot infer whether an authored overlay was meant to be inside the
+        frame or whether a cut still points at a missing asset.  This small
+        deterministic contract checks those declarations alongside the real
+        frame probe and fails closed on obvious placeholder copy.
+        """
+        report: dict[str, Any] = {
+            "valid": True,
+            "overlay_bounds_checked": 0,
+            "missing_sources": [],
+            "placeholder_tokens": [],
+            "errors": [],
+            "warnings": [],
+        }
+        if not isinstance(edit_decisions, Mapping):
+            return report
+
+        assets_by_id: dict[str, Mapping[str, Any]] = {}
+        if isinstance(asset_manifest, Mapping):
+            for row in asset_manifest.get("assets") or []:
+                if isinstance(row, Mapping) and row.get("id"):
+                    assets_by_id[str(row["id"])] = row
+
+        def _candidate_paths(raw: Any) -> list[Path]:
+            if not isinstance(raw, str) or not raw.strip() or raw.startswith(("http://", "https://", "s3://", "gs://")):
+                return []
+            value = Path(raw).expanduser()
+            if value.is_absolute():
+                return [value]
+            # Typical durable layout is <project>/artifacts and
+            # <project>/renders; include both the output parent and project
+            # parent without probing the process cwd.
+            return [
+                output_path.parent / value,
+                output_path.parent.parent / value,
+                output_path.parent.parent.parent / value,
+            ]
+
+        def _check_source(label: str, raw: Any) -> None:
+            if not isinstance(raw, str) or not raw.strip():
+                return
+            if raw in assets_by_id:
+                raw = assets_by_id[raw].get("path")
+            candidates = _candidate_paths(raw)
+            if candidates and not any(path.is_file() for path in candidates):
+                report["missing_sources"].append(label)
+                report["errors"].append(f"{label} references a missing local visual asset: {raw}")
+
+        for index, cut in enumerate(edit_decisions.get("cuts") or []):
+            if not isinstance(cut, Mapping):
+                continue
+            _check_source(f"cuts[{index}].source", cut.get("source"))
+
+        # Validate the optional overlay geometry in either pixel coordinates
+        # or normalized 0..1 coordinates.  Time ranges are bounded by the
+        # actual probed output duration as well.
+        for index, overlay in enumerate(edit_decisions.get("overlays") or []):
+            if not isinstance(overlay, Mapping):
+                continue
+            position = overlay.get("position") if isinstance(overlay.get("position"), Mapping) else overlay
+            try:
+                x = float(position.get("x"))
+                y = float(position.get("y"))
+            except (TypeError, ValueError, AttributeError):
+                report["errors"].append(f"overlays[{index}] has invalid x/y bounds")
+                continue
+            width_value = position.get("width")
+            height_value = position.get("height")
+            try:
+                overlay_width = float(width_value) if width_value is not None else 0.0
+                overlay_height = float(height_value) if height_value is not None else 0.0
+            except (TypeError, ValueError):
+                report["errors"].append(f"overlays[{index}] has invalid width/height bounds")
+                continue
+            normalized = max(abs(x), abs(y), abs(overlay_width), abs(overlay_height)) <= 1.0 and (width_value is not None or height_value is not None)
+            frame_width = 1.0 if normalized else float(width or 0)
+            frame_height = 1.0 if normalized else float(height or 0)
+            report["overlay_bounds_checked"] += 1
+            if x < 0 or y < 0 or (frame_width and x + overlay_width > frame_width + 1e-6) or (frame_height and y + overlay_height > frame_height + 1e-6):
+                report["errors"].append(
+                    f"overlays[{index}] is outside the frame ({x:g},{y:g},{overlay_width:g}x{overlay_height:g})"
+                )
+            if overlay.get("start_seconds") is not None or overlay.get("end_seconds") is not None:
+                try:
+                    start = float(overlay.get("start_seconds", 0) or 0)
+                    end = float(overlay.get("end_seconds", duration_seconds) or duration_seconds)
+                    if start < 0 or end <= start or (duration_seconds > 0 and end > duration_seconds + 0.05):
+                        report["errors"].append(f"overlays[{index}] has an invalid time range {start:g}-{end:g}s")
+                except (TypeError, ValueError):
+                    report["errors"].append(f"overlays[{index}] has a non-numeric time range")
+            _check_source(f"overlays[{index}].asset_id", overlay.get("asset_id"))
+
+        placeholder_patterns = (
+            re.compile(r"\b(?:todo|tbd|lorem ipsum|sample text|dummy text|replace[_ -]?me)\b", re.IGNORECASE),
+            re.compile(r"\[\s*(?:placeholder|insert [^\]]+)\s*\]", re.IGNORECASE),
+        )
+
+        def _scan(value: Any, path: str = "edit_decisions") -> None:
+            if isinstance(value, str):
+                for pattern in placeholder_patterns:
+                    if pattern.search(value):
+                        report["placeholder_tokens"].append({"path": path, "value": value[:160]})
+                        report["errors"].append(f"placeholder copy remains at {path}")
+                        break
+            elif isinstance(value, Mapping):
+                for key, item in value.items():
+                    _scan(item, f"{path}.{key}")
+            elif isinstance(value, list):
+                for index, item in enumerate(value):
+                    _scan(item, f"{path}[{index}]")
+
+        _scan(edit_decisions)
+        report["errors"] = list(dict.fromkeys(report["errors"]))
+        report["valid"] = not report["errors"]
+        return report
+
     @classmethod
     def _compare_transcript_to_script(
         cls,
-        transcript_path: Path,
-        script_text: str,
+        transcript_path: Path | None,
+        script_text: str | None,
+        *,
+        expected_language: str | None = None,
+        expected_voice_identity: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Compare a word-level transcript against the source script.
 
@@ -1951,6 +3080,11 @@ class VideoCompose(BaseTool):
             "script_word_count": 0,
             "transcript_word_count": 0,
             "spurious_punctuation_words": [],
+            "language_expected": cls._normalise_language(expected_language),
+            "language_observed": None,
+            "language_match": None,
+            "voice_identity_observed": None,
+            "voice_identity_match": None,
             "issues": [],
         }
 
@@ -1970,6 +3104,44 @@ class VideoCompose(BaseTool):
         except Exception as e:
             result["issues"].append(f"transcript_comparison could not parse transcript: {e}")
             return result
+
+        if not isinstance(transcript_data, Mapping):
+            result["issues"].append("transcript_comparison transcript must be a JSON object")
+            return result
+
+        observed_language = cls._normalise_language(
+            transcript_data.get("language")
+            or transcript_data.get("locale")
+            or transcript_data.get("language_code")
+        )
+        result["language_observed"] = observed_language
+        result["language_match"] = cls._language_matches(expected_language, observed_language)
+        if expected_language and not observed_language:
+            result["issues"].append(
+                f"transcript language evidence is missing (expected {expected_language})"
+            )
+        elif result["language_match"] is False:
+            result["issues"].append(
+                f"transcript language {observed_language!r} does not match expected {expected_language!r}"
+            )
+
+        if expected_voice_identity:
+            observed_voice = cls._voice_identity_from_payload(transcript_data)
+            result["voice_identity_observed"] = observed_voice
+            if observed_voice:
+                try:
+                    from lib.voice_contracts import normalize_voice_identity
+
+                    result["voice_identity_match"] = (
+                        normalize_voice_identity(observed_voice).identity_key
+                        == normalize_voice_identity(expected_voice_identity).identity_key
+                    )
+                except Exception:
+                    result["voice_identity_match"] = False
+                if result["voice_identity_match"] is False:
+                    result["issues"].append(
+                        "transcript voice identity does not match the approved narration voice"
+                    )
 
         transcript_words = [
             w.get("word", "").strip() for w in transcript_data.get("word_timestamps", [])
@@ -2034,6 +3206,7 @@ class VideoCompose(BaseTool):
         output_path: Path,
         edit_decisions: dict[str, Any] | None = None,
         proposal_packet: dict[str, Any] | None = None,
+        asset_manifest: dict[str, Any] | None = None,
         narration_transcript_path: str | Path | None = None,
         script_text: str | None = None,
     ) -> dict[str, Any]:
@@ -2054,6 +3227,27 @@ class VideoCompose(BaseTool):
         """
         log = logging.getLogger("video_compose.final_review")
         issues: list[str] = []
+
+        # A final review is an evidence record, not an optimistic status bit.
+        # Capture its identity and the candidate checksum so the render report
+        # can prove exactly which bytes were inspected.
+        review_id = str(uuid.uuid4())
+        reviewed_at = datetime.now(timezone.utc).isoformat()
+        output_sha256: str | None = None
+        try:
+            if output_path.is_file():
+                digest = hashlib.sha256()
+                with output_path.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                output_sha256 = digest.hexdigest()
+        except OSError as exc:
+            issues.append(f"Could not hash rendered output: {exc}")
+        audio_expected_declared = bool(
+            isinstance(edit_decisions, Mapping)
+            and isinstance(edit_decisions.get("audio"), Mapping)
+            and edit_decisions.get("audio", {}).get("narration")
+        )
 
         # --- 1. Technical probe via ffprobe ---
         technical_probe: dict[str, Any] = {
@@ -2091,6 +3285,10 @@ class VideoCompose(BaseTool):
                     "has_audio": bool(audio_stream),
                     "codec": video_stream.get("codec_name", "unknown"),
                     "file_size_bytes": int(fmt.get("size", 0)),
+                    "stream_count": len(streams),
+                    "audio_channels": int(audio_stream.get("channels") or 0),
+                    "audio_channel_layout": audio_stream.get("channel_layout"),
+                    "audio_tags": dict(audio_stream.get("tags") or {}) if isinstance(audio_stream, Mapping) else {},
                     "issues": [],
                 }
 
@@ -2131,9 +3329,22 @@ class VideoCompose(BaseTool):
         except Exception as e:
             technical_probe["issues"].append(f"ffprobe error: {e}")
 
+        if not audio_expected_declared:
+            technical_probe["issues"] = [
+                item for item in technical_probe.get("issues", [])
+                if "no audio stream" not in str(item).lower()
+            ]
+            if not technical_probe.get("has_audio"):
+                technical_probe.setdefault("warnings", []).append(
+                    "No audio stream declared; audio QA was not required for this render"
+                )
         issues.extend(technical_probe.get("issues", []))
 
-        # --- 2. Visual spotcheck: sample 4 frames ---
+        # --- 2. Visual spotcheck: sample the editorial beats ---
+        # Four QA snapshots are useful for a rough container check, but they
+        # cannot prove that a 30-second edit with 15 visual beats rendered
+        # correctly. Sample every authored beat when practical, with a cap for
+        # long-form renders so review remains bounded.
         visual_spotcheck: dict[str, Any] = {
             "frames_sampled": 0,
             "frame_paths": [],
@@ -2148,8 +3359,34 @@ class VideoCompose(BaseTool):
             try:
                 frame_dir = output_path.parent / ".final_review_frames"
                 frame_dir.mkdir(parents=True, exist_ok=True)
-                # Sample at 10%, 35%, 65%, 90% of duration
-                sample_points = [0.10, 0.35, 0.65, 0.90]
+                review_sample_count = max(4, min(60, int(math.ceil(duration / 2.0))))
+                sample_points: list[float] = []
+                if edit_decisions:
+                    primary_cuts = sorted(
+                        [
+                            c for c in edit_decisions.get("cuts", [])
+                            if c.get("layer", "primary") == "primary"
+                        ]
+                        or edit_decisions.get("cuts", []),
+                        key=lambda c: float(c.get("in_seconds", 0) or 0),
+                    )
+                    sample_points = [
+                        max(
+                            0.01,
+                            min(
+                                0.99,
+                                ((float(c.get("in_seconds", 0) or 0) + float(c.get("out_seconds", 0) or 0)) / 2.0)
+                                / duration,
+                            ),
+                        )
+                        for c in primary_cuts[:review_sample_count]
+                    ]
+                if len(sample_points) < review_sample_count:
+                    sample_points.extend(
+                        (index + 0.5) / review_sample_count
+                        for index in range(review_sample_count - len(sample_points))
+                    )
+                visual_spotcheck["review_sample_count"] = review_sample_count
                 frame_paths = []
                 for i, pct in enumerate(sample_points):
                     ts = round(duration * pct, 2)
@@ -2164,17 +3401,12 @@ class VideoCompose(BaseTool):
                     if frame_path.exists():
                         frame_paths.append(str(frame_path))
 
-                        # Check for black frames (file size heuristic:
-                        # a 1920x1080 PNG of pure black is ~5KB)
-                        if frame_path.stat().st_size < 2000:
-                            visual_spotcheck["black_frames_detected"] = True
-
                 visual_spotcheck["frames_sampled"] = len(frame_paths)
                 visual_spotcheck["frame_paths"] = frame_paths
 
-                if len(frame_paths) < 4:
+                if len(frame_paths) < review_sample_count:
                     visual_spotcheck["issues"].append(
-                        f"Only {len(frame_paths)}/4 frames extracted — some timestamps may be out of range"
+                        f"Only {len(frame_paths)}/{review_sample_count} editorial review frames extracted — some timestamps may be out of range"
                     )
                 if visual_spotcheck["black_frames_detected"]:
                     visual_spotcheck["issues"].append(
@@ -2185,6 +3417,113 @@ class VideoCompose(BaseTool):
 
         issues.extend(visual_spotcheck.get("issues", []))
 
+        # Decode and inspect actual frame samples.  File size is not a valid
+        # proxy for black/frozen/duplicate/corrupt media, so use FFmpeg's
+        # decoded samples and black/freezedetect filters instead.
+        video_quality: dict[str, Any] = {}
+        try:
+            from lib.video_quality import inspect_video
+
+            selected_profile = None
+            if isinstance(edit_decisions, Mapping):
+                selected_profile = edit_decisions.get("output_profile") or edit_decisions.get("profile")
+            if not selected_profile and isinstance(proposal_packet, Mapping):
+                selected_profile = (proposal_packet.get("production_plan") or {}).get("output_profile")
+            qa_policy = (
+                (edit_decisions.get("metadata") or {}).get("qa_policy")
+                if isinstance(edit_decisions, Mapping)
+                else None
+            )
+            allowed_static_holds = (
+                qa_policy.get("allowed_static_holds")
+                if isinstance(qa_policy, Mapping)
+                else None
+            )
+            video_quality = inspect_video(
+                output_path,
+                profile=str(selected_profile).strip().lower() if selected_profile else None,
+                sample_count=int(visual_spotcheck.get("review_sample_count") or 12),
+                allowed_static_holds=(
+                    list(allowed_static_holds)
+                    if isinstance(allowed_static_holds, list)
+                    else None
+                ),
+            )
+            visual_spotcheck["video_quality"] = video_quality
+            visual_spotcheck["black_frames_detected"] = bool(
+                any(sample.get("black") for sample in video_quality.get("samples", []))
+                or video_quality.get("black_intervals")
+            )
+            for error in video_quality.get("errors", []):
+                # Audio expectations are handled by audio_spotcheck below.
+                if str(error).lower().startswith("no audio stream"):
+                    continue
+                issues.append(f"Video quality violation: {error}")
+        except Exception as exc:
+            visual_spotcheck["video_quality"] = {"valid": False, "errors": [str(exc)]}
+            issues.append(f"Video quality analysis error: {exc}")
+
+        probed_width = probed_height = 0
+        resolution_value = technical_probe.get("resolution")
+        if isinstance(resolution_value, str) and "x" in resolution_value:
+            try:
+                probed_width, probed_height = (int(part) for part in resolution_value.split("x", 1))
+            except (TypeError, ValueError):
+                probed_width = probed_height = 0
+        visual_contract = self._editorial_visual_contract(
+            edit_decisions,
+            asset_manifest,
+            output_path=output_path,
+            duration_seconds=float(technical_probe.get("duration_seconds") or 0),
+            width=probed_width,
+            height=probed_height,
+        )
+        visual_spotcheck["visual_contract"] = visual_contract
+        visual_spotcheck["missing_assets"] = bool(visual_contract.get("missing_sources"))
+        for error in visual_contract.get("errors", []):
+            issues.append(f"Visual contract violation: {error}")
+
+        # --- 2b. Editorial timeline and narration audit ---
+        timeline_report: dict[str, Any] | None = None
+        narration_report: dict[str, Any] | None = None
+        if edit_decisions:
+            metadata = edit_decisions.get("metadata") or {}
+            cadence = metadata.get("visual_beat_cadence_seconds")
+            if cadence is not None:
+                declared_duration = (
+                    edit_decisions.get("total_duration_seconds")
+                    or metadata.get("target_duration_seconds")
+                    or duration
+                )
+                try:
+                    timeline_report = validate_visual_timeline(
+                        edit_decisions.get("cuts", []),
+                        duration_seconds=float(declared_duration),
+                        beat_seconds=float(cadence),
+                        minimum_beats=metadata.get("minimum_visual_beats"),
+                    )
+                    timeline_report["enforced"] = True
+                    for error in timeline_report.get("errors", []):
+                        issues.append(f"Visual timeline violation: {error}")
+
+                    narration = (edit_decisions.get("audio") or {}).get("narration")
+                    if isinstance(narration, dict):
+                        narration_report = validate_narration_timeline(
+                            narration,
+                            float(declared_duration),
+                        )
+                        narration_report["enforced"] = True
+                        for error in narration_report.get("errors", []):
+                            issues.append(f"Narration timeline violation: {error}")
+                except (TypeError, ValueError) as exc:
+                    timeline_report = {
+                        "valid": False,
+                        "enforced": True,
+                        "errors": [f"Visual timeline policy is invalid: {exc}"],
+                        "warnings": [],
+                    }
+                    issues.append(f"Visual timeline violation: {exc}")
+
         # --- 3. Audio spotcheck ---
         audio_spotcheck: dict[str, Any] = {
             "narration_present": False,
@@ -2193,6 +3532,10 @@ class VideoCompose(BaseTool):
             "clipping_detected": False,
             "mix_intelligible": True,
             "issues": [],
+            "audio_quality": None,
+            "language_expected": None,
+            "language_observed": None,
+            "language_match": None,
         }
         if technical_probe.get("has_audio") and duration > 0:
             try:
@@ -2242,6 +3585,112 @@ class VideoCompose(BaseTool):
                 audio_spotcheck["issues"].append(f"Audio analysis error: {e}")
 
         issues.extend(audio_spotcheck.get("issues", []))
+
+        # When an output profile is known, measure the final muxed stream
+        # against its LUFS/true-peak/silence/channel contract.  This is kept
+        # separate from the legacy volumedetect spotcheck so both the evidence
+        # and the actionable failure reason remain visible.
+        audio_expected = audio_expected_declared
+        selected_audio_profile = None
+        if isinstance(edit_decisions, Mapping):
+            selected_audio_profile = edit_decisions.get("output_profile") or edit_decisions.get("profile")
+        if not selected_audio_profile and isinstance(proposal_packet, Mapping):
+            selected_audio_profile = (proposal_packet.get("production_plan") or {}).get("output_profile")
+        if technical_probe.get("has_audio") and selected_audio_profile:
+            try:
+                from tools.analysis.audio_quality import probe_audio_quality
+
+                audio_quality = probe_audio_quality(
+                    output_path,
+                    profile=str(selected_audio_profile).strip().lower(),
+                )
+                audio_spotcheck["audio_quality"] = audio_quality
+                for error in audio_quality.get("errors", []):
+                    issues.append(f"Audio quality violation: {error}")
+            except Exception as exc:
+                audio_spotcheck["audio_quality"] = {"valid": False, "errors": [str(exc)]}
+                issues.append(f"Audio quality analysis error: {exc}")
+        if audio_expected and not technical_probe.get("has_audio"):
+            message = "Narration/audio is declared but the final output has no audio stream"
+            audio_spotcheck["issues"].append(message)
+            issues.append(message)
+
+        # Language and voice are immutable content contracts.  Compare the
+        # actual transcript/stream evidence and every declared voice identity
+        # before a render can be treated as an accurate narration result.
+        expected_language = self._expected_language(
+            edit_decisions,
+            proposal_packet,
+            (edit_decisions or {}).get("expected_language") if isinstance(edit_decisions, Mapping) else None,
+        )
+        expected_voice = self._expected_voice_identity(
+            edit_decisions,
+            proposal_packet,
+            asset_manifest,
+        )
+        transcript_comparison = self._compare_transcript_to_script(
+            Path(narration_transcript_path) if narration_transcript_path else None,
+            script_text,
+            expected_language=expected_language,
+            expected_voice_identity=expected_voice,
+        )
+        voice_over: dict[str, Any] = {
+            "identity_expected": expected_voice,
+            "identity_observed": None,
+            "identity_match": None,
+            "language_expected": expected_language,
+            "language_observed": None,
+            "language_match": None,
+            "identity_evidence": [],
+            "issues": [],
+        }
+        if expected_voice or isinstance(asset_manifest, Mapping):
+            try:
+                from lib.voice_contracts import validate_voice_propagation
+
+                declared_artifacts: dict[str, Mapping[str, Any]] = {}
+                for name, payload in (
+                    ("proposal_packet", proposal_packet),
+                    ("edit_decisions", edit_decisions),
+                    ("asset_manifest", asset_manifest),
+                ):
+                    if isinstance(payload, Mapping):
+                        declared_artifacts[name] = payload
+                        identity = self._voice_identity_from_payload(payload)
+                        if identity:
+                            voice_over["identity_evidence"].append({"artifact": name, "identity": identity})
+                            if voice_over["identity_observed"] is None:
+                                voice_over["identity_observed"] = identity
+                propagation = validate_voice_propagation(declared_artifacts, expected=expected_voice)
+                voice_over["identity_match"] = bool(propagation.get("valid")) if propagation.get("checked") else None
+                for error in propagation.get("errors", []):
+                    voice_over["issues"].append(f"Voice identity mismatch: {error}")
+            except Exception as exc:
+                voice_over["identity_match"] = False
+                voice_over["issues"].append(f"Voice identity QA could not run: {exc}")
+
+        stream_language = None
+        tags = technical_probe.get("audio_tags") if isinstance(technical_probe, Mapping) else {}
+        if isinstance(tags, Mapping):
+            stream_language = tags.get("language") or tags.get("LANGUAGE") or tags.get("locale")
+        transcript_language = None
+        if isinstance(transcript_comparison, Mapping):
+            transcript_language = transcript_comparison.get("language_observed")
+        observed_language = transcript_language or self._normalise_language(stream_language)
+        voice_over["language_observed"] = observed_language
+        voice_over["language_match"] = self._language_matches(expected_language, observed_language)
+        audio_spotcheck["language_expected"] = expected_language
+        audio_spotcheck["language_observed"] = observed_language
+        audio_spotcheck["language_match"] = voice_over["language_match"]
+        if expected_language and not observed_language:
+            voice_over["issues"].append(
+                f"Audio language evidence is missing (expected {expected_language})"
+            )
+        elif voice_over["language_match"] is False:
+            voice_over["issues"].append(
+                f"Audio language {observed_language!r} does not match expected {expected_language!r}"
+            )
+        issues.extend(voice_over["issues"])
 
         # --- 4. Promise preservation ---
         promise_preservation: dict[str, Any] = {
@@ -2389,11 +3838,16 @@ class VideoCompose(BaseTool):
         # as the word 'dot'" trap) that volume-based audio checks miss.
         # Only runs when caller provides both the transcript and script; when
         # skipped, issues list records that so the silence is visible.
-        transcript_comparison = self._compare_transcript_to_script(
-            Path(narration_transcript_path) if narration_transcript_path else None,
-            script_text,
-        )
-        issues.extend(transcript_comparison.get("issues", []))
+        # A transcript comparison is required when narration/script evidence
+        # is declared.  For silent motion-graphics fixtures with no such
+        # inputs, retain the explicit "skipped" note in the artifact without
+        # turning an optional check into a false render failure.
+        if audio_expected or narration_transcript_path or script_text:
+            issues.extend(transcript_comparison.get("issues", []))
+        if audio_expected and (
+            not narration_transcript_path or not Path(narration_transcript_path).is_file()
+        ):
+            issues.append("Narration is declared but verified transcript evidence is missing")
 
         # --- 7. Determine overall status ---
         critical_issues = [
@@ -2402,15 +3856,25 @@ class VideoCompose(BaseTool):
                 "silent downgrade", "delivery promise violation",
                 "effectively silent", "ffprobe failed", "suspiciously short",
                 "tts punctuation leak",  # reading literal punctuation aloud
+                "visual timeline violation", "narration timeline violation",
+                "video quality violation", "audio quality violation",
+                "no audio stream", "transcript evidence is missing",
+                "could not hash rendered output", "frame filter inspection",
             ])
         ]
 
         if critical_issues:
             status = "revise"
             recommended_action = "re_render"
+        elif visual_contract.get("missing_sources"):
+            status = "revise"
+            recommended_action = "revise_assets"
+        elif visual_contract.get("placeholder_tokens"):
+            status = "revise"
+            recommended_action = "re_author"
         elif issues:
-            status = "pass"
-            recommended_action = "present_to_user"
+            status = "revise"
+            recommended_action = "revise_edit"
         else:
             status = "pass"
             recommended_action = "present_to_user"
@@ -2421,19 +3885,58 @@ class VideoCompose(BaseTool):
 
         final_review = {
             "version": "1.0",
+            "review_id": review_id,
+            "reviewed_at": reviewed_at,
+            "output_sha256": output_sha256,
             "output_path": str(output_path),
             "status": status,
             "checks": {
                 "technical_probe": technical_probe,
                 "visual_spotcheck": visual_spotcheck,
                 "audio_spotcheck": audio_spotcheck,
+                "visual_timeline": timeline_report or {
+                    "valid": True,
+                    "enforced": False,
+                    "note": "No visual_beat_cadence_seconds policy was declared in edit_decisions.metadata.",
+                },
+                "narration_timeline": narration_report or {
+                    "valid": True,
+                    "enforced": False,
+                    "note": "No segmented narration timeline was declared.",
+                },
                 "promise_preservation": promise_preservation,
                 "subtitle_check": subtitle_check,
                 "transcript_comparison": transcript_comparison,
+                "voice_over": voice_over,
             },
             "issues_found": issues,
             "recommended_action": recommended_action,
         }
+        # Carry the same durable identity into the review when the caller
+        # supplied it on edit/proposal metadata.  This lets the manifest
+        # executor reject a review copied from another project/run.
+        identity_source = edit_decisions if isinstance(edit_decisions, Mapping) else {}
+        identity_metadata = identity_source.get("metadata") if isinstance(identity_source.get("metadata"), Mapping) else {}
+        proposal_plan = (proposal_packet or {}).get("production_plan") if isinstance(proposal_packet, Mapping) else {}
+        for field in ("project_id", "pipeline_type", "run_id", "attempt"):
+            value = identity_source.get(field) or identity_metadata.get(field)
+            if value in (None, "") and isinstance(proposal_packet, Mapping):
+                value = proposal_packet.get(field)
+            if value in (None, "") and isinstance(proposal_plan, Mapping):
+                value = proposal_plan.get(field)
+            if value not in (None, ""):
+                final_review[field] = value
+        selected_review_profile = (
+            identity_source.get("output_profile")
+            or identity_source.get("profile")
+            or (proposal_plan or {}).get("output_profile")
+            or (proposal_plan or {}).get("profile")
+        ) if isinstance(proposal_plan, Mapping) else identity_source.get("output_profile") or identity_source.get("profile")
+        if selected_review_profile:
+            final_review["output_profile"] = str(selected_review_profile)
+            final_review["profile"] = str(selected_review_profile)
+        if expected_voice:
+            final_review["voice_identity"] = expected_voice
 
         log.info(
             "Final review: status=%s, issues=%d, action=%s",
@@ -2453,18 +3956,163 @@ class VideoCompose(BaseTool):
         except (ValueError, ZeroDivisionError):
             return 0.0
 
+    def _caption_contract_for_inputs(
+        self,
+        inputs: dict[str, Any],
+        *,
+        subtitle_path: str | Path | None,
+        width: int,
+        height: int,
+        duration_seconds: float,
+        runtime: str = "ffmpeg",
+        mode: str | None = None,
+        style: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Resolve and certify captions before any FFmpeg command is run."""
+
+        from lib.caption_contracts import (
+            CaptionContractError,
+            build_caption_render_contract,
+            cues_from_transcript,
+            load_caption_cues,
+            validate_verified_transcript,
+        )
+
+        transcript = inputs.get("transcript") or inputs.get("verified_transcript")
+        raw_cues = inputs.get("captions")
+        verification: dict[str, Any] | None = None
+        if isinstance(transcript, dict):
+            if raw_cues is None and isinstance(transcript.get("segments"), list):
+                raw_cues = cues_from_transcript(
+                    transcript,
+                    max_words_per_cue=int(inputs.get("max_words_per_cue", 6) or 6),
+                    max_chars_per_line=int(inputs.get("max_chars_per_line", 42) or 42),
+                )
+        if bool(inputs.get("require_verified_transcript", False)):
+            payload = dict(transcript or {}) if isinstance(transcript, dict) else {}
+            payload.setdefault("segments", [])
+            if "verified" not in payload and "verification_status" not in payload:
+                payload["verified"] = bool(inputs.get("transcript_verified", False))
+            verification = validate_verified_transcript(
+                payload,
+                expected_language=inputs.get("expected_language"),
+                expected_text=inputs.get("expected_text"),
+            )
+            if verification.get("valid") is not True:
+                raise CaptionContractError(
+                    "; ".join(verification.get("errors") or ["verified transcript validation failed"])
+                )
+        if raw_cues is None and subtitle_path:
+            raw_cues = load_caption_cues(subtitle_path)
+        if raw_cues is None:
+            return None, verification
+        render_mode = str(mode or inputs.get("caption_mode", "burn_in")).strip().lower()
+        if render_mode not in {"burn_in", "sidecar"}:
+            raise CaptionContractError("FFmpeg caption_mode must be 'burn_in' or 'sidecar'")
+        contract = build_caption_render_contract(
+            runtime=runtime,
+            mode=render_mode,
+            cues=raw_cues,
+            width=width,
+            height=height,
+            duration_seconds=duration_seconds,
+            fps=int(inputs.get("fps", 30) or 30),
+            safe_area=inputs.get("safe_area"),
+            max_chars_per_line=int(inputs.get("max_chars_per_line", 42) or 42),
+            max_lines=int(inputs.get("max_lines", 2) or 2),
+            font_size=int((style or {}).get("font_size", inputs.get("caption_font_size", 42)) or 42),
+            style=style,
+            transcript_verification=verification,
+            profile_name=inputs.get("profile") or inputs.get("output_profile"),
+        )
+        return contract, verification
+
+    @staticmethod
+    def _probe_video_dimensions(path: str | Path) -> tuple[int, int, float]:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=width,height:format=duration",
+                "-of", "json", str(path),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
+        payload = json.loads(result.stdout or "{}")
+        stream = (payload.get("streams") or [{}])[0]
+        fmt = payload.get("format") or {}
+        width = int(stream.get("width") or 0)
+        height = int(stream.get("height") or 0)
+        duration = float(fmt.get("duration") or stream.get("duration") or 0)
+        if width < 1 or height < 1 or duration <= 0:
+            raise ValueError("ffprobe returned incomplete video dimensions/duration")
+        return width, height, duration
+
+    @staticmethod
+    def _write_caption_srt(contract: Mapping[str, Any], path: Path) -> Path:
+        """Materialize inline/transcript cues for FFmpeg's subtitles filter."""
+
+        def stamp(seconds: float) -> str:
+            total_ms = int(round(max(0.0, float(seconds)) * 1000))
+            hours, rem = divmod(total_ms, 3_600_000)
+            minutes, rem = divmod(rem, 60_000)
+            secs, millis = divmod(rem, 1_000)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+        lines: list[str] = []
+        for index, cue in enumerate(contract.get("cues") or [], start=1):
+            lines.extend(
+                [
+                    str(index),
+                    f"{stamp(cue['start'])} --> {stamp(cue['end'])}",
+                    str(cue["text"]),
+                    "",
+                ]
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines), encoding="utf-8")
+        return path
+
     def _burn_subtitles(self, inputs: dict[str, Any]) -> ToolResult:
         """Burn subtitle file into video."""
         input_path = Path(inputs["input_path"])
-        subtitle_path = Path(inputs["subtitle_path"])
+        subtitle_value = inputs.get("subtitle_path")
+        subtitle_path = Path(subtitle_value) if subtitle_value else None
         output_path = Path(inputs.get("output_path", str(input_path.with_stem(f"{input_path.stem}_subtitled"))))
 
         if not input_path.exists():
             return ToolResult(success=False, error=f"Input not found: {input_path}")
-        if not subtitle_path.exists():
+        if subtitle_path is not None and not subtitle_path.exists():
             return ToolResult(success=False, error=f"Subtitle file not found: {subtitle_path}")
+        if subtitle_path is None and inputs.get("captions") is None and inputs.get("transcript") is None:
+            return ToolResult(success=False, error="Provide subtitle_path, captions, or transcript")
 
         style = inputs.get("subtitle_style", {})
+        try:
+            width, height, duration = self._probe_video_dimensions(input_path)
+            caption_contract, transcript_verification = self._caption_contract_for_inputs(
+                inputs,
+                subtitle_path=subtitle_path,
+                width=width,
+                height=height,
+                duration_seconds=duration,
+                runtime="ffmpeg",
+                mode="burn_in",
+                style=style,
+            )
+        except Exception as exc:
+            return ToolResult(success=False, error=f"Caption render contract rejected: {exc}")
+        if caption_contract is None:
+            return ToolResult(success=False, error="Caption render contract contains no cues")
+        temporary_caption = None
+        if subtitle_path is None:
+            temporary_caption = output_path.parent / f"._captions_{uuid.uuid4().hex}.srt"
+            subtitle_path = self._write_caption_srt(caption_contract, temporary_caption)
+        style = dict(style or {})
+        style["margin_v"] = max(int(style.get("margin_v", 0) or 0), int(caption_contract["safe_area"]["pixels"]["bottom"]))
         ass_style = self._build_subtitle_style(style)
         sub_escaped = str(subtitle_path.resolve()).replace("\\", "/").replace(":", "\\:")
         codec = inputs.get("codec", "libx264")
@@ -2479,13 +4127,23 @@ class VideoCompose(BaseTool):
             str(output_path),
         ]
 
-        self.run_command(cmd, timeout=600)
+        try:
+            self.run_command(cmd, timeout=600)
+        finally:
+            if temporary_caption is not None:
+                temporary_caption.unlink(missing_ok=True)
+
+        if not output_path.exists():
+            return ToolResult(success=False, error="FFmpeg subtitle burn produced no output")
 
         return ToolResult(
             success=True,
             data={
                 "operation": "burn_subtitles",
                 "output": str(output_path),
+                "caption_render_contract": caption_contract,
+                "transcript_verification": transcript_verification,
+                "caption_mode": "burn_in",
             },
             artifacts=[str(output_path)],
         )

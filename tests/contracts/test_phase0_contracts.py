@@ -106,6 +106,10 @@ def sample_artifact(name: str) -> dict:
             "production_plan": {
                 "pipeline": "animated-explainer",
                 "render_runtime": "remotion",
+                "music_source": {
+                    "source_type": "none",
+                    "reason": "No music selected for this contract fixture.",
+                },
                 "stages": [
                     {"stage": "script", "tools": [], "approach": "Write from research"},
                     {"stage": "assets", "tools": [{"tool_name": "tts_selector", "role": "narration", "available": True}], "approach": "Generate assets"},

@@ -315,17 +315,24 @@ class GoogleMusic(BaseTool):
         duration_seconds = round(time.time() - start, 2)
         cost_usd = self.estimate_cost(inputs)
 
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "google",
+            "model": model_name,
+            "prompt": prompt,
+            "duration_seconds": duration,
+            "output": str(output_path),
+            "output_path": str(output_path),
+            "format": "mp3",
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data, inputs, source_tool=self.name
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "google",
-                "model": model_name,
-                "prompt": prompt,
-                "duration_seconds": duration,
-                "output": str(output_path),
-                "output_path": str(output_path),
-                "format": "mp3",
-            },
+            data=result_data,
             artifacts=[str(output_path)],
             cost_usd=cost_usd,
             duration_seconds=duration_seconds,

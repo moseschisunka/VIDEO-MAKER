@@ -6,6 +6,12 @@ You are turning the inspected recording into a timestamped procedural script. Un
 
 ## Prerequisites
 
+### Binding grounding contract
+
+Read `skills/meta/claim-grounding.md`. Commands, UI states, versions, and
+performance claims must match the captured source or an approved source
+record; never invent a successful result for a demo.
+
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/script.schema.json` | Artifact validation |

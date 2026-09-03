@@ -27,6 +27,11 @@ def _port() -> int:
         return DEFAULT_PORT
 
 
+def _host() -> str:
+    """Return the bind host; stay local unless a server explicitly opts in."""
+    return os.environ.get("BACKLOT_HOST", "127.0.0.1")
+
+
 def _server_alive(port: int) -> bool:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1.5) as resp:
@@ -82,7 +87,7 @@ def cmd_open(project_id: str | None) -> int:
 def cmd_serve(port: int) -> int:
     import uvicorn
 
-    uvicorn.run("backlot.server:app", host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run("backlot.server:app", host=_host(), port=port, log_level="warning")
     return 0
 
 

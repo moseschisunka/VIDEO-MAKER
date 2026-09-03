@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/work_orders/work_order",
+  "title": "OpenMontage Durable Manifest Work Order",
+  "description": "Deterministic execution envelope created after request validation and before an agent claims a pipeline run.",
+  "type": "object",
+  "required": [
+    "version",
+    "project_id",
+    "title",
+    "topic_prompt",
+    "target_duration_seconds",
+    "pipeline_type",
+    "manifest_version",
+    "manifest_hash",
+    "run_id",
+    "attempt",
+    "status",
+    "created_at",
+    "updated_at",
+    "stages",
+    "current_stage",
+    "next_stage",
+    "selections",
+    "approvals",
+    "claim",
+    "resume",
+    "blocker"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+    "topic_prompt": { "type": "string", "maxLength": 20000 },
+    "target_duration_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "manifest_version": { "type": "string", "minLength": 1 },
+    "manifest_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "run_record_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project-relative durable run record path"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "preflighting",
+        "running",
+        "awaiting_approval",
+        "revising",
+        "failed",
+        "cancelled",
+        "completed"
+      ]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "order", "status"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 0 },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "ready",
+              "running",
+              "awaiting_approval",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "checkpoint": { "type": ["string", "null"] },
+          "completed_at": { "type": ["string", "null"], "format": "date-time" },
+          "error": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "current_stage": { "type": ["string", "null"] },
+    "next_stage": { "type": ["string", "null"] },
+    "selections": {
+      "type": "object",
+      "required": [
+        "playbook",
+        "voice",
+        "voice_provider",
+        "render_runtime",
+        "output_profile",
+        "aspect_ratio",
+        "source_mode"
+      ],
+      "properties": {
+        "playbook": { "type": "string", "minLength": 1 },
+        "voice": { "type": "string", "minLength": 1 },
+        "voice_provider": { "type": "string", "minLength": 1 },
+        "render_runtime": { "type": "string", "enum": ["remotion", "hyperframes", "ffmpeg"] },
+        "output_profile": { "type": "string", "minLength": 1 },
+        "aspect_ratio": { "type": "string", "minLength": 3 },
+        "source_mode": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate", "status", "required"],
+        "properties": {
+          "gate": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected", "not_required"] },
+          "required": { "type": "boolean" },
+          "artifact_ref": { "type": ["string", "null"] },
+          "approval_id": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "artifact_digest": {
+            "type": ["string", "null"],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "artifact_version": { "type": ["string", "null"] },
+          "decision": { "type": ["string", "null"], "enum": ["approve", "revise", "reject", null] },
+          "approved_by": { "type": ["string", "null"] },
+          "approved_at": { "type": ["string", "null"], "format": "date-time" },
+          "notes": { "type": ["string", "null"] },
+          "record_ref": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "claim": {
+      "type": "object",
+      "required": ["claimed_by", "lease_expires_at", "last_heartbeat_at", "lease_version"],
+      "properties": {
+        "claimed_by": { "type": ["string", "null"] },
+        "lease_expires_at": { "type": ["string", "null"], "format": "date-time" },
+        "last_heartbeat_at": { "type": ["string", "null"], "format": "date-time" },
+        "lease_version": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "resume": {
+      "type": "object",
+      "required": ["last_successful_stage", "last_successful_checkpoint", "next_action", "resume_from_stage"],
+      "properties": {
+        "last_successful_stage": { "type": ["string", "null"] },
+        "last_successful_checkpoint": { "type": ["string", "null"] },
+        "next_action": { "type": "string", "minLength": 1 },
+        "resume_from_stage": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["code", "message", "details"],
+      "properties": {
+        "code": { "type": ["string", "null"] },
+        "message": { "type": ["string", "null"] },
+        "details": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "metadata": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}

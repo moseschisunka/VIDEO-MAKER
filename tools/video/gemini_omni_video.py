@@ -1,8 +1,9 @@
 """Google Gemini Omni Flash video generation and conversational editing.
 
-Calls the Gemini Interactions API (``POST /v1beta/interactions``) directly with
-the project's Google API key — the same key that unlocks Imagen images and
-Cloud TTS. Gemini Omni Flash generates 3-10 second 720p/24fps clips with
+Calls the Gemini Interactions API through the official ``google.genai`` SDK by
+default, with a REST compatibility transport for uploads and diagnostics. The
+project's Google API key is read from the environment — the same key that
+unlocks Imagen images and Cloud TTS. Gemini Omni Flash generates 3-10 second 720p/24fps clips with
 synthesized audio, and is the only provider in the fleet with stateful
 conversational editing: pass ``previous_interaction_id`` and describe only the
 delta ("Make the violin invisible. Keep everything else the same.").
@@ -37,7 +38,7 @@ from tools.base_tool import (
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 _UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files"
-_DEFAULT_MODEL = "gemini-omni-flash-preview"
+_DEFAULT_MODEL = "gemini-omni-1.1-flash"
 # Billed at 5,792 output tokens per second of 720p video, $17.50/1M tokens
 # (ai.google.dev/gemini-api/docs/pricing) — effectively ~$0.10 per second.
 _COST_PER_SECOND = 0.10
@@ -114,6 +115,17 @@ class GeminiOmniVideo(BaseTool):
                 "type": "string",
                 "enum": ["text_to_video", "image_to_video", "reference_to_video", "edit_video"],
                 "default": "text_to_video",
+            },
+            "model": {
+                "type": "string",
+                "default": _DEFAULT_MODEL,
+                "description": "Gemini Omni model id. Defaults to the current Gemini Omni 1.1 Flash model.",
+            },
+            "transport": {
+                "type": "string",
+                "enum": ["sdk", "rest"],
+                "default": "sdk",
+                "description": "Use the official google.genai SDK or the REST compatibility adapter.",
             },
             "aspect_ratio": {
                 "type": "string",
@@ -339,6 +351,58 @@ class GeminiOmniVideo(BaseTool):
         download_resp.raise_for_status()
         return download_resp.content
 
+    @staticmethod
+    def _sdk_output_video(interaction: Any) -> dict[str, Any] | None:
+        """Normalize the SDK's output_video object for the shared downloader."""
+        video = getattr(interaction, "output_video", None)
+        if video is None:
+            return None
+        data = getattr(video, "data", None)
+        uri = getattr(video, "uri", None)
+        if data:
+            return {"data": data}
+        if uri:
+            return {"uri": uri}
+        return None
+
+    def _execute_sdk(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        input_parts: list[dict[str, Any]],
+        aspect_ratio: str,
+        previous_interaction_id: str | None,
+        store: bool,
+        api_key: str,
+    ) -> tuple[Any, bytes]:
+        """Call google.genai's Interactions API and normalize video bytes."""
+        from tools.google_credentials import get_genai_client
+
+        client = get_genai_client()
+        interaction_input: Any = prompt if not input_parts else input_parts + [{"type": "text", "text": prompt}]
+        kwargs: dict[str, Any] = {"model": model, "input": interaction_input}
+        if aspect_ratio != "16:9":
+            kwargs["response_format"] = {"type": "video", "aspect_ratio": aspect_ratio}
+        if previous_interaction_id:
+            kwargs["previous_interaction_id"] = previous_interaction_id
+        if not store:
+            kwargs["store"] = False
+
+        interaction = client.interactions.create(**kwargs)
+        video = self._sdk_output_video(interaction)
+        if not video:
+            raise RuntimeError("Gemini Omni SDK response did not include output_video.data or output_video.uri")
+        if video.get("data"):
+            raw = video["data"]
+            if isinstance(raw, bytes):
+                raw = raw.decode("ascii")
+            return interaction, base64.b64decode(raw)
+
+        import requests
+
+        return interaction, self._download_via_uri(requests, api_key, str(video["uri"]))
+
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         api_key = self._get_api_key()
         if not api_key:
@@ -347,12 +411,14 @@ class GeminiOmniVideo(BaseTool):
                 error="GEMINI_API_KEY / GOOGLE_API_KEY not set. " + self.install_instructions,
             )
 
-        import requests
-
         start = time.time()
         operation = inputs.get("operation", "text_to_video")
         prompt = str(inputs["prompt"]).strip()
         aspect_ratio = inputs.get("aspect_ratio", "16:9")
+        model = str(inputs.get("model") or _DEFAULT_MODEL)
+        transport = str(inputs.get("transport") or "sdk").lower()
+        if transport not in {"sdk", "rest"}:
+            return ToolResult(success=False, error="transport must be 'sdk' or 'rest'")
         previous_interaction_id = inputs.get("previous_interaction_id")
 
         if operation == "edit_video" and not previous_interaction_id and not inputs.get("input_video_path"):
@@ -373,13 +439,31 @@ class GeminiOmniVideo(BaseTool):
         try:
             parts: list[dict[str, Any]] = [self._image_part(p) for p in reference_paths]
             if inputs.get("input_video_path"):
+                import requests
+
                 video_uri = self._upload_video_file(requests, api_key, inputs["input_video_path"])
                 parts.append({"type": "document", "uri": video_uri})
         except Exception as e:
             return ToolResult(success=False, error=f"Gemini Omni input preparation failed: {e}")
 
-        payload: dict[str, Any] = {
-            "model": _DEFAULT_MODEL,
+        interaction_id = None
+        if transport == "sdk":
+            try:
+                interaction, video_bytes = self._execute_sdk(
+                    model=model,
+                    prompt=prompt,
+                    input_parts=parts,
+                    aspect_ratio=aspect_ratio,
+                    previous_interaction_id=previous_interaction_id,
+                    store=inputs.get("store") is not False,
+                    api_key=api_key,
+                )
+                interaction_id = getattr(interaction, "id", None)
+            except Exception as e:
+                return ToolResult(success=False, error=f"Gemini Omni SDK video generation failed: {e}")
+        else:
+            payload: dict[str, Any] = {
+                "model": model,
             # Plain string for text-only turns (the documented minimal form),
             # typed parts when images or an uploaded video ride along.
             "input": prompt if not parts else parts + [{"type": "text", "text": prompt}],
@@ -390,40 +474,45 @@ class GeminiOmniVideo(BaseTool):
                 "aspect_ratio": aspect_ratio,
                 "delivery": "uri",
             },
-        }
-        if previous_interaction_id:
-            payload["previous_interaction_id"] = previous_interaction_id
-        if inputs.get("store") is False:
-            payload["store"] = False
+            }
+            if previous_interaction_id:
+                payload["previous_interaction_id"] = previous_interaction_id
+            if inputs.get("store") is False:
+                payload["store"] = False
+
+            try:
+                import requests
+
+                resp = requests.post(
+                    f"{_BASE_URL}/interactions",
+                    headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                    json=payload,
+                    timeout=600,
+                )
+                if not resp.ok:
+                    detail = resp.text[:1000]
+                    return ToolResult(
+                        success=False,
+                        error=f"Gemini Omni interaction failed ({resp.status_code}): {detail}",
+                    )
+                data = resp.json()
+
+                interaction_id = data.get("id")
+                video = self._extract_output_video(data)
+                if not video:
+                    return ToolResult(
+                        success=False,
+                        error=f"Gemini Omni response did not include an output video: {str(data)[:1000]}",
+                    )
+
+                if video.get("data"):
+                    video_bytes = base64.b64decode(video["data"])
+                else:
+                    video_bytes = self._download_via_uri(requests, api_key, str(video["uri"]))
+            except Exception as e:
+                return ToolResult(success=False, error=f"Gemini Omni video generation failed: {e}")
 
         try:
-            resp = requests.post(
-                f"{_BASE_URL}/interactions",
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-                json=payload,
-                timeout=600,
-            )
-            if not resp.ok:
-                detail = resp.text[:1000]
-                return ToolResult(
-                    success=False,
-                    error=f"Gemini Omni interaction failed ({resp.status_code}): {detail}",
-                )
-            data = resp.json()
-
-            interaction_id = data.get("id")
-            video = self._extract_output_video(data)
-            if not video:
-                return ToolResult(
-                    success=False,
-                    error=f"Gemini Omni response did not include an output video: {str(data)[:1000]}",
-                )
-
-            if video.get("data"):
-                video_bytes = base64.b64decode(video["data"])
-            else:
-                video_bytes = self._download_via_uri(requests, api_key, str(video["uri"]))
-
             output_path = Path(inputs.get("output_path", "gemini_omni_output.mp4"))
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(video_bytes)
@@ -435,9 +524,10 @@ class GeminiOmniVideo(BaseTool):
             success=True,
             data={
                 "provider": self.provider,
-                "model": _DEFAULT_MODEL,
+                "model": model,
                 "prompt": prompt,
                 "operation": operation,
+                "transport": transport,
                 "output": str(output_path),
                 "aspect_ratio": aspect_ratio,
                 "has_audio": True,
@@ -448,5 +538,5 @@ class GeminiOmniVideo(BaseTool):
             artifacts=[str(output_path)],
             cost_usd=self.estimate_cost(inputs),
             duration_seconds=round(time.time() - start, 2),
-            model=_DEFAULT_MODEL,
+            model=model,
         )

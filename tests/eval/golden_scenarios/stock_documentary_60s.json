@@ -1,0 +1,44 @@
+{
+  "name": "stock_documentary_60s",
+  "pipeline_type": "documentary-montage",
+  "description": "A sixty-second stock-led documentary montage that tests retrieval provenance, licensing, thematic coherence, and music timing.",
+  "inputs": {
+    "source_mode": "stock_retrieval",
+    "brief": "Build a thematic montage about a changing city using licensed real footage and a restrained music plan.",
+    "profile": "landscape_16_9",
+    "duration_seconds": 60,
+    "target_platform": "youtube"
+  },
+  "expected_artifacts": {
+    "brief": { "required_fields": ["metadata", "title"], "assertions": { "music_plan_present": true, "end_tag_plan_present": true } },
+    "scene_plan": { "required_fields": ["slots"], "assertions": { "hero_slots_minimum": 2, "search_queries_present": true } },
+    "asset_manifest": { "required_fields": ["assets"], "assertions": { "license_provenance_per_asset": true, "source_url_per_asset": true } },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "narrative_beats_cover_duration": true } },
+    "render_report": { "required_fields": ["outputs", "media_probe"], "assertions": { "all_sources_playable": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "stochastic",
+  "tolerance": 1.0,
+  "profile": "landscape_16_9",
+  "duration_seconds": 60,
+  "duration_tolerance_seconds": 3.0,
+  "voice_intent": {
+    "mode": "music_led_no_narration",
+    "provider_policy": "music_choice_must_be_explicit_and_provenanced",
+    "transcript_policy": "not_applicable_without_narration"
+  },
+  "visual_strategy": {
+    "mode": "retrieval_first_thematic_montage",
+    "description": "Select concrete, diverse real-world clips whose provenance and license fit each narrative slot; preserve era and subject continuity.",
+    "asset_sources": ["licensed_stock", "archive_sources", "user_media_if_approved"],
+    "motion_requirement": "required"
+  },
+  "runtime_candidates": ["remotion", "hyperframes", "ffmpeg"],
+  "expected_approvals": ["idea", "scene_plan", "assets", "edit", "compose"],
+  "prohibited_downgrade": [
+    "use an unlicensed or provenance-free clip because retrieval returned no match without approval",
+    "replace real footage with still images without an approved treatment change",
+    "hide missing corpus or clip-retrieval capabilities from the production plan"
+  ],
+  "tags": ["phase0", "documentary", "stock", "provenance", "experimental"]
+}

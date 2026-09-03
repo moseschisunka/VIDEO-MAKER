@@ -1,0 +1,46 @@
+{
+  "name": "screen_demo_30s",
+  "pipeline_type": "screen-demo",
+  "description": "A thirty-second screen demonstration that supports both real capture and deterministic synthetic terminal presentation.",
+  "inputs": {
+    "source_mode": "real_capture_or_synthetic_terminal",
+    "brief": "Show a short install and first-run flow with readable commands, cursor timing, and clear callouts.",
+    "profile": "landscape_16_9",
+    "duration_seconds": 30,
+    "input_media": ["fixtures/media/terminal_flow.json"],
+    "target_platform": "youtube"
+  },
+  "expected_artifacts": {
+    "brief": { "required_fields": ["production_mode", "target_platform", "target_duration_seconds"] },
+    "script": { "required_fields": ["sections", "command_beats"] },
+    "scene_plan": { "required_fields": ["scenes"], "assertions": { "screen_targets_are_explicit": true } },
+    "asset_manifest": { "required_fields": ["assets"], "assertions": { "capture_or_terminal_source_recorded": true } },
+    "edit_decisions": { "required_fields": ["cuts", "render_runtime"], "assertions": { "narration_offsets_preserved": true } },
+    "render_report": { "required_fields": ["outputs", "media_probe"], "assertions": { "text_is_readable": true, "output_is_playable": true } },
+    "publish_log": { "required_fields": ["entries"] }
+  },
+  "eval_mode": "deterministic",
+  "tolerance": 0.5,
+  "profile": "landscape_16_9",
+  "duration_seconds": 30,
+  "duration_tolerance_seconds": 1.5,
+  "voice_intent": {
+    "mode": "narrated_synthesis_or_source_audio",
+    "provider_policy": "voice_identity_and_provider_must_be_locked_before_render",
+    "transcript_policy": "every_command_and_callout_must_match_the_spoken_beat"
+  },
+  "visual_strategy": {
+    "mode": "real_capture_or_terminal_scene",
+    "description": "Use real capture for unpredictable app UIs and synthetic TerminalScene for deterministic CLI/install flows; add purposeful zooms and callouts.",
+    "asset_sources": ["screen_capture", "terminal_scene", "subtitle_generator"],
+    "motion_requirement": "required"
+  },
+  "runtime_candidates": ["remotion", "ffmpeg"],
+  "expected_approvals": ["idea", "script", "scene_plan", "assets", "edit", "publish"],
+  "prohibited_downgrade": [
+    "record a real screen when synthetic terminal mode was approved without logging the change",
+    "show commands or UI states that are not present in the approved script",
+    "allow callouts or captions to leave the declared screen safe area"
+  ],
+  "tags": ["phase0", "screen-demo", "terminal", "deterministic", "launch-candidate"]
+}

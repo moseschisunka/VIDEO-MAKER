@@ -17,6 +17,27 @@ description: >
   is a real app UI (real capture) or a scriptable terminal session (synthetic).
 category: screen_recording
 stability: production
+ui_visible: true
+maturity: beta
+supported_runtimes: [remotion, ffmpeg]
+supported_profiles:
+  - youtube_landscape
+  - youtube_shorts
+  - instagram_reels
+  - instagram_feed
+  - tiktok
+  - linkedin
+  - ilearnzed_long_form
+  - generic_hd
+required_capabilities:
+  - video_compose
+required_artifacts:
+  - brief
+  - script
+  - scene_plan
+  - asset_manifest
+  - edit_decisions
+  - render_report
 default_checkpoint_policy: guided
 
 # Production modes this pipeline supports
@@ -71,7 +92,8 @@ compatible_playbooks:
   recommended:
     - minimalist-diagram
     - clean-professional
-  also_works: []
+  also_works:
+    - premium-minimalist
   custom_allowed: true
 
 stages:

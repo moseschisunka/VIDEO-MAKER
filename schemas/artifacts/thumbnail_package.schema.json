@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/artifacts/thumbnail_package",
+  "title": "Thumbnail and Title Package",
+  "description": "Packaging options that connect a truthful YouTube title, thumbnail, audience, and viewer expectation.",
+  "type": "object",
+  "required": ["version", "video_id", "target_audience", "viewer_promise", "title_options", "thumbnail_variants", "recommended_pair", "quality_gates"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "video_id": { "type": "string", "minLength": 1 },
+    "target_audience": { "type": "string", "minLength": 1 },
+    "viewer_promise": { "type": "string", "minLength": 1 },
+    "central_question": { "type": "string" },
+    "misconception": { "type": "string" },
+    "story_lens": { "type": "string" },
+    "language": { "type": "string", "default": "en" },
+    "title_options": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "thumbnail_variants": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["id", "on_image_text", "focal_subject", "visual_proof", "logo_treatment", "mobile_readability"],
+        "properties": {
+          "id": { "type": "string" },
+          "on_image_text": { "type": "string", "maxLength": 80 },
+          "focal_subject": { "type": "string" },
+          "visual_proof": { "type": "string" },
+          "logo_treatment": { "type": "string" },
+          "mobile_readability": { "type": "string" },
+          "preview_path": { "type": "string" },
+          "supporting_elements": { "type": "array", "items": { "type": "string" } },
+          "claim_review": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "recommended_pair": {
+      "type": "object",
+      "required": ["title", "thumbnail_variant_id", "viewer_expectation"],
+      "properties": {
+        "title": { "type": "string" },
+        "thumbnail_variant_id": { "type": "string" },
+        "viewer_expectation": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "quality_gates": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "hypothesis": { "type": "string" },
+        "single_change": { "type": "string" },
+        "success_signal": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

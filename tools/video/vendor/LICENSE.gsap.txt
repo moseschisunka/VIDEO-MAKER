@@ -1,0 +1,8 @@
+GSAP is distributed under the standard GreenSock license.
+
+Source: https://www.npmjs.com/package/gsap
+Pinned bundle: gsap 3.15.0 (dist/gsap.min.js)
+
+The bundle is vendored solely to make OpenMontage HyperFrames work without a
+runtime CDN request. Consult the upstream package license before redistribution
+outside this repository.

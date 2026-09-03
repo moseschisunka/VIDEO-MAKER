@@ -1,0 +1,1 @@
+"""Bundled OpenMontage pipeline manifests."""

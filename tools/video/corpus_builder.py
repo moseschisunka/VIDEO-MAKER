@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -183,6 +184,20 @@ class CorpusBuilder(BaseTool):
                 "minimum": 1,
                 "maximum": 20,
             },
+            "strict_media_validation": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Production mode: require magic-signature and decode/probe validation "
+                    "before a downloaded candidate is promoted. Set false only for legacy "
+                    "fixture corpora."
+                ),
+            },
+            "require_provenance": {
+                "type": "boolean",
+                "default": True,
+                "description": "Production mode: reject stock candidates without source URL, creator, and license metadata.",
+            },
         },
     }
 
@@ -213,9 +228,11 @@ class CorpusBuilder(BaseTool):
             return ToolStatus.DEGRADED
         return ToolStatus.AVAILABLE
 
-    def get_info(self) -> dict[str, Any]:
-        info = super().get_info()
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
+        info = super().get_info(include_status=include_status)
         try:
+            if not include_status:
+                raise RuntimeError("stock source diagnostics deferred")
             from tools.video.stock_sources import source_catalog, source_summary
             info["source_provider_menu"] = source_catalog()
             info["source_provider_summary"] = source_summary()
@@ -248,6 +265,7 @@ class CorpusBuilder(BaseTool):
                 get_source,
                 source_summary,
             )
+            from tools.video.stock_sources.base import stock_provenance
 
             corpus_dir = Path(inputs["corpus_dir"])
             queries: list[dict] = list(inputs["queries"])
@@ -256,6 +274,8 @@ class CorpusBuilder(BaseTool):
             max_new = int(inputs.get("max_new_clips", 100))
             skip_existing = bool(inputs.get("skip_existing", True))
             thumbs_per_video = int(inputs.get("thumbs_per_video", 5))
+            strict_media_validation = bool(inputs.get("strict_media_validation", True))
+            require_provenance = bool(inputs.get("require_provenance", True))
 
             # Resolve sources. If the caller passed an explicit list we
             # must not silently degrade: pinned-but-unavailable sources
@@ -365,6 +385,8 @@ class CorpusBuilder(BaseTool):
                                 thumbs_per_video=thumbs_per_video,
                                 cache=cache,
                                 run_cache_stats=run_cache_stats,
+                                strict_media_validation=strict_media_validation,
+                                require_provenance=require_provenance,
                             )
                         except Exception as e:
                             failed += 1
@@ -446,6 +468,8 @@ class CorpusBuilder(BaseTool):
                     "total_corpus_size": len(corp),
                     "requested_sources": source_names or [],
                     "resolved_sources": [s.name for s in sources],
+                    "strict_media_validation": strict_media_validation,
+                    "require_provenance": require_provenance,
                     "source_provider_summary": source_summary(),
                     # Shared clip bytes cache (Phase 1): per-run
                     # counters plus a full stats snapshot for the
@@ -479,6 +503,8 @@ class CorpusBuilder(BaseTool):
         thumbs_per_video: int,
         cache,
         run_cache_stats: dict,
+        strict_media_validation: bool = True,
+        require_provenance: bool = True,
     ):
         """Download → thumb → embed → add one Candidate to the corpus.
 
@@ -499,12 +525,18 @@ class CorpusBuilder(BaseTool):
 
         from lib.clip_embedder import embed_images, embed_texts, pool_frames
         from lib.corpus import ClipRecord
+        from tools.video.stock_sources.base import download_candidate_atomic, stock_provenance
 
         # Pick file extension from the URL path (sources give us
         # stable .mp4/.jpg/.png URLs) with a kind-aware fallback.
         ext = _guess_ext(cand)
         local_rel = Path("clips") / f"{cand.clip_id}{ext}"
         local_abs = corp.corpus_dir / local_rel
+        validation: dict[str, Any] = {}
+
+        provenance = {}
+        if require_provenance:
+            provenance = stock_provenance(cand, retrieval_time=datetime.now(timezone.utc).isoformat())
 
         # Try the shared cache first. A hit links the cached blob
         # into local_abs (same filesystem → hard link, cross-drive
@@ -524,19 +556,55 @@ class CorpusBuilder(BaseTool):
                 run_cache_stats["bytes_saved"] += local_abs.stat().st_size
             except OSError:
                 pass
+            if strict_media_validation:
+                from lib.media_ingestion import validate_media_file
+                try:
+                    validation = validate_media_file(
+                        local_abs,
+                        "image" if cand.kind == "image" else "video",
+                        strict_decode=True,
+                        min_bytes=1024,
+                    )
+                except Exception:
+                    local_abs.unlink(missing_ok=True)
+                    raise
         else:
             run_cache_stats["misses"] += 1
             # Download. Any HTTP/IO exception propagates up to the
             # per-candidate try in execute().
-            src.download(cand, local_abs)
+            # Adapters receive a sibling `.part` target.  No candidate enters
+            # the canonical corpus until it passes magic-signature and decode
+            # validation in production mode; a failed validation leaves no
+            # misleading final path behind.
+            part_abs = local_abs.with_name(local_abs.name + ".part")
+            part_abs.unlink(missing_ok=True)
+            try:
+                if strict_media_validation and src.__class__.__module__.startswith("tools.video.stock_sources."):
+                    validation = download_candidate_atomic(cand, part_abs, strict_decode=True)
+                else:
+                    src.download(cand, part_abs)
+                if strict_media_validation and not validation:
+                    from lib.media_ingestion import validate_media_file
+
+                    validation = validate_media_file(
+                        part_abs,
+                        "image" if cand.kind == "image" else "video",
+                        strict_decode=True,
+                        min_bytes=1024,
+                    )
+                else:
+                    validation = {
+                        "valid": False,
+                        "validation_mode": "size_only_legacy_fixture",
+                    }
+                part_abs.replace(local_abs)
+            except Exception:
+                part_abs.unlink(missing_ok=True)
+                raise
             if not local_abs.exists() or local_abs.stat().st_size < 1024:
                 # Empty / near-empty file = bad download. Clean up so a
                 # retry doesn't mistake it for success.
-                try:
-                    if local_abs.exists():
-                        local_abs.unlink()
-                except OSError:
-                    pass
+                local_abs.unlink(missing_ok=True)
                 return None
 
             # Ingest the fresh file into the shared cache so the
@@ -553,7 +621,13 @@ class CorpusBuilder(BaseTool):
                         "source_url": cand.source_url,
                         "license": cand.license,
                         "creator": cand.creator,
+                        "license_url": str(getattr(cand, "license_url", "") or ""),
+                        "attribution_required": bool(getattr(cand, "attribution_required", False)),
+                        "restrictions": list(getattr(cand, "restrictions", ()) or ()),
+                        **provenance,
                         "source_tags": cand.source_tags,
+                        "sha256": validation.get("sha256"),
+                        "mime_type": validation.get("mime_type"),
                     },
                 )
             except Exception:
@@ -600,6 +674,24 @@ class CorpusBuilder(BaseTool):
         tag_text = cand.source_tags or query
         tag_vec = embed_texts([tag_text])[0]
 
+        extra = cand.extra if isinstance(cand.extra, dict) else {}
+        license_url = str(extra.get("license_url") or "")
+        restrictions = extra.get("restrictions") or ()
+        if isinstance(restrictions, str):
+            restrictions = (restrictions,)
+        else:
+            restrictions = tuple(str(item) for item in restrictions)
+        validation = dict(validation)
+        if strict_media_validation and not validation.get("sha256"):
+            from lib.media_ingestion import validate_media_file
+
+            validation = validate_media_file(
+                local_abs,
+                "image" if cand.kind == "image" else "video",
+                strict_decode=True,
+                min_bytes=1024,
+            )
+
         rec = ClipRecord(
             clip_id=cand.clip_id,
             source=cand.source,
@@ -611,6 +703,13 @@ class CorpusBuilder(BaseTool):
             query=query,
             creator=cand.creator,
             license=cand.license,
+            license_url=license_url,
+            attribution_required=bool(extra.get("attribution_required", False)),
+            restrictions=list(restrictions),
+            sha256=str(validation.get("sha256") or ""),
+            mime_type=str(validation.get("mime_type") or ""),
+            retrieved_at=str(provenance.get("retrieved_at") or extra.get("retrieved_at") or datetime.now(timezone.utc).isoformat()),
+            validation=validation,
             duration=float(duration or 0.0),
             width=int(width or 0),
             height=int(height or 0),

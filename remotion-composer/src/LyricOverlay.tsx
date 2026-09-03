@@ -8,12 +8,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import React from "react";
-import { loadFont as loadPlayfair } from "@remotion/google-fonts/PlayfairDisplay";
-
-const { fontFamily: playfairItalic } = loadPlayfair("italic", {
-  weights: ["400", "700"],
-  subsets: ["latin"],
-});
+const playfairItalic = "Playfair Display, Georgia, serif";
 
 function resolveAsset(src: string): string {
   if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) return src;
@@ -38,7 +33,7 @@ export interface Lyric {
   outSeconds: number;
 }
 
-export interface LyricOverlayProps {
+export interface LyricOverlayProps extends Record<string, unknown> {
   videoSrc: string;
   lyrics: Lyric[];
   bottomY?: number; // 0..1, vertical center of subtitle band
@@ -170,9 +165,12 @@ export const LyricOverlay: React.FC<LyricOverlayProps> = ({
   bottomY = 0.88,
 }) => {
   const { durationInFrames } = useVideoConfig();
+  const hasVideo = Boolean(videoSrc?.trim());
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
-      <OffthreadVideo src={resolveAsset(videoSrc)} />
+      {/* Empty source is an intentional assetless preview; a declared source
+          remains strict and must resolve to a real media asset. */}
+      {hasVideo ? <OffthreadVideo src={resolveAsset(videoSrc)} /> : null}
       {lyrics.map((l, i) => (
         <LyricLine key={i} lyric={l} bottomY={bottomY} />
       ))}

@@ -131,6 +131,29 @@ class AudioMixer(BaseTool):
                 },
             },
             "normalize": {"type": "boolean", "default": True},
+            "preserve_stems": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "For full_mix, render independently addressable narration, music, "
+                    "and SFX stems before the controlled final mix. Production callers "
+                    "must set this true; false is retained only for legacy one-file mixes."
+                ),
+            },
+            "stem_output_dir": {
+                "type": "string",
+                "description": "Optional directory for preserved full_mix stems.",
+            },
+            "quality_check": {
+                "type": "boolean",
+                "default": False,
+                "description": "Run measured profile loudness/true-peak/silence/clipping checks on the final mix.",
+            },
+            "profile": {
+                "type": "string",
+                "default": "generic_hd",
+                "description": "Output profile supplying the audio loudness and peak contract.",
+            },
             "loudnorm_target": {
                 "type": "number",
                 "default": -16,
@@ -204,14 +227,35 @@ class AudioMixer(BaseTool):
         Forward that value (or pass loudnorm_target directly) so the executed
         loudness matches the target platform instead of silently defaulting.
         """
-        target = inputs.get("loudnorm_target", -16)
+        target = inputs.get("loudnorm_target")
+        true_peak = inputs.get("true_peak_target_db")
+        if target is None or true_peak is None:
+            try:
+                from lib.media_profiles import get_profile
+
+                profile = get_profile(str(inputs.get("profile") or inputs.get("output_profile")))
+                if target is None:
+                    target = profile.audio_loudness_lufs
+                if true_peak is None:
+                    true_peak = profile.audio_true_peak_db
+            except (KeyError, TypeError, ValueError):
+                pass
+        if target is None:
+            target = -16
+        if true_peak is None:
+            true_peak = -1.5
         try:
             target = float(target)
         except (TypeError, ValueError):
             target = -16.0
+        try:
+            true_peak = float(true_peak)
+        except (TypeError, ValueError):
+            true_peak = -1.5
         # Clamp to a sane loudness range to avoid malformed ffmpeg args.
         target = max(-40.0, min(0.0, target))
-        return f"[{in_label}]loudnorm=I={target}:LRA=11:TP=-1.5[{out_label}]"
+        true_peak = max(-9.0, min(-0.1, true_peak))
+        return f"[{in_label}]loudnorm=I={target}:LRA=11:TP={true_peak}[{out_label}]"
 
     def _track_filters(self, track: dict[str, Any]) -> list[str]:
         """Build per-track filters on the source timeline before scheduling it.
@@ -401,16 +445,25 @@ class AudioMixer(BaseTool):
             )
 
         # Use FFmpeg sidechaincompress for ducking
-        music_vol = ducking.get("music_volume_during_speech", 0.15)
-        attack = ducking.get("attack_ms", 200) / 1000
-        release = ducking.get("release_ms", 500) / 1000
+        try:
+            music_vol = float(ducking.get("music_volume_during_speech", 0.15))
+            attack_ms = float(ducking.get("attack_ms", 200))
+            release_ms = float(ducking.get("release_ms", 500))
+        except (TypeError, ValueError):
+            return ToolResult(success=False, error="Ducking volume/attack/release values must be numeric")
+        if not 0 <= music_vol <= 1:
+            return ToolResult(success=False, error="music_volume_during_speech must be between 0 and 1")
+        if attack_ms < 0 or release_ms < 0:
+            return ToolResult(success=False, error="Ducking attack_ms and release_ms cannot be negative")
+        attack = attack_ms / 1000
+        release = release_ms / 1000
 
         # Sidechain compress: use speech as the key signal to duck music
         filter_complex = (
             f"[1:a]sidechaincompress="
             f"threshold=0.02:ratio=9:attack={attack}:release={release}:"
             f"level_sc=1:mix=0.9[ducked];"
-            f"[ducked]volume={music_vol * 3}[music_out];"  # compensate sidechain level
+            f"[ducked]volume={music_vol}[music_out];"
             f"[0:a][music_out]amix=inputs=2:duration=longest[out]"
         )
 
@@ -500,6 +553,7 @@ class AudioMixer(BaseTool):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         normalize = inputs.get("normalize", True)
         ducking = inputs.get("ducking", {"enabled": True})
+        preserve_stems = bool(inputs.get("preserve_stems", False))
 
         speech_tracks = [t for t in tracks if t.get("role") in ("speech", "primary")]
         music_tracks = [t for t in tracks if t.get("role") in ("music", "secondary")]
@@ -513,6 +567,58 @@ class AudioMixer(BaseTool):
         for t in all_tracks:
             if not Path(t["path"]).exists():
                 return ToolResult(success=False, error=f"Track not found: {t['path']}")
+
+        stem_records: list[dict[str, Any]] = []
+        if preserve_stems:
+            stem_dir = Path(
+                inputs.get("stem_output_dir")
+                or (output_path.parent / f"{output_path.stem}.stems")
+            )
+            stem_dir.mkdir(parents=True, exist_ok=True)
+            for index, track in enumerate(all_tracks):
+                role = str(track.get("role") or "stem").lower().replace(" ", "_")
+                stem_path = stem_dir / f"{index:02d}_{role}.wav"
+                filters = self._track_filters(track)
+                stem_cmd = ["ffmpeg", "-y", "-i", str(track["path"])]
+                if filters:
+                    stem_cmd.extend(
+                        [
+                            "-filter_complex",
+                            f"[0:a]{','.join(filters)}[stem]",
+                            "-map",
+                            "[stem]",
+                        ]
+                    )
+                else:
+                    stem_cmd.extend(["-map", "0:a"])
+                stem_cmd.extend(
+                    [
+                        "-vn",
+                        "-ar",
+                        "48000",
+                        "-ac",
+                        "2",
+                        "-c:a",
+                        "pcm_s16le",
+                        str(stem_path),
+                    ]
+                )
+                self.run_command(stem_cmd)
+                if not stem_path.exists():
+                    return ToolResult(
+                        success=False,
+                        error=f"Preserved stem was not produced: {stem_path}",
+                    )
+                stem_records.append(
+                    {
+                        "stem_id": f"stem_{index + 1:02d}",
+                        "role": str(track.get("role") or "stem"),
+                        "source_path": str(track["path"]),
+                        "path": str(stem_path),
+                        "start_seconds": float(track.get("start_seconds", 0) or 0),
+                        "volume": float(track.get("volume", 1.0) or 0),
+                    }
+                )
 
         # Build FFmpeg inputs and filter graph
         input_args = []
@@ -564,15 +670,25 @@ class AudioMixer(BaseTool):
 
             # Apply sidechain ducking — music is compressed, [speech_key] is the key
             duck_params = ducking if isinstance(ducking, dict) else {}
-            attack = duck_params.get("attack_ms", 200) / 1000
-            release = duck_params.get("release_ms", 500) / 1000
-            music_vol = duck_params.get("music_volume_during_speech", 0.15)
+            try:
+                attack_ms = float(duck_params.get("attack_ms", 200))
+                release_ms = float(duck_params.get("release_ms", 500))
+                music_vol = float(duck_params.get("music_volume_during_speech", 0.15))
+            except (TypeError, ValueError):
+                return ToolResult(success=False, error="Ducking volume/attack/release values must be numeric")
+            if attack_ms < 0 or release_ms < 0 or not 0 <= music_vol <= 1:
+                return ToolResult(
+                    success=False,
+                    error="Ducking requires non-negative attack/release and volume between 0 and 1",
+                )
+            attack = attack_ms / 1000
+            release = release_ms / 1000
 
             filter_parts.append(
                 f"{music_in}[speech_key]sidechaincompress="
                 f"threshold=0.02:ratio=9:attack={attack}:release={release}:"
                 f"level_sc=1:mix=0.9[ducked_music];"
-                f"[ducked_music]volume={music_vol * 3}[music_out]"
+                f"[ducked_music]volume={music_vol}[music_out]"
             )
 
             # Final mix: the other speech branch + ducked music
@@ -612,6 +728,25 @@ class AudioMixer(BaseTool):
 
         self.run_command(cmd)
 
+        quality_report = None
+        if bool(inputs.get("quality_check", False)):
+            from tools.analysis.audio_quality import probe_audio_quality
+
+            quality_report = probe_audio_quality(
+                output_path,
+                profile=str(inputs.get("profile") or inputs.get("output_profile") or "generic_hd"),
+            )
+            if quality_report.get("valid") is not True:
+                return ToolResult(
+                    success=False,
+                    data={
+                        "operation": "full_mix",
+                        "quality_report": quality_report,
+                        "output": str(output_path),
+                    },
+                    error="; ".join(quality_report.get("errors") or ["audio quality check failed"]),
+                )
+
         return ToolResult(
             success=True,
             data={
@@ -621,9 +756,14 @@ class AudioMixer(BaseTool):
                 "sfx_tracks": len(sfx_tracks),
                 "ducking_enabled": duck_enabled,
                 "normalized": normalize,
+                "stems_preserved": preserve_stems,
+                "stems": stem_records,
+                "stem_output_dir": str(Path(inputs.get("stem_output_dir") or (output_path.parent / f"{output_path.stem}.stems"))) if preserve_stems else None,
+                "quality_checked": quality_report is not None,
+                "quality_report": quality_report,
                 "output": str(output_path),
             },
-            artifacts=[str(output_path)],
+            artifacts=[str(output_path)] + [record["path"] for record in stem_records],
         )
 
     def _segmented_music(self, inputs: dict[str, Any]) -> ToolResult:

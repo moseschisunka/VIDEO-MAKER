@@ -10,10 +10,12 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 from lib.events import read_events
 from lib.paths import PROJECTS_DIR, REPO_ROOT  # single source of truth (env-overridable)
+from lib.pipeline_release import pipeline_release_metadata, studio_release_status
+from lib.project_identity import validate_project_identity
 
 MEDIA_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 MEDIA_VIDEO_EXT = {".mp4", ".webm", ".mov"}
@@ -61,10 +63,12 @@ def _rel(project_dir: Path, path: Path) -> str:
 
 def _load_pipeline_meta(pipeline_type: Optional[str]) -> dict[str, Any]:
     """Stage order + gate flags from the manifest; graceful fallback."""
+    manifest = None
+    validation_error = None
     if pipeline_type and pipeline_type != "unknown":
         try:
-            from lib.pipeline_loader import load_pipeline
-            manifest = load_pipeline(pipeline_type)
+            from lib.pipeline_loader import load_pipeline_readonly
+            manifest = load_pipeline_readonly(pipeline_type)
             stages = [
                 {
                     "name": s["name"],
@@ -78,17 +82,31 @@ def _load_pipeline_meta(pipeline_type: Optional[str]) -> dict[str, Any]:
                 if isinstance(s, dict) and s.get("name")
             ]
             if stages:
+                release = pipeline_release_metadata(
+                    pipeline_type,
+                    manifest=manifest,
+                    schema_valid=True,
+                )
                 return {
                     "pipeline_type": pipeline_type,
                     "stages": stages,
                     "known": True,
+                    **release,
                 }
-        except Exception:
+        except Exception as exc:
+            validation_error = str(exc)
             pass
+    release = pipeline_release_metadata(
+        pipeline_type or "unknown",
+        manifest=manifest,
+        schema_valid=False,
+        validation_error=validation_error,
+    )
     return {
         "pipeline_type": pipeline_type or "unknown",
         "stages": [{"name": s, "gated": False, "produces": []} for s in FALLBACK_STAGES],
         "known": False,
+        **release,
     }
 
 
@@ -163,6 +181,7 @@ def _build_stage_rail(
             "cost_snapshot": cp.get("cost_snapshot") if cp else None,
             "error": cp.get("error") if cp else None,
             "human_approved": cp.get("human_approved") if cp else None,
+            "approval_record": cp.get("approval_record") if cp else None,
             "partial_progress": (cp.get("metadata") or {}).get("partial_progress") if cp else None,
             "versions": len(versions) + (1 if cp else 0),
             # Chronological status trail (history + current) — powers replay.
@@ -204,6 +223,7 @@ def _build_stage_rail(
             "cost_snapshot": cp.get("cost_snapshot"),
             "error": cp.get("error"),
             "human_approved": cp.get("human_approved"),
+            "approval_record": cp.get("approval_record"),
             "partial_progress": None,
             "versions": 1 + len(history.get(name, [])),
             "undeclared": True,
@@ -231,6 +251,7 @@ ARTIFACT_FILES = {
     "brief": "brief.json",
     "proposal_packet": "proposal_packet.json",
     "script": "script.json",
+    "teaching_plan": "teaching_plan.json",
     "scene_plan": "scene_plan.json",
     "asset_manifest": "asset_manifest.json",
     "edit_decisions": "edit_decisions.json",
@@ -238,6 +259,8 @@ ARTIFACT_FILES = {
     "final_review": "final_review.json",
     "publish_log": "publish_log.json",
     "decision_log": "decision_log.json",
+    "thumbnail_package": "thumbnail_package.json",
+    "contact_sheet": "contact_sheet.json",
 }
 
 
@@ -262,6 +285,106 @@ def _collect_artifacts(project_dir: Path, checkpoints: dict[str, dict]) -> dict[
                 if resolved is not None:
                     artifacts[name] = resolved
     return artifacts
+
+
+def _qa_evidence(
+    project_dir: Path,
+    artifacts: Mapping[str, Any],
+    approval_log: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Expose final-review evidence in a safe, board-consumable shape.
+
+    Final-review artifacts are produced by render workers and may contain
+    absolute paths.  Backlot never returns those paths directly to the browser:
+    only files inside the project's media roots are converted to relative
+    paths that the guarded ``/media`` and ``/thumb`` endpoints can serve.
+    """
+    review = artifacts.get("final_review") if isinstance(artifacts, Mapping) else None
+    if not isinstance(review, Mapping):
+        return None
+    root = project_dir.resolve()
+
+    def _safe_relative(raw: Any) -> str | None:
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        value = raw.strip()
+        if value.startswith(("http://", "https://", "s3://", "gs://")):
+            return None
+        candidate = Path(value).expanduser()
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        try:
+            resolved = candidate.resolve()
+            relative = resolved.relative_to(root)
+        except (OSError, ValueError):
+            return None
+        if not relative.parts or relative.parts[0].lower() not in {"assets", "renders"}:
+            return None
+        return relative.as_posix() if resolved.is_file() else None
+
+    checks = review.get("checks") if isinstance(review.get("checks"), Mapping) else {}
+    visual = checks.get("visual_spotcheck") if isinstance(checks.get("visual_spotcheck"), Mapping) else {}
+    audio = checks.get("audio_spotcheck") if isinstance(checks.get("audio_spotcheck"), Mapping) else {}
+    transcript = checks.get("transcript_comparison") if isinstance(checks.get("transcript_comparison"), Mapping) else {}
+    voice = checks.get("voice_over") if isinstance(checks.get("voice_over"), Mapping) else {}
+    frames: list[dict[str, Any]] = []
+    for index, raw in enumerate(visual.get("frame_paths") or []):
+        relative = _safe_relative(raw)
+        if relative:
+            frames.append({
+                "path": relative,
+                "timestamp_seconds": (visual.get("video_quality") or {}).get("samples", [])[index].get("timestamp_seconds")
+                if isinstance(visual.get("video_quality"), Mapping)
+                and isinstance((visual.get("video_quality") or {}).get("samples"), list)
+                and index < len((visual.get("video_quality") or {}).get("samples") or [])
+                and isinstance((visual.get("video_quality") or {}).get("samples", [])[index], Mapping)
+                else None,
+            })
+    return {
+        "status": str(review.get("status") or "unknown"),
+        "recommended_action": review.get("recommended_action"),
+        "review_id": review.get("review_id"),
+        "reviewed_at": review.get("reviewed_at"),
+        "output_path": _safe_relative(review.get("output_path")),
+        "output_sha256": review.get("output_sha256"),
+        "frames": frames,
+        "visual": {
+            "frames_sampled": visual.get("frames_sampled", 0),
+            "black_frames_detected": bool(visual.get("black_frames_detected")),
+            "issues": list(visual.get("issues") or []),
+            "video_quality": visual.get("video_quality"),
+            "visual_contract": visual.get("visual_contract"),
+        },
+        "audio": {
+            "narration_present": bool(audio.get("narration_present")),
+            "unexpected_silence": bool(audio.get("unexpected_silence")),
+            "clipping_detected": bool(audio.get("clipping_detected")),
+            "language_expected": audio.get("language_expected"),
+            "language_observed": audio.get("language_observed"),
+            "language_match": audio.get("language_match"),
+            "quality": audio.get("audio_quality"),
+            "issues": list(audio.get("issues") or []),
+        },
+        "transcript": {
+            "matches_script": transcript.get("transcript_matches_script"),
+            "word_accuracy": transcript.get("word_accuracy"),
+            "language_expected": transcript.get("language_expected"),
+            "language_observed": transcript.get("language_observed"),
+            "language_match": transcript.get("language_match"),
+            "voice_identity_match": transcript.get("voice_identity_match"),
+            "issues": list(transcript.get("issues") or []),
+        },
+        "voice": {
+            "identity_expected": voice.get("identity_expected"),
+            "identity_observed": voice.get("identity_observed"),
+            "identity_match": voice.get("identity_match"),
+            "language_match": voice.get("language_match"),
+            "issues": list(voice.get("issues") or []),
+        },
+        "issues": list(review.get("issues_found") or []),
+        "approval_records": list((approval_log or {}).get("records") or [])[-10:]
+        if isinstance(approval_log, Mapping) else [],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +466,14 @@ def _asset_entry(project_dir: Path, asset: dict) -> dict:
         "quality_score": asset.get("quality_score"),
         "duration_seconds": asset.get("duration_seconds"),
         "resolution": asset.get("resolution"),
+        "source_url": asset.get("source_url") or asset.get("original_url"),
+        "creator": asset.get("creator"),
+        "license": asset.get("license"),
+        "license_url": asset.get("license_url"),
+        "attribution_required": asset.get("attribution_required"),
+        "restrictions": asset.get("restrictions") or [],
+        "sha256": asset.get("sha256"),
+        "validation_status": asset.get("validation_status") or (asset.get("validation") or {}).get("status"),
     }
 
 
@@ -409,6 +540,7 @@ def _build_storyboard(
         return None
     sections = (artifacts.get("script") or {}).get("sections") or []
     manifest_assets = (artifacts.get("asset_manifest") or {}).get("assets") or []
+    contact_sheet = artifacts.get("contact_sheet")
 
     def scene_key(value: Any) -> str:
         # 0 is a legitimate scene id — only None/absent collapses to "".
@@ -480,6 +612,11 @@ def _build_storyboard(
             "audio": audio,
             "generating": generating.get(sid) is not None,
             "generating_tool": (generating.get(sid) or {}).get("tool"),
+            "approval_candidates": [
+                candidate for candidate in (contact_sheet or {}).get("candidates", [])
+                if str(candidate.get("scene_id") or "") == sid
+            ],
+            "sample_approval_status": (contact_sheet or {}).get("approval_status"),
         })
 
     total = scene_plan.get("metadata", {}).get("total_duration_seconds")
@@ -490,6 +627,7 @@ def _build_storyboard(
         "scenes": cards,
         "total_duration_seconds": total,
         "style_playbook": scene_plan.get("style_playbook"),
+        "contact_sheet": contact_sheet,
     }
 
 
@@ -566,6 +704,8 @@ def _last_activity(project_dir: Path) -> float:
     try:
         candidates = list(project_dir.glob("checkpoint_*.json"))
         candidates.append(project_dir / "events.jsonl")
+        candidates.append(project_dir / "work_order.json")
+        candidates.append(project_dir / "approval_records.json")
         art = project_dir / "artifacts"
         if art.is_dir():
             candidates.extend(art.glob("*.json"))
@@ -590,11 +730,20 @@ def load_board_state(project_dir: Path) -> dict[str, Any]:
 
     marker = _read_json(project_dir / "project.json") or {}
     meta_json = _read_json(project_dir / "meta.json") or {}
+    project_config = _read_json(project_dir / "artifacts" / "project_config.json") or {}
+    work_order = _read_json(project_dir / "work_order.json")
+    approval_log = _read_json(project_dir / "approval_records.json") or {
+        "version": "1.0",
+        "project_id": project_id,
+        "records": [],
+    }
 
     checkpoints = _collect_checkpoints(project_dir)
     history = _collect_history(project_dir)
 
-    pipeline_type = marker.get("pipeline_type")
+    # Newly created Backlot projects have a marker, while older projects may
+    # only have project_config.json. Both are read-only identity sources.
+    pipeline_type = marker.get("pipeline_type") or project_config.get("pipeline_type")
     if not pipeline_type:
         for cp in checkpoints.values():
             pt = cp.get("pipeline_type")
@@ -605,6 +754,7 @@ def load_board_state(project_dir: Path) -> dict[str, Any]:
 
     artifacts = _collect_artifacts(project_dir, checkpoints)
     events = read_events(project_dir, limit=250)
+    identity = validate_project_identity(project_dir)
     storyboard = _build_storyboard(project_dir, artifacts, events)
     media = _scan_media(project_dir)
 
@@ -639,7 +789,18 @@ def load_board_state(project_dir: Path) -> dict[str, Any]:
         "project_id": project_id,
         "title": marker.get("title") or meta_json.get("name") or project_id.replace("-", " ").title(),
         "pipeline": pipeline_meta,
+        "release": studio_release_status(),
+        # The work order is deterministic control-plane state, not a creative
+        # artifact. Expose it read-only so Backlot can show queue/resume truth
+        # without reconstructing selections from a stale proposal.
+        "work_order": work_order,
+        "approval_log": approval_log,
+        "qa": _qa_evidence(project_dir, artifacts, approval_log),
+        "identity": identity,
         "style_playbook": marker.get("style_playbook"),
+        "visual_variant": project_config.get("visual_variant"),
+        "voiceover_reused": bool(project_config.get("voiceover_reused")),
+        "voiceover_source_project_id": project_config.get("voiceover_source_project_id"),
         "created_at": marker.get("created_at"),
         "has_marker": bool(marker),
         "has_pipeline_state": bool(checkpoints),
@@ -678,6 +839,19 @@ def summarize_project(project_dir: Path) -> dict[str, Any]:
         "completed_count": len(done),
         "render_count": len(state["media"]["renders"]),
         "scene_count": len((state["storyboard"] or {}).get("scenes", [])),
+        "visual_variant": state.get("visual_variant"),
+        "voiceover_reused": state.get("voiceover_reused", False),
+        "voiceover_source_project_id": state.get("voiceover_source_project_id"),
+        "release_lane": state["pipeline"].get("release_lane"),
+        "release_label": state["pipeline"].get("release_label"),
+        "release_status": state["pipeline"].get("release_status", "not_certified"),
+        "production_ready": False,
+        "production_gate": state["pipeline"].get("production_gate", "PR-11G"),
+        "work_order_status": (state.get("work_order") or {}).get("status"),
+        "work_order_run_id": (state.get("work_order") or {}).get("run_id"),
+        "work_order_next_stage": (state.get("work_order") or {}).get("next_stage"),
+        "identity_valid": bool((state.get("identity") or {}).get("valid")),
+        "identity_issue_count": len((state.get("identity") or {}).get("issues") or []),
     }
 
 
@@ -707,6 +881,14 @@ def list_projects(projects_dir: Optional[Path] = None) -> list[dict[str, Any]]:
                 "completed_count": 0,
                 "render_count": 0,
                 "scene_count": 0,
+                "release_lane": "experimental",
+                "release_label": "Experimental — internal preview only",
+                "release_status": "not_certified",
+                "production_ready": False,
+                "production_gate": "PR-11G",
+                "work_order_status": None,
+                "work_order_run_id": None,
+                "work_order_next_stage": None,
                 "error": "unreadable",
             })
     summaries.sort(key=lambda s: (not s["live"], -(s["last_activity"] or 0)))

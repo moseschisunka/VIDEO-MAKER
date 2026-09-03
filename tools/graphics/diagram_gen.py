@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import textwrap
 import time
 from pathlib import Path
 from typing import Any
@@ -123,6 +124,9 @@ class DiagramGen(BaseTool):
         start = time.time()
 
         try:
+            from lib.diagram_contracts import validate_diagram_spec, validate_diagram_render
+
+            semantic = validate_diagram_spec(inputs)
             if diagram_type == "mermaid":
                 result = self._render_mermaid(inputs)
             elif diagram_type in ("flowchart", "boxes"):
@@ -132,6 +136,15 @@ class DiagramGen(BaseTool):
         except Exception as e:
             return ToolResult(success=False, error=f"Diagram generation failed: {e}")
 
+        if result.success:
+            output = (result.data or {}).get("output") if isinstance(result.data, dict) else None
+            if output:
+                try:
+                    render_facts = validate_diagram_render(output)
+                except Exception as exc:
+                    return ToolResult(success=False, data={"semantic_validation": semantic}, error=f"Diagram render validation failed: {exc}")
+                result.data["semantic_validation"] = semantic
+                result.data["render_validation"] = render_facts
         result.duration_seconds = round(time.time() - start, 2)
         return result
 
@@ -226,9 +239,6 @@ class DiagramGen(BaseTool):
             y_offset += 50
 
         # Layout boxes in a grid
-        if not boxes:
-            boxes = [{"label": "Empty"}]
-
         cols = min(len(boxes), 4)
         rows = (len(boxes) + cols - 1) // cols
         box_w = min(200, (width - 80) // cols - 20)
@@ -252,14 +262,17 @@ class DiagramGen(BaseTool):
                 width=2,
             )
 
-            label = box.get("label", f"Box {i}")
-            bbox = draw.textbbox((0, 0), label, font=font)
-            lw = bbox[2] - bbox[0]
-            lh = bbox[3] - bbox[1]
-            draw.text(
-                (x + (box_w - lw) // 2, y + (box_h - lh) // 2),
-                label, fill=text_color, font=font,
-            )
+            label = str(box.get("label", f"Box {i}"))
+            lines = textwrap.wrap(label, width=max(8, int(box_w / 10))) or [label]
+            line_boxes = [draw.textbbox((0, 0), line, font=font) for line in lines]
+            line_height = max((box[3] - box[1] for box in line_boxes), default=18)
+            total_height = len(lines) * line_height
+            for line_index, (line, bbox) in enumerate(zip(lines, line_boxes)):
+                lw = bbox[2] - bbox[0]
+                draw.text(
+                    (x + (box_w - lw) // 2, y + (box_h - total_height) // 2 + line_index * line_height),
+                    line, fill=text_color, font=font,
+                )
 
             box_positions.append((x, y, x + box_w, y + box_h))
 
@@ -292,7 +305,7 @@ class DiagramGen(BaseTool):
             if conn_label:
                 mid_x = (start_x + end_x) // 2
                 mid_y = (start_y + end_y) // 2
-                draw.text((mid_x + 5, mid_y - 10), conn_label, fill=text_color, font=font)
+                draw.text((mid_x + 5, mid_y - 10), str(conn_label)[:32], fill=text_color, font=font)
 
         img.save(output_path)
 

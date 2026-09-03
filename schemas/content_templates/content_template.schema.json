@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/content_templates/content_template",
+  "title": "Content Production Template",
+  "description": "Reusable audience, teaching, packaging, production, and safety contract for a content format.",
+  "type": "object",
+  "required": ["version", "id", "name", "category", "audience", "promise", "structure", "production", "thumbnail", "quality_gates"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "category": { "type": "string", "enum": ["exam_lesson", "concept_explainer", "study_methods", "teacher_onboarding", "product_demonstration", "shorts"] },
+    "description": { "type": "string" },
+    "audience": {
+      "type": "object",
+      "required": ["primary", "need", "levels"],
+      "properties": {
+        "primary": { "type": "string" },
+        "secondary": { "type": "array", "items": { "type": "string" } },
+        "need": { "type": "string" },
+        "levels": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+    "promise": {
+      "type": "object",
+      "required": ["viewer_outcome", "central_question_required", "truthfulness_rule"],
+      "properties": {
+        "viewer_outcome": { "type": "string" },
+        "central_question_required": { "type": "boolean" },
+        "misconception_required": { "type": "boolean" },
+        "truthfulness_rule": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "structure": {
+      "type": "object",
+      "required": ["opening", "beats", "ending"],
+      "properties": {
+        "opening": {
+          "type": "object",
+          "required": ["must_show", "must_say", "max_seconds"],
+          "properties": {
+            "must_show": { "type": "string" },
+            "must_say": { "type": "string" },
+            "max_seconds": { "type": "number", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "beats": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["id", "purpose", "visual_requirement"],
+            "properties": {
+              "id": { "type": "string" },
+              "purpose": { "type": "string" },
+              "plot": { "type": "string", "enum": ["A", "B", "both"] },
+              "visual_requirement": { "type": "string" },
+              "viewer_question": { "type": "string" },
+              "required": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "ending": {
+          "type": "object",
+          "required": ["payoff", "next_step"],
+          "properties": {
+            "payoff": { "type": "string" },
+            "next_step": { "type": "string" },
+            "outro_limit_seconds": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "production": {
+      "type": "object",
+      "required": ["default_pipeline", "formats", "required_artifacts"],
+      "properties": {
+        "default_pipeline": { "type": "string" },
+        "formats": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "compatible_playbooks": { "type": "array", "items": { "type": "string" } },
+        "required_artifacts": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "source_modes": { "type": "array", "items": { "type": "string" } },
+        "duration_guidance": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "thumbnail": {
+      "type": "object",
+      "required": ["concepts", "on_image_word_target", "required_checks"],
+      "properties": {
+        "concepts": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+        "on_image_word_target": { "type": "string" },
+        "required_checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+    "shorts": {
+      "type": "object",
+      "properties": {
+        "derivative_allowed": { "type": "boolean" },
+        "self_contained_required": { "type": "boolean" },
+        "mechanisms": { "type": "array", "items": { "type": "string" } },
+        "first_frame_rule": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "localization": {
+      "type": "object",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "languages": { "type": "array", "items": { "type": "string" } },
+        "priority": { "type": "string" },
+        "human_review_required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "consent": {
+      "type": "object",
+      "properties": {
+        "teacher_consent_required": { "type": "boolean" },
+        "student_identifiable_consent_required": { "type": "boolean" },
+        "evidence_required_before_publish": { "type": "boolean" },
+        "scope": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "quality_gates": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+  },
+  "additionalProperties": false
+}

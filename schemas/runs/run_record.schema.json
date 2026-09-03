@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/runs/run_record",
+  "title": "OpenMontage Run Record",
+  "description": "Durable execution and output-provenance record for one manifest run.",
+  "type": "object",
+  "required": [
+    "version",
+    "project_id",
+    "pipeline_type",
+    "run_id",
+    "attempt",
+    "status",
+    "created_at",
+    "updated_at",
+    "started_at",
+    "finished_at",
+    "work_order_ref",
+    "current_stage",
+    "next_stage",
+    "artifacts"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "pipeline_type": { "type": "string", "minLength": 1 },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "preflighting",
+        "running",
+        "awaiting_approval",
+        "revising",
+        "failed",
+        "cancelled",
+        "completed"
+      ]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "started_at": { "type": ["string", "null"], "format": "date-time" },
+    "finished_at": { "type": ["string", "null"], "format": "date-time" },
+    "work_order_ref": { "type": "string", "minLength": 1 },
+    "current_stage": { "type": ["string", "null"] },
+    "next_stage": { "type": ["string", "null"] },
+    "last_successful_stage": { "type": ["string", "null"] },
+    "last_successful_checkpoint": { "type": ["string", "null"] },
+    "artifacts": {
+      "type": "object",
+      "description": "Canonical artifact paths keyed by artifact name or checkpoint reference.",
+      "additionalProperties": {
+        "$ref": "#/$defs/artifactProvenance"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifactProvenance" }
+    },
+    "last_error": { "type": ["string", "null"] },
+    "metadata": { "type": "object", "additionalProperties": true }
+  },
+  "$defs": {
+    "artifactProvenance": {
+      "type": "object",
+      "required": [
+        "path",
+        "project_id",
+        "pipeline_type",
+        "run_id",
+        "attempt",
+        "stage",
+        "tool",
+        "recorded_at"
+      ],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "artifact_name": { "type": "string", "minLength": 1 },
+        "project_id": { "type": "string", "minLength": 1 },
+        "pipeline_type": { "type": "string", "minLength": 1 },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "stage": { "type": "string", "minLength": 1 },
+        "tool": { "type": "string", "minLength": 1 },
+        "agent_id": { "type": ["string", "null"] },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": { "type": ["integer", "null"], "minimum": 0 },
+        "created_at": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

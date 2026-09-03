@@ -44,7 +44,7 @@ logged in `decision_log`. Silent runtime swaps are a contract violation.
 | Scenario | Prefer | Why |
 |----------|--------|-----|
 | Existing explainer, React scene component stack (text_card, stat_card, chart scenes, caption overlay, TalkingHead, CinematicRenderer) | **Remotion** | These compositions already exist in `remotion-composer/`. Reusing them is free; replicating them in HTML is not. |
-| Word-level caption burn / karaoke captions | **Remotion** | `remotion_caption_burn` is Remotion-specific and is NOT at parity on HyperFrames day 1. |
+| Word-level caption burn / karaoke captions | **Remotion** | `remotion_caption_burn` remains the word-level/karaoke path; HyperFrames certifies segment/phrase captions through the shared caption contract. |
 | Avatar / lip-sync presenter | **Remotion** | `TalkingHead` composition lives in Remotion. No HyperFrames equivalent yet. |
 | Kinetic typography, heavy text motion, GSAP-native animation | **HyperFrames** | HTML/GSAP is the natural medium. Expressing this as Remotion `interpolate()` calls is slow and fragile. |
 | Product promo / launch reel / marketing title card | **HyperFrames** | CSS/GSAP composition grammar matches how designers already think about these. Templates (`kinetic-type`, `product-promo`, `swiss-grid`) give a strong starting point. |
@@ -88,7 +88,7 @@ approval before switching runtime.
 Do **not** attempt to port these to HyperFrames on day 1. They require
 dedicated parity work:
 
-- `remotion_caption_burn` (word-by-word burned captions)
+- `remotion_caption_burn` word-by-word/karaoke behavior (HyperFrames supports certified segment/phrase overlays, not karaoke)
 - `TalkingHead` composition (avatar/lip-sync presenter)
 - Existing documentary-montage end-tag overlay stack (relies on specific
   Remotion components)
@@ -148,18 +148,28 @@ OpenMontage artifacts into HyperFrames project files:
 | OpenMontage artifact field | HyperFrames target |
 |---|---|
 | `edit_decisions.cuts[]` (sequence of scenes) | `index.html` timeline, one `<div data-composition-id data-composition-src>` per cut |
-| `edit_decisions.cuts[i].in_seconds / out_seconds` | `data-start` / `data-duration` on the clip element |
+| `edit_decisions.cuts[i].in_seconds / out_seconds` | `data-start` / `data-duration` on the clip element; gaps are retained exactly and invalid/unknown cut shapes are rejected before scaffold |
+| `edit_decisions.cuts[i].source_in_seconds` / `media_start_seconds` | `data-media-start` on the host media element |
 | `edit_decisions.cuts[i].type` (scene kind) | Registry block installed via `hyperframes add`, OR a hand-authored sub-composition template |
 | `asset_manifest.assets[]` paths | Copied or symlinked into `projects/<p>/hyperframes/assets/` and referenced with relative `src=` |
-| `audio.narration.segments[]` | `<audio>` element with matching `data-start` / `data-duration` |
-| `audio.music` | Second `<audio>` element, lower `data-volume` |
-| `subtitles` (enabled + source) | Either a registry `captions` block or hand-authored per-word spans — NOT `remotion_caption_burn` |
+| `audio.narration.segments[]` | One direct-child `<audio>` per segment with `data-start`, `data-duration`, and `data-media-start` (source offset) |
+| `audio.music` | Separate music stem with `data-volume`, `data-media-start`, loop, fade, and deterministic ducking volume keyframes |
+| `audio.sfx[]` | Separate SFX stem with its own timeline start, source offset, and volume |
+| `subtitles` (enabled + source) | Shared caption contract; HyperFrames renders certified segment/phrase overlays or packages a sidecar, while Remotion retains word-level/karaoke behavior |
 | Selected playbook (`flat-motion-graphics`, `clean-professional`, etc.) | `:root` CSS custom properties + `DESIGN.md`. See `lib/hyperframes_style_bridge.py`. |
 | `renderer_family` | Controls which top-level HTML template is used and which registry blocks are pre-installed |
 
 The concrete rendering is: `hyperframes_compose` writes files into the
-workspace, runs `lint → validate → render`, and returns a `render_report`
+run-scoped workspace, runs `scaffold → lint → validate → inspect → render`
+in production mode, and returns a `render_report`
 with the path to the generated MP4. See `tools/video/hyperframes_compose.py`.
+
+Production workspaces also contain a local `vendor/gsap.min.js`,
+`EDIT_MAPPING.json`, `audio_plan.json`, and `index.motion.json`. These files
+make the runtime dependency, canonical timing/audio mapping, and inspectable
+motion intent explicit. A public CDN is never loaded by a production render;
+the registry URL in `hyperframes.json` is only for the explicit `add_block`
+operation.
 
 ### Workspace-local authoring artifacts
 
@@ -240,7 +250,7 @@ fix by effort:
 HyperFrames ships a real validation stack. Run **all** of these before
 declaring a render complete:
 
-1. **`npx hyperframes lint`** — static contract checks (duplicate ids,
+1. **`npx hyperframes lint --strict`** — static contract checks (duplicate ids,
    overlapping tracks, missing `data-composition-id`, unregistered timelines).
    MUST pass before render.
 2. **`npx hyperframes validate`** — browser-based runtime checks: seeks into
@@ -248,8 +258,11 @@ declaring a render complete:
    contrast ratios, verifies `window.__timelines` registration and
    `class="clip"` on timed elements. MUST pass before render (contrast can
    be deferred with `--no-contrast` during iteration, but not for final).
-3. **`npx hyperframes render --quality standard`** — produces the MP4.
-4. **Post-render final review** — probe with ffprobe, sample frames,
+3. **`npx hyperframes inspect --strict`** — seek/layout/motion checks; any
+   critical issue blocks delivery.
+4. **`npx hyperframes render --quality standard --workers <safe-count>`** —
+   produces the MP4 only after the prior gates pass.
+5. **Post-render final review** — probe with ffprobe, sample frames,
    transcribe audio, compare to script. Same contract as the Remotion path.
    See `final_review.schema.json`.
 

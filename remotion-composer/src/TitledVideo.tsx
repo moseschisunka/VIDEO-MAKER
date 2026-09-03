@@ -10,16 +10,10 @@ import {
   useVideoConfig,
 } from "remotion";
 import { getVideoMetadata } from "@remotion/media-utils";
-import { loadFont } from "@remotion/google-fonts/PlayfairDisplay";
+// Editorial serif fallback chain; no network font download is required.
+const fontFamily = "Playfair Display, Georgia, serif";
 
-// Editorial serif for the tagline — Playfair Display at its boldest weight.
-// Loaded once at module scope so every render reuses the same font face.
-const { fontFamily } = loadFont("normal", {
-  weights: ["400", "700", "900"],
-  subsets: ["latin"],
-});
-
-export interface TitledVideoProps {
+export interface TitledVideoProps extends Record<string, unknown> {
   videoSrc: string;
   tagline: string;
   // When the tagline starts animating in, in seconds from the start of the video.
@@ -216,20 +210,23 @@ export const TitledVideo: React.FC<TitledVideoProps> = ({
       ? Math.round(taglineOutSeconds * fps)
       : durationInFrames;
   const overlayFrames = Math.max(1, endFrame - inFrame);
+  const hasVideo = Boolean(videoSrc?.trim());
 
   return (
     <AbsoluteFill style={{ background: "#000" }}>
       {/* Full-bleed background video — no fades, no vignette, no color shift.
-          The source is already color-graded final.mp4 with music baked in;
-          we play it through untouched, audio included. */}
-      <OffthreadVideo
-        src={resolveAsset(videoSrc)}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-        }}
-      />
+          An empty source is an intentional assetless preview; a declared
+          source remains strict and is never silently replaced. */}
+      {hasVideo ? (
+        <OffthreadVideo
+          src={resolveAsset(videoSrc)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      ) : null}
 
       {/* Tagline overlay in its own Sequence so it mounts exactly on the
           fade-in frame and carries its own local frame counter. */}
@@ -252,6 +249,14 @@ export const TitledVideo: React.FC<TitledVideoProps> = ({
 export const calculateTitledVideoMetadata: CalculateMetadataFunction<
   TitledVideoProps
 > = async ({ props }) => {
+  if (!props.videoSrc?.trim()) {
+    return {
+      durationInFrames: 30 * 60,
+      fps: 30,
+      width: 1920,
+      height: 1080,
+    };
+  }
   try {
     const meta = await getVideoMetadata(resolveAsset(props.videoSrc));
     return {

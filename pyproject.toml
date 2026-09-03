@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openmontage"
+version = "0.1.0"
+description = "AI-Orchestrated Video Production Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "jsonschema>=4.20",
+    "python-dotenv>=1.0",
+    "Pillow>=10.0",
+    "numpy>=1.24",
+    "requests>=2.31",
+    "filelock>=3.13",
+    "google-auth>=2.0",
+    "google-genai>=1.0.0",
+    "openai>=2.44.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "watchfiles>=0.21",
+]
+
+[project.optional-dependencies]
+dev = [
+    "setuptools>=69",
+    "wheel>=0.45",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.24",
+    "tomli>=2.0; python_version < '3.11'",
+]
+gpu = [
+    "torch>=2.0",
+    "torchaudio>=2.0",
+    "torchvision>=0.15",
+    "diffusers>=0.30",
+    "transformers>=4.40",
+    "accelerate>=0.30",
+]
+
+[tool.setuptools.packages.find]
+include = [
+    "backlot*",
+    "config*",
+    "content_templates*",
+    "lib*",
+    "pipeline_defs*",
+    "profiles*",
+    "schemas*",
+    "skills*",
+    "styles*",
+    "tools*",
+]
+
+[tool.setuptools.package-data]
+"backlot" = ["ui/**/*"]
+"config" = ["*.json", "*.yaml", "*.yml"]
+"content_templates" = ["*.yaml", "*.yml", "*.json"]
+"pipeline_defs" = ["*.yaml", "*.yml"]
+"profiles" = ["*.yaml", "*.yml", "*.json"]
+"schemas" = ["**/*.json", "**/*.yaml", "**/*.yml"]
+"skills" = ["**/*.md", "**/*.yaml", "**/*.yml", "**/*.json"]
+"styles" = ["*.yaml", "*.yml", "*.json"]
+"tools" = ["_comfyui/workflows/**/*", "video/vendor/**/*"]
+
+# The application still resolves these legacy root-relative paths at runtime.
+# Keep them in the wheel while the resource-root migration is handled in a
+# later packaging hardening task; PR-1001 tests the installed paths directly.
+[tool.setuptools.data-files]
+"." = ["config.yaml"]
+"remotion-composer" = [
+    "remotion-composer/package.json",
+    "remotion-composer/package-lock.json",
+    "remotion-composer/tsconfig.json",
+    "remotion-composer/SCENE_TYPES.md",
+    "remotion-composer/titled_video_props.json",
+]
+"remotion-composer/src" = [
+    "remotion-composer/src/*.tsx",
+    "remotion-composer/src/*.ts",
+    "remotion-composer/src/*.json",
+]
+"remotion-composer/src/cinematic" = ["remotion-composer/src/cinematic/*.tsx", "remotion-composer/src/cinematic/*.ts"]
+"remotion-composer/src/components" = ["remotion-composer/src/components/*.tsx", "remotion-composer/src/components/*.ts"]
+"remotion-composer/src/components/charts" = ["remotion-composer/src/components/charts/*.tsx", "remotion-composer/src/components/charts/*.ts"]
+"remotion-composer/src/lib" = ["remotion-composer/src/lib/*.tsx", "remotion-composer/src/lib/*.ts", "remotion-composer/src/lib/*.json"]
+"remotion-composer/public" = ["remotion-composer/public/*.json", "remotion-composer/public/*.png", "remotion-composer/public/*.mp3", "remotion-composer/public/*.mp4"]
+"remotion-composer/public/demo-props" = ["remotion-composer/public/demo-props/*.json"]
+"remotion-composer/public/projects" = ["remotion-composer/public/projects/*.json", "remotion-composer/public/projects/*.png", "remotion-composer/public/projects/*.mp3", "remotion-composer/public/projects/*.mp4"]
+"remotion-composer/public/projects/explainer-what-is-biology" = ["remotion-composer/public/projects/explainer-what-is-biology/*.json"]
+"remotion-composer/public/projects/explainer-what-is-biology/assets" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/*.json", "remotion-composer/public/projects/explainer-what-is-biology/assets/*.png", "remotion-composer/public/projects/explainer-what-is-biology/assets/*.mp3", "remotion-composer/public/projects/explainer-what-is-biology/assets/*.mp4"]
+"remotion-composer/public/projects/explainer-what-is-biology/assets/audio" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/audio/*"]
+"remotion-composer/public/projects/explainer-what-is-biology/assets/images" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/images/*"]
+"remotion-composer/public/projects/explainer-what-is-biology/assets/music" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/music/*"]
+"remotion-composer/public/projects/explainer-what-is-biology/assets/video" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/video/*"]
+"remotion-composer/public/talking-head" = ["remotion-composer/public/talking-head/*"]

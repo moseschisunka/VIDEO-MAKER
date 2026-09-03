@@ -179,8 +179,8 @@ class ComfyUIMusic(BaseTool):
     def estimate_runtime(self, inputs: dict[str, Any]) -> float:
         return float(inputs.get("steps", 50)) * 2.0
 
-    def get_info(self) -> dict[str, Any]:
-        info = super().get_info()
+    def get_info(self, *, include_status: bool = True) -> dict[str, Any]:
+        info = super().get_info(include_status=include_status)
         info["setup_offer"] = self.setup_offer
         info["bundled_model_stack"] = BUNDLED_MODEL_STACKS["ace-step-1-t2a"]
         return info
@@ -283,18 +283,25 @@ class ComfyUIMusic(BaseTool):
 
         duration = self._probe_duration(paths[0])
         model_name = self._model_name(inputs, custom_workflow)
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "comfyui",
+            "model": model_name,
+            "prompt": inputs["prompt"],
+            "lyrics": inputs.get("lyrics", ""),
+            "duration_seconds": duration,
+            "output": str(paths[0]),
+            "format": paths[0].suffix.lstrip("."),
+            "workflow_provenance": provenance,
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data, inputs, source_tool=self.name
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "comfyui",
-                "model": model_name,
-                "prompt": inputs["prompt"],
-                "lyrics": inputs.get("lyrics", ""),
-                "duration_seconds": duration,
-                "output": str(paths[0]),
-                "format": paths[0].suffix.lstrip("."),
-                "workflow_provenance": provenance,
-            },
+            data=result_data,
             artifacts=[str(p) for p in paths],
             cost_usd=0.0,
             duration_seconds=round(time.time() - start, 2),

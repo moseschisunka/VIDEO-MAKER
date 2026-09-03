@@ -7,6 +7,25 @@
   "required": ["version", "concept_options", "selected_concept", "production_plan", "cost_estimate", "approval"],
   "properties": {
     "version": { "type": "string", "const": "1.0" },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "description": "Immutable project identity copied from the durable work order"
+    },
+    "pipeline_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Selected pipeline manifest name; must match the work order"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "UUIDv4 execution identity copied from the durable work order"
+    },
+    "output_profile": { "type": "string", "minLength": 1, "description": "Canonical media profile locked at proposal" },
+    "profile": { "type": "string", "minLength": 1, "description": "Compatibility alias for output_profile" },
+    "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
+    "target_duration_seconds": { "type": "number", "minimum": 1 },
     "concept_options": {
       "type": "array",
       "items": {
@@ -29,6 +48,9 @@
             "enum": ["youtube", "instagram", "tiktok", "linkedin", "generic"]
           },
           "target_duration_seconds": { "type": "number", "minimum": 1 },
+          "output_profile": { "type": "string", "minLength": 1 },
+          "profile": { "type": "string", "minLength": 1 },
+          "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
           "key_points": {
             "type": "array",
             "items": { "type": "string" },
@@ -66,9 +88,13 @@
     },
     "production_plan": {
       "type": "object",
-      "required": ["pipeline", "stages", "render_runtime"],
+      "required": ["pipeline", "stages", "render_runtime", "music_source"],
       "properties": {
         "pipeline": { "type": "string", "description": "Pipeline manifest name, e.g., 'animated-explainer'" },
+        "output_profile": { "type": "string", "minLength": 1 },
+        "profile": { "type": "string", "minLength": 1 },
+        "aspect_ratio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "21:9", "4:3"] },
+        "target_duration_seconds": { "type": "number", "minimum": 1 },
         "playbook": { "type": "string", "description": "Selected style playbook" },
         "stages": {
           "type": "array",
@@ -160,6 +186,16 @@
           "enum": ["templated", "atelier"],
           "description": "Locked at proposal — HOW the composition is built (orthogonal to render_runtime). templated=assemble stock cut.type scenes (Explainer/CinematicRenderer); atelier=hand-author a project-local composition from scratch with no creative-component reuse. Default atelier for hero work. See AGENT_GUIDE.md → 'Composition Authoring Mode' and skills/meta/bespoke-composition.md. The decision MUST be logged in decision_log with category='composition_mode' and BOTH options presented."
         },
+        "duration_policy": {
+          "type": "string",
+          "enum": ["target_led", "content_led"],
+          "description": "Whether the requested duration is a target or a flexible floor while narration and teaching content determine the final length."
+        },
+        "requested_duration_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "User-requested duration used to seed the initial beat count; not a maximum when duration_policy is content_led."
+        },
         "art_direction": {
           "type": "string",
           "description": "Required when composition_mode='atelier'. Short note (or path to art-direction.md) committing to a fresh visual language for THIS piece — palette, type, motion, signature device. Per skills/meta/bespoke-composition.md step 1, written down BEFORE authoring scenes."
@@ -168,21 +204,46 @@
         "music_source": {
           "type": "object",
           "description": "Resolved music plan from the proposal stage",
+          "required": ["source_type"],
           "properties": {
             "source_type": { "type": "string", "enum": ["user_library", "ai_generated", "bring_your_own", "none"] },
             "track_path": { "type": "string", "description": "Path to selected track, if known" },
             "provider": { "type": "string", "description": "Music generation provider, if AI-generated" },
             "mood_direction": { "type": "string", "description": "Music mood description from research" },
+            "prompt": { "type": "string", "description": "Exact generation prompt, if AI-generated" },
+            "model": { "type": "string", "description": "Exact generation model, if AI-generated" },
+            "license": { "type": "string", "description": "Known license or rights basis" },
+            "license_url": { "type": "string", "description": "URL for the license or rights record" },
+            "source_url": { "type": "string", "description": "Source URL for a user-supplied or library track" },
+            "reason": { "type": "string", "description": "Required explanation when no music is selected" },
             "estimated_cost_usd": { "type": "number", "minimum": 0 }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": { "properties": { "source_type": { "const": "none" } } },
+              "then": { "required": ["reason"], "not": { "required": ["track_path"] } }
+            },
+            {
+              "if": { "properties": { "source_type": { "enum": ["user_library", "bring_your_own"] } } },
+              "then": { "required": ["track_path"] }
+            },
+            {
+              "if": { "properties": { "source_type": { "const": "ai_generated" } } },
+              "then": { "required": ["provider"], "anyOf": [{ "required": ["prompt"] }, { "required": ["mood_direction"] }] }
+            }
+          ]
         },
         "voice_selection": {
           "type": "object",
           "description": "Selected voice/TTS provider and rationale",
           "properties": {
             "provider": { "type": "string" },
+            "model": { "type": "string", "description": "Exact provider model or variant; never a display-only label." },
             "voice_id": { "type": "string" },
+            "locale": { "type": "string" },
+            "settings": { "type": "object", "additionalProperties": true },
+            "identity_key": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
             "rationale": { "type": "string" },
             "estimated_cost_usd": { "type": "number", "minimum": 0 },
             "delivery_style": {
@@ -196,7 +257,10 @@
             "sample_approval_required": {
               "type": "boolean",
               "description": "True when a TTS sample must be approved before batch narration generation."
-            }
+            },
+            "sample_approved": { "type": "boolean" },
+            "sample_status": { "type": "string", "enum": ["not_required", "pending", "approved", "rejected"] },
+            "sample_asset_id": { "type": "string" }
           },
           "additionalProperties": false
         },

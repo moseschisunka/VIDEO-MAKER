@@ -151,22 +151,32 @@ class FreesoundMusic(BaseTool):
                 duration_seconds=round(time.time() - start, 2),
             )
 
+        from lib.music_contracts import music_provenance_from_output
+
+        result_data = {
+            "provider": "freesound",
+            "sound_id": sound.get("id"),
+            "name": sound.get("name", "Unknown"),
+            "duration_seconds": sound.get("duration"),
+            "avg_rating": sound.get("avg_rating"),
+            "tags": sound.get("tags", []),
+            "query": inputs["query"],
+            "output": str(output_path),
+            "format": "mp3",
+            "license": "Creative Commons (check individual sound license)",
+            "freesound_url": f"https://freesound.org/people/{sound.get('username', '')}/sounds/{sound.get('id', '')}/",
+            "results_found": len(search_result),
+        }
+        result_data["music_provenance"] = music_provenance_from_output(
+            result_data,
+            inputs,
+            source_tool=self.name,
+            source_type="bring_your_own",
+        )
+
         return ToolResult(
             success=True,
-            data={
-                "provider": "freesound",
-                "sound_id": sound.get("id"),
-                "name": sound.get("name", "Unknown"),
-                "duration_seconds": sound.get("duration"),
-                "avg_rating": sound.get("avg_rating"),
-                "tags": sound.get("tags", []),
-                "query": inputs["query"],
-                "output": str(output_path),
-                "format": "mp3",
-                "license": "Creative Commons (check individual sound license)",
-                "freesound_url": f"https://freesound.org/people/{sound.get('username', '')}/sounds/{sound.get('id', '')}/",
-                "results_found": len(search_result),
-            },
+            data=result_data,
             artifacts=[str(output_path)],
             cost_usd=0.0,
             duration_seconds=round(time.time() - start, 2),
