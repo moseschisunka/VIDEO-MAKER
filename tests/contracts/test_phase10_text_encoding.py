@@ -121,3 +121,18 @@ def test_creation_wizard_uses_authoritative_catalogs_and_fails_closed() -> None:
     assert 'availablePipelines.length ? availablePipelines :' not in library_js
     assert 'availablePlaybooks.length ? availablePlaybooks :' not in library_js
     assert 'availableVoices.length ? availableVoices :' not in library_js
+
+
+@pytest.mark.release_blocker
+def test_pipeline_start_errors_are_visible_to_the_creator() -> None:
+    library_js = (REPO_ROOT / "backlot" / "ui" / "library.js").read_text(
+        encoding="utf-8"
+    )
+    board_js = (REPO_ROOT / "backlot" / "ui" / "board.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "if (!runResponse.ok || runData.ok !== true)" in library_js
+    assert "Project created, but automatic run could not start:" in library_js
+    assert "if (!response.ok || data.ok !== true)" in board_js
+    assert "alert(`Run pipeline failed:" in board_js

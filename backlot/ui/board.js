@@ -163,9 +163,14 @@ function renderSlate(s) {
       runBtn.disabled = true;
       runBtn.innerHTML = "<span>▶ Launching...</span>";
       try {
-        await fetch(`/api/project/${encodedProjectId}/run`, { method: "POST" });
+        const response = await fetch(`/api/project/${encodedProjectId}/run`, { method: "POST" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.ok !== true) {
+          throw new Error(data.detail || data.error || `HTTP ${response.status}`);
+        }
       } catch (e) {
         console.error("Run pipeline failed:", e);
+        alert(`Run pipeline failed: ${String(e.message || e).slice(0, 300)}`);
       }
       setTimeout(() => {
         runBtn.disabled = false;

@@ -451,10 +451,20 @@ async function handleCreateProject(e) {
     const data = await res.json();
     if (data.ok && data.project_id) {
       // Trigger background pipeline run immediately
+      let runError = null;
       try {
-        await fetch(`/api/project/${data.project_id}/run`, { method: "POST" });
+        const runResponse = await fetch(`/api/project/${data.project_id}/run`, { method: "POST" });
+        const runData = await runResponse.json().catch(() => ({}));
+        if (!runResponse.ok || runData.ok !== true) {
+          throw new Error(runData.detail || runData.error || `HTTP ${runResponse.status}`);
+        }
       } catch (runErr) {
-        console.warn("Auto-run trigger:", runErr);
+        runError = runErr;
+        console.error("Auto-run trigger failed:", runErr);
+      }
+      if (runError) {
+        const detail = String(runError.message || runError).slice(0, 300);
+        alert(`Project created, but automatic run could not start: ${detail}. Open the project to retry.`);
       }
       window.location.href = `/p/${data.project_id}`;
     } else {
