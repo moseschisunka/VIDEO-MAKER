@@ -38,6 +38,8 @@ structured_logs:
 
 metrics:
   endpoint: /api/metrics
+  scrape_endpoint: /api/metrics/prometheus
+  scrape_format: prometheus_text_0.0.4
   storage: bounded_in_process_snapshot
   slo_contract: config/slo.yaml
   alert_contract: config/alerts.yaml

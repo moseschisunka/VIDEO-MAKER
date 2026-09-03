@@ -177,8 +177,11 @@ corrected fixture path is exercised in supported CI.
 3. `SEC-06` still requires a supported deployment to demonstrate same-origin
    CORS, bearer-only CSRF behavior, and distributed `429` request limiting at
    the trusted edge.
-4. `OBS-02` still requires external metrics/log aggregation or scrape proof
-   and durable SLO denominators; the in-process snapshot resets on restart.
+4. `OBS-02` still requires external metrics/log aggregation and durable SLO
+   denominators. The service now exposes a scrape-compatible
+   `/api/metrics/prometheus` endpoint (see [`PR-1019`](PR-1019.md)), but the
+   in-process snapshot still resets on restart and no approved sink has been
+   exercised.
 5. HyperFrames' clean supported certification now passes, but the frozen
    release-candidate rerun must still repeat the complete matrix before
    `PR-10G` can close.

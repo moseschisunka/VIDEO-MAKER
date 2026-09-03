@@ -48,6 +48,20 @@ From a local Backlot process:
 GET /api/metrics
 ```
 
+For a standard metrics scraper, use the text exposition endpoint:
+
+```text
+GET /api/metrics/prometheus
+Content-Type: text/plain; version=0.0.4
+```
+
+Counters and gauges retain their labels. Latency observations are exported as
+bounded Prometheus summaries (`quantile=0.5` and `quantile=0.95`, plus
+`_count`/`_sum`); histogram buckets are not fabricated. Both endpoints are
+diagnostic snapshots and inherit the same authentication and deployment
+controls. A production deployment still must configure an external scraper,
+durable retention, and long-window SLO aggregation.
+
 The endpoint is protected by the same remote bearer authentication and project
 deployment controls as the rest of Backlot. Operators should export the JSON
 snapshot to the approved monitoring sink without adding prompts, headers, or

@@ -33,6 +33,23 @@ def test_metrics_registry_is_bounded_and_reports_latency_percentiles():
     assert histogram["p95"] == 3.0
 
 
+def test_metrics_registry_exports_deterministic_prometheus_text_without_raw_labels():
+    registry = MetricsRegistry(max_samples=32)
+    registry.increment("runs_total", labels={"status": 'ok\n"quoted"'})
+    registry.set_gauge("queue_depth", 2)
+    registry.observe("run_duration_seconds", 1.5, labels={"runtime": "ffmpeg"})
+
+    output = registry.prometheus_text()
+
+    assert "# TYPE runs_total counter" in output
+    assert 'runs_total{status="ok\\n\\\"quoted\\\""} 1' in output
+    assert "# TYPE queue_depth gauge" in output
+    assert "# TYPE run_duration_seconds summary" in output
+    assert 'run_duration_seconds{quantile="0.5",runtime="ffmpeg"} 1.5' in output
+    assert "run_duration_seconds_count{runtime=\"ffmpeg\"} 1" in output
+    assert output.endswith("\n")
+
+
 def test_event_stream_contains_end_to_end_correlation_without_prompt_content(tmp_path: Path):
     project = tmp_path / "lesson"
     project.mkdir()
@@ -128,6 +145,43 @@ def test_backlot_metrics_endpoint_exposes_bounded_snapshot(monkeypatch: pytest.M
     assert isinstance(body["histograms"], list)
 
 
+def test_backlot_metrics_endpoint_exposes_scrape_compatible_snapshot(monkeypatch: pytest.MonkeyPatch):
+    async def no_watch():
+        return None
+
+    monkeypatch.setattr(server_mod, "_watch_projects", no_watch)
+    monkeypatch.setenv("BACKLOT_HOST", "127.0.0.1")
+    monkeypatch.delenv("BACKLOT_AUTH_REQUIRED", raising=False)
+    monkeypatch.delenv("BACKLOT_AUTH_TOKEN", raising=False)
+    with TestClient(server_mod.create_app()) as client:
+        response = client.get("/api/metrics/prometheus")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain; version=0.0.4")
+    assert response.headers["cache-control"] == "no-store"
+    assert response.text.startswith("# OpenMontage bounded metrics")
+
+
+def test_backlot_scrape_endpoint_inherits_remote_bearer_boundary(monkeypatch: pytest.MonkeyPatch):
+    async def no_watch():
+        return None
+
+    monkeypatch.setattr(server_mod, "_watch_projects", no_watch)
+    monkeypatch.setenv("BACKLOT_HOST", "0.0.0.0")
+    monkeypatch.setenv("BACKLOT_AUTH_TOKEN", "metrics-token")
+    monkeypatch.delenv("BACKLOT_AUTH_REQUIRED", raising=False)
+    with TestClient(server_mod.create_app()) as client:
+        missing = client.get("/api/metrics/prometheus")
+        valid = client.get(
+            "/api/metrics/prometheus",
+            headers={"Authorization": "Bearer metrics-token"},
+        )
+
+    assert missing.status_code == 401
+    assert "metrics-token" not in missing.text
+    assert valid.status_code == 200
+
+
 def test_observability_config_and_operator_doc_match_runtime_contract():
     config = yaml.safe_load(
         (Path(__file__).resolve().parents[2] / "config" / "observability.yaml").read_text(
@@ -144,6 +198,8 @@ def test_observability_config_and_operator_doc_match_runtime_contract():
     assert "run_id" in config["event_stream"]["correlation_fields"]
     assert config["event_stream"]["sensitive_content_policy"]["prompts_and_scripts"] == "hash_and_record_length_only"
     assert config["metrics"]["endpoint"] == "/api/metrics"
+    assert config["metrics"]["scrape_endpoint"] == "/api/metrics/prometheus"
+    assert config["metrics"]["scrape_format"] == "prometheus_text_0.0.4"
     assert config["metrics"]["alert_contract"] == "config/alerts.yaml"
     assert "openmontage_auth_failures_total" in config["metrics"]["names"]
     assert "openmontage_auth_failures_total" in docs

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -995,6 +995,15 @@ def create_app() -> FastAPI:
     async def metrics_endpoint() -> dict:
         """Return bounded in-process metrics for operators and CI probes."""
         return metrics.snapshot()
+
+    @app.get("/api/metrics/prometheus")
+    async def prometheus_metrics_endpoint() -> PlainTextResponse:
+        """Return a scrape-compatible view of the bounded metrics snapshot."""
+        return PlainTextResponse(
+            metrics.prometheus_text(),
+            media_type="text/plain; version=0.0.4",
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/api/release-status")
     async def release_status() -> dict:

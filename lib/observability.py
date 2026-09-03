@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import hashlib
 import logging
+import re
 import threading
 import time
 import uuid
@@ -190,6 +191,116 @@ class MetricsRegistry:
             "gauges": gauges,
             "histograms": histograms,
         }
+
+    @staticmethod
+    def _prometheus_label_name(value: Any) -> str:
+        """Return a valid, deterministic Prometheus label name."""
+        name = re.sub(r"[^a-zA-Z0-9_]", "_", str(value))
+        if not name:
+            name = "label"
+        if name[0].isdigit():
+            name = f"label_{name}"
+        return name
+
+    @staticmethod
+    def _prometheus_label_value(value: Any) -> str:
+        """Escape a label value for the Prometheus text exposition format."""
+        return (
+            str(value)
+            .replace("\\", "\\\\")
+            .replace("\n", "\\n")
+            .replace('"', '\\"')
+        )
+
+    @classmethod
+    def _prometheus_labels(cls, labels: Mapping[str, Any] | None = None) -> str:
+        """Serialize labels without allowing malformed keys or values."""
+        normalized: dict[str, str] = {}
+        for key, value in sorted((labels or {}).items(), key=lambda item: str(item[0])):
+            label_name = cls._prometheus_label_name(key)
+            # Registry labels are normally already unique and safe.  Preserve
+            # both values deterministically if a caller supplied colliding
+            # names such as ``scene-id`` and ``scene_id``.
+            if label_name in normalized:
+                suffix = 2
+                candidate = f"{label_name}_{suffix}"
+                while candidate in normalized:
+                    suffix += 1
+                    candidate = f"{label_name}_{suffix}"
+                label_name = candidate
+            normalized[label_name] = cls._prometheus_label_value(value)
+        if not normalized:
+            return ""
+        return "{" + ",".join(
+            f'{key}="{value}"' for key, value in sorted(normalized.items())
+        ) + "}"
+
+    @staticmethod
+    def _prometheus_number(value: Any) -> str:
+        """Format finite metric values without locale-dependent output."""
+        number = float(value)
+        if number == float("inf"):
+            return "+Inf"
+        if number == float("-inf"):
+            return "-Inf"
+        if number != number:
+            return "NaN"
+        return format(number, ".12g")
+
+    def prometheus_text(self) -> str:
+        """Render the bounded snapshot as Prometheus text exposition.
+
+        Counters and gauges preserve their metric names.  Bounded latency
+        observations are exported as Prometheus summaries (quantiles plus
+        ``_count``/``_sum``), which is explicit about the fact that this
+        process does not retain bucket data.  The endpoint is scrape-ready;
+        durability and long-window aggregation remain deployment concerns.
+        """
+        snapshot = self.snapshot()
+        lines = [
+            "# OpenMontage bounded metrics (diagnostic snapshot)",
+        ]
+        declared_types: set[str] = set()
+
+        def declare(name: str, metric_type: str) -> None:
+            if name not in declared_types:
+                lines.append(f"# TYPE {name} {metric_type}")
+                declared_types.add(name)
+
+        for item in snapshot["counters"]:
+            name = str(item["name"])
+            declare(name, "counter")
+            lines.append(
+                f"{name}{self._prometheus_labels(item.get('labels'))} "
+                f"{self._prometheus_number(item['value'])}"
+            )
+        for item in snapshot["gauges"]:
+            name = str(item["name"])
+            declare(name, "gauge")
+            lines.append(
+                f"{name}{self._prometheus_labels(item.get('labels'))} "
+                f"{self._prometheus_number(item['value'])}"
+            )
+        for item in snapshot["histograms"]:
+            name = str(item["name"])
+            declare(name, "summary")
+            labels = item.get("labels") or {}
+            for quantile, field in (("0.5", "p50"), ("0.95", "p95")):
+                quantile_labels = dict(labels)
+                quantile_labels["quantile"] = quantile
+                lines.append(
+                    f"{name}{self._prometheus_labels(quantile_labels)} "
+                    f"{self._prometheus_number(item[field])}"
+                )
+            lines.append(
+                f"{name}_count{self._prometheus_labels(labels)} "
+                f"{self._prometheus_number(item['count'])}"
+            )
+            lines.append(
+                f"{name}_sum{self._prometheus_labels(labels)} "
+                f"{self._prometheus_number(item['sum'])}"
+            )
+        return "\n".join(lines) + "\n"
 
     def reset(self) -> None:
         with self._lock:
