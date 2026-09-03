@@ -180,7 +180,7 @@ def _instrument_execute(fn: Callable) -> Callable:
         # saying ``type: boolean`` must not be defeated by Python truthiness
         # (for example, ``"false"`` or ``1``).  Tool-specific contracts still
         # validate nested objects and richer cross-field rules.
-        if isinstance(inputs, dict):
+        if isinstance(inputs, dict) and getattr(self, "schema_boolean_validation", True):
             schema = getattr(self, "input_schema", {})
             properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
             if isinstance(properties, dict):
@@ -368,6 +368,11 @@ class BaseTool(ABC):
     provider: str = "openmontage"
     capabilities: list[str] = []
     input_schema: dict = {}
+    # Most tools use the shared pre-execution schema guard.  A small number of
+    # report-producing QA tools may opt out when their own strict parser must
+    # preserve a structured ``revise`` report instead of returning a transport
+    # failure; such classes must document and enforce that parser themselves.
+    schema_boolean_validation: bool = True
     output_schema: dict = {}
     artifact_schema: dict = {}
     progress_schema: Optional[dict] = None

@@ -11,6 +11,7 @@ from tools.base_tool import BaseTool, ToolResult
 from tools.graphics.dashscope_image import DashscopeImage
 from tools.video.seedance_ark import SeedanceArkVideo
 from tools.video.veo_video import VeoVideo
+from tools.character.character_animation import CharacterAnimationReviewer
 
 
 class _BooleanTool(BaseTool):
@@ -55,3 +56,17 @@ def test_provider_declared_boolean_is_rejected_before_external_work(monkeypatch,
     result = instance.execute({"prompt": "a precise request", field: "false"})
     assert not result.success
     assert f"{field} must be boolean" in (result.error or "")
+
+
+def test_structured_character_reviewer_retains_its_strict_qa_report_contract():
+    result = CharacterAnimationReviewer().execute(
+        {
+            "review_level": "final",
+            "browser_preview_checked": "false",
+            "frame_samples_checked": True,
+        }
+    )
+    assert result.success is True
+    report = result.data["character_qa_report"]
+    assert report["status"] == "revise"
+    assert "browser_preview_checked must be boolean" in report["issues"]

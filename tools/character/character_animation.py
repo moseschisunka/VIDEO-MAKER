@@ -813,6 +813,11 @@ class CharacterAnimationReviewer(BaseTool):
     }
     artifact_schema = {"artifact": "character_qa_report"}
     side_effects = ["optionally writes character_qa_report JSON to output_path"]
+    # This reviewer deliberately returns a structured ``revise`` report for
+    # malformed review flags.  Its execute() parser is the authoritative gate,
+    # so the generic BaseTool transport guard must not replace that report with
+    # a bare ToolResult failure.
+    schema_boolean_validation = False
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         start = time.time()
