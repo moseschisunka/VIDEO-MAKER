@@ -63,3 +63,14 @@ def test_runtime_config_utf8_text_survives_loading() -> None:
 
     assert config.creator_profile == "profiles/teacher — africa.yaml"
     assert "â" not in config.creator_profile
+
+
+@pytest.mark.release_blocker
+def test_creation_wizard_guards_title_only_submissions() -> None:
+    library_js = (REPO_ROOT / "backlot" / "ui" / "library.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'if (!title)' in library_js
+    assert 'if (!topic)' in library_js
+    assert 'Please describe the video topic and key takeaways.' in library_js

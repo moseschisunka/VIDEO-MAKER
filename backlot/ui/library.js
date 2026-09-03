@@ -327,6 +327,17 @@ async function handleCreateProject(e) {
     return;
   }
 
+  // Keep the programmatic submit path aligned with the required textarea.
+  // Native form validation runs for a normal browser submit, but this handler
+  // is also called directly by the click listener and by keyboard submits.
+  // Without this guard a title-only request silently falls back to using the
+  // title as the topic, producing an under-specified creative brief.
+  if (!topic) {
+    alert("Please describe the video topic and key takeaways.");
+    document.getElementById("projectTopic")?.focus();
+    return;
+  }
+
   submitCreateBtn.disabled = true;
   submitCreateBtn.innerHTML = `<span>Creating internal preview...</span>`;
 
