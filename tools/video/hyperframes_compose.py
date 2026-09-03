@@ -543,12 +543,51 @@ class HyperFramesCompose(BaseTool):
             total += max(0.0, out_s - in_s)
         return 30.0 + total * 0.5
 
+    def _policy_flags(self, inputs: dict[str, Any]) -> tuple[bool, bool, bool]:
+        """Parse HyperFrames policy flags without Python truthiness.
+
+        ``strict`` and ``production_mode`` control release-blocking quality
+        checks, while ``offline`` controls whether npm may be contacted.  A
+        malformed value must stop the operation before any workspace mutation
+        or provider/runtime probe.  When ``offline`` is omitted, preserve the
+        instance-level override used by the cached QA harness.
+        """
+        try:
+            strict_mode = (
+                strict_bool(inputs["strict"], "strict")
+                if "strict" in inputs
+                else False
+            )
+            production_mode = (
+                strict_bool(inputs["production_mode"], "production_mode")
+                if "production_mode" in inputs
+                else False
+            )
+            offline_mode = (
+                strict_bool(inputs["offline"], "offline")
+                if "offline" in inputs
+                else bool(getattr(self, "_offline_mode", False))
+            )
+        except MediaContractError:
+            raise
+        return strict_mode, production_mode or strict_mode, offline_mode
+
     # ------------------------------------------------------------------
     # Execute
     # ------------------------------------------------------------------
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
-        operation = inputs["operation"]
+        operation = inputs.get("operation")
+        if operation not in {
+            "render",
+            "lint",
+            "validate",
+            "inspect",
+            "doctor",
+            "scaffold_workspace",
+            "add_block",
+        }:
+            return ToolResult(success=False, error=f"Unknown operation: {operation}")
         start = time.time()
         try:
             # Keep the public ``offline`` contract consistent across every
@@ -558,8 +597,12 @@ class HyperFramesCompose(BaseTool):
             # requested cached-only execution.  Preserve an instance-level
             # diagnostic override when the key is omitted (the opt-in QA
             # harness uses this to exercise a cached runtime across steps).
+            try:
+                _, _, offline_mode = self._policy_flags(inputs)
+            except MediaContractError as exc:
+                return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
             if "offline" in inputs:
-                self._offline_mode = bool(inputs.get("offline"))
+                self._offline_mode = offline_mode
             if operation == "doctor":
                 result = self._doctor(inputs)
             elif operation == "scaffold_workspace":
@@ -574,7 +617,7 @@ class HyperFramesCompose(BaseTool):
                 result = self._render(inputs)
             elif operation == "add_block":
                 result = self._add_block(inputs)
-            else:
+            else:  # pragma: no cover - operation is validated above
                 return ToolResult(success=False, error=f"Unknown operation: {operation}")
         except Exception as e:
             log.exception("hyperframes_compose failed")
@@ -589,7 +632,11 @@ class HyperFramesCompose(BaseTool):
 
     def _doctor(self, inputs: dict[str, Any]) -> ToolResult:
         """Probe the environment. Reports node/ffmpeg/npx plus CLI doctor output."""
-        self._offline_mode = bool(inputs.get("offline"))
+        try:
+            _, _, offline_mode = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
+        self._offline_mode = offline_mode
         check = self._runtime_check()
         out: dict[str, Any] = {"runtime_check": check}
 
@@ -696,12 +743,15 @@ class HyperFramesCompose(BaseTool):
         generated files so they map cleanly to edit_decisions. `init` is
         meant for humans bootstrapping a project by hand.
         """
+        try:
+            _, production_mode, _ = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
         workspace = self._resolve_workspace(inputs)
         edit_decisions = inputs.get("edit_decisions") or {}
         asset_manifest = inputs.get("asset_manifest") or {}
         playbook = inputs.get("playbook") or {}
         profile_name = inputs.get("profile")
-        production_mode = bool(inputs.get("production_mode") or inputs.get("strict"))
         mapping: dict[str, Any] | None = None
 
         if not edit_decisions.get("cuts"):
@@ -856,6 +906,10 @@ class HyperFramesCompose(BaseTool):
         )
 
     def _lint(self, inputs: dict[str, Any]) -> ToolResult:
+        try:
+            _, production_mode, _ = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
         workspace = self._resolve_workspace(inputs)
         if not (workspace / "index.html").exists():
             return ToolResult(
@@ -866,7 +920,6 @@ class HyperFramesCompose(BaseTool):
         # (it is supported by `inspect`).  Production strictness is enforced
         # from the machine-readable finding counts below instead of passing an
         # unsupported flag that would make every render fail immediately.
-        production_mode = bool(inputs.get("strict") or inputs.get("production_mode"))
         args = ["lint", "--json"]
         proc = self._run_hf(args, cwd=workspace, timeout=120, check=False)
         data: dict[str, Any] = {"exit_code": proc.returncode}
@@ -922,6 +975,10 @@ class HyperFramesCompose(BaseTool):
         )
 
     def _validate(self, inputs: dict[str, Any]) -> ToolResult:
+        try:
+            _, production_mode, _ = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
         workspace = self._resolve_workspace(inputs)
         if not (workspace / "index.html").exists():
             return ToolResult(
@@ -947,7 +1004,6 @@ class HyperFramesCompose(BaseTool):
         else:
             data["stdout_tail"] = (proc.stdout or "")[-4000:]
         data["stderr_tail"] = (proc.stderr or "")[-2000:]
-        production_mode = bool(inputs.get("strict") or inputs.get("production_mode"))
         errors = payload.get("errors") if isinstance(payload, dict) else []
         warnings = payload.get("warnings") if isinstance(payload, dict) else []
         if not isinstance(errors, list):
@@ -981,6 +1037,10 @@ class HyperFramesCompose(BaseTool):
 
     def _inspect(self, inputs: dict[str, Any]) -> ToolResult:
         """Run HyperFrames' seek/layout/motion inspection gate."""
+        try:
+            _, production_mode, _ = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
         workspace = self._resolve_workspace(inputs)
         if not (workspace / "index.html").exists():
             return ToolResult(
@@ -988,7 +1048,7 @@ class HyperFramesCompose(BaseTool):
                 error=f"No index.html in {workspace}. Run scaffold_workspace first.",
             )
         args = ["inspect", "--json"]
-        if inputs.get("strict") or inputs.get("production_mode"):
+        if production_mode:
             args.append("--strict")
         proc = self._run_hf(args, cwd=workspace, timeout=300, check=False)
         data: dict[str, Any] = {"exit_code": proc.returncode}
@@ -1056,8 +1116,11 @@ class HyperFramesCompose(BaseTool):
 
     def _render(self, inputs: dict[str, Any]) -> ToolResult:
         """Full pipeline: scaffold → lint → validate → inspect → render."""
-        self._offline_mode = bool(inputs.get("offline"))
-        production_mode = bool(inputs.get("production_mode") or inputs.get("strict"))
+        try:
+            _, production_mode, offline_mode = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid HyperFrames policy control: {exc}")
+        self._offline_mode = offline_mode
         runtime_ok = self._runtime_check()
         if not runtime_ok["runtime_available"]:
             return ToolResult(
@@ -1328,7 +1391,7 @@ class HyperFramesCompose(BaseTool):
                 "media_probe": media_probe,
                 "worker_policy": worker_policy,
                 "resource_budget": resource_budget,
-                "offline": bool(inputs.get("offline")),
+                "offline": offline_mode,
                 "runtime_check": runtime_ok,
                 "caption_render_contract": (scaffold.data or {}).get("caption_render_contract") if isinstance(scaffold.data, dict) else None,
                 "caption_sidecar": (scaffold.data or {}).get("caption_sidecar") if isinstance(scaffold.data, dict) else None,
@@ -1369,7 +1432,10 @@ class HyperFramesCompose(BaseTool):
         raw = inputs.get("workspace_path")
         project_dir = inputs.get("project_dir")
         run_id = inputs.get("run_id")
-        production_mode = bool(inputs.get("production_mode") or inputs.get("strict"))
+        try:
+            _, production_mode, _ = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            raise ValueError(f"Invalid HyperFrames policy control: {exc}") from exc
         if project_dir and run_id:
             try:
                 from lib.paths import run_paths
@@ -1461,7 +1527,10 @@ class HyperFramesCompose(BaseTool):
             )
         except MediaContractError as exc:
             raise CaptionContractError(str(exc)) from exc
-        production_mode = bool(inputs.get("production_mode") or inputs.get("strict"))
+        try:
+            _, production_mode, _ = self._policy_flags(inputs)
+        except MediaContractError as exc:
+            raise ValueError(f"Invalid HyperFrames policy control: {exc}") from exc
         verification: dict[str, Any] | None = None
 
         if isinstance(transcript, dict):
