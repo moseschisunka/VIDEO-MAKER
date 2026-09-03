@@ -9,6 +9,7 @@ in tests/qa/test_09_hyperframes_compose.py and are opt-in.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -257,6 +258,56 @@ def test_runtime_check_succeeds_when_npm_resolves(monkeypatch):
     assert rc["runtime_available"] is True
     assert rc["npm_package_version"] == "0.4.5"
     assert rc["reasons"] == []
+
+
+def test_bounded_process_timeout_does_not_drain_child_pipes(monkeypatch):
+    """Regression: a Windows npm/npx child must not make timeout cleanup hang.
+
+    The helper intentionally uses file-backed stdout/stderr and ``wait``
+    rather than ``communicate`` so a wrapper child retaining inherited pipe
+    handles cannot hold a preflight request indefinitely.
+    """
+    import tools.video.hyperframes_compose as hyperframes_module
+
+    class FakeProcess:
+        pid = 1234
+
+        def __init__(self):
+            self.returncode = None
+            self.wait_calls = 0
+
+        def wait(self, timeout=None):
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                raise subprocess.TimeoutExpired(["fake"], timeout)
+            self.returncode = -9
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    fake = FakeProcess()
+
+    def fake_popen(_cmd, **kwargs):
+        assert kwargs["stdout"] is not subprocess.PIPE
+        assert kwargs["stderr"] is not subprocess.PIPE
+        return fake
+
+    monkeypatch.setattr(hyperframes_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        HyperFramesCompose,
+        "_terminate_process_tree",
+        staticmethod(lambda _process: None),
+    )
+
+    result = HyperFramesCompose._run_bounded_process(["fake"], timeout=0.01)
+
+    assert result.returncode == 124
+    assert "timeout after 0.01s" in result.stderr
+    assert fake.wait_calls == 2
 
 
 def test_video_compose_render_engines_follow_hyperframes_runtime_check(monkeypatch):

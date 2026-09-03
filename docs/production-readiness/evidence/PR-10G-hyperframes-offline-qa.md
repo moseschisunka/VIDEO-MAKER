@@ -65,3 +65,30 @@ python -c "import os,pytest; os.environ['HYPERFRAMES_QA']='1'; os.environ['HYPER
 This confirms the current Windows cache remains executable, but it does not
 change the gate classification: the supported Ubuntu opt-in run and the
 frozen-release-candidate rerun are still outstanding.
+
+## Runtime preflight timeout hardening (2026-09-03)
+
+The Windows runtime probe previously used `subprocess.run()` with an npm
+`.CMD` wrapper. When the npm registry was unreachable, the wrapper's Node
+child could retain inherited stdout/stderr pipe handles after the nominal
+five-second timeout, causing `VideoCompose.get_info()` to block for more than
+one minute. The HyperFrames adapter now runs CLI probes in a bounded process
+group, terminates the complete wrapper tree, and captures output through
+temporary files so cleanup never drains descendant-owned pipes indefinitely.
+
+Verification:
+
+```text
+python -u -c "import time; from tools.video.video_compose import VideoCompose; started=time.perf_counter(); info=VideoCompose().get_info(); print({'elapsed_seconds':round(time.perf_counter()-started,3),'engines':info['render_engines']})"
+```
+
+Result: **5.447 seconds**, with a structured HyperFrames-unavailable status
+(`ffmpeg` and Remotion remained available). The focused adapter suite is now
+**47 passed**, including a regression test that asserts timeout cleanup does
+not use pipe-backed output or an unbounded `communicate()` call. Phase 7/8
+contracts remain **24 passed**, and the explicit cached-runtime QA remains
+**2 passed in 56.15s**.
+
+This is a reliability improvement to the diagnostic and render subprocess
+boundary; it is not the supported Ubuntu HyperFrames certification or the
+frozen-RC evidence required to close `PR-10G`.
