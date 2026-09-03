@@ -136,7 +136,10 @@ def test_ci_hyperframes_gate_runs_full_render_on_pinned_node() -> None:
     assert 'node-version: "22"' in hyperframes
     assert 'HYPERFRAMES_QA: "1"' in hyperframes
     assert 'HYPERFRAMES_QA_RENDER: "1"' in hyperframes
-    assert ".venv/bin/python -m pytest tests -m hyperframes_qa -q" in hyperframes
+    assert ".venv/bin/python -m pytest tests -m hyperframes_qa -q 2>&1 | tee hyperframes-qa.log" in hyperframes
+    assert "actions/upload-artifact@v4" in hyperframes
+    assert "name: openmontage-hyperframes-qa" in hyperframes
+    assert "path: hyperframes-qa.log" in hyperframes
 
 
 def test_ci_waits_for_docker_healthcheck_state_after_http_health() -> None:

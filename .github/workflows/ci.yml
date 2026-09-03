@@ -386,4 +386,12 @@ jobs:
         env:
           HYPERFRAMES_QA: "1"
           HYPERFRAMES_QA_RENDER: "1"
-        run: .venv/bin/python -m pytest tests -m hyperframes_qa -q
+        run: .venv/bin/python -m pytest tests -m hyperframes_qa -q 2>&1 | tee hyperframes-qa.log
+
+      - name: Retain HyperFrames QA evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmontage-hyperframes-qa
+          path: hyperframes-qa.log
+          if-no-files-found: error
