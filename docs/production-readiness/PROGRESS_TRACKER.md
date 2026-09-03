@@ -10,11 +10,11 @@ Do not mark a task complete because code exists. Link current test and review ev
 |---|---|
 | Program status | `IN_PROGRESS` |
 | Current phase | Phase 10 — Packaging, performance, security, and operations |
-| Next task | `PR-10G` (blocked only by external deployment/observability/edge proof and frozen-RC certification) |
+| Next task | `PR-1016` (talking-head executor reconciliation; `PR-10G` remains blocked by external deployment/observability/edge proof and frozen-RC certification) |
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None |
 | Production decision | Not eligible |
-| Last tracker update | Supported run `33740027654` (checkpoint `7646d46`) passed all required jobs: clean install with zero high/critical npm advisories, **1058** release-blocker contracts, **1516** offline regression tests, the hardened container/browser matrix, Ubuntu SLO/load/operations evidence, and the project-relative caption final-review regression; live-provider and HyperFrames opt-ins were skipped. `PR-1015` is verified. Remaining blockers are deployment rollback, external alert delivery/metrics aggregation, trusted-edge security enforcement, and frozen-RC evidence |
+| Last tracker update | `PR-1016` is being verified after reconciling the approved source-footage talking-head launch lane with the ordinary manifest executor. The prior supported run `33740027654` (checkpoint `7646d46`) passed all required jobs: clean install with zero high/critical npm advisories, **1058** release-blocker contracts, **1516** offline regression tests, the hardened container/browser matrix, Ubuntu SLO/load/operations evidence, and the project-relative caption final-review regression; live-provider and HyperFrames opt-ins were skipped. `PR-1015` remains verified. `PR-10G` remains blocked by deployment rollback, external alert delivery/metrics aggregation, trusted-edge security enforcement, and frozen-RC evidence |
 
 ## Status rules
 
@@ -198,7 +198,8 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 | `PR-1013` | Make library state/progress truthful for work-order handoffs | `PR-1006`, `PR-1007` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1013.md`](evidence/PR-1013.md) — removes the hard-coded six-stage denominator, labels queued/running/approval states honestly, and reports a queued handoff at 0%; 10 focused contracts, read-only browser evidence, and supported run `33736220396` pass on the `0f3421d` checkpoint |
 | `PR-1014` | Derive library completion metrics from truthful project state | `PR-1013` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1014.md`](evidence/PR-1014.md) — removes the hard-coded five-stage completion threshold, preserves rendered outputs, and uses one state predicate for metrics/filtering; 10 focused contracts, a read-only browser filter check, and supported run `33736220396` pass on `58439f9` |
 | `PR-1015` | Preserve project-relative caption evidence through final review | `PR-1006`, `PR-1011` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1015.md`](evidence/PR-1015.md) — commit `7646d46`; focused, adjacent, and full offline release-blocker regressions pass locally; supported run `33740027654` passes the release-blocker/offline, clean-install, container/browser, and SLO/load/operations jobs |
-| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1015` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported run `33740027654` passes the current non-opt-in checkpoint, including PR-1015 integration; deployment rollback, external monitoring/alert delivery, trusted-edge enforcement, and frozen-RC evidence remain required |
+| `PR-1016` | Certify the approved source-footage talking-head launch path | `PR-1012`, `PR-1015` | `IN_PROGRESS` | OpenMontage execution agent | Deterministic manifest-faithful talking-head golden path and ordinary `/run` handoff are being reconciled with the approved Option A launch scope; no provider calls |
+| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1016` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported run `33740027654` passes the current non-opt-in checkpoint, including PR-1015 integration; deployment rollback, external monitoring/alert delivery, trusted-edge enforcement, and frozen-RC evidence remain required |
 
 ## Phase 11 tracker
 

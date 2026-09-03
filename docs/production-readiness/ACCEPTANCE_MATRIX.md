@@ -66,7 +66,7 @@ Each manifest discovered by `lib.pipeline_loader` must appear here before releas
 | `localization-dub` | Experimental | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | — |
 | `podcast-repurpose` | Beta | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | — |
 | `screen-demo` | Launch candidate (not certified) | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | — |
-| `talking-head` | Launch candidate (source-footage only; not certified) | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | `NOT_RUN` | — |
+| `talking-head` | Launch candidate (source-footage only; AV certification pending) | `PASS` | `PASS` | `PASS` | `NOT_RUN` | `BLOCKED` | [`evidence/PR-1016.md`](evidence/PR-1016.md) — deterministic manifest executor chain and Backlot handoff pass; human AV/live-provider certification remains Phase 11 |
 | `framework-smoke` | Test only, never user-visible | `NOT_RUN` | `NOT_RUN` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `NOT_RUN` | — |
 
 Pipeline certification requires:

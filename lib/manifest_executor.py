@@ -50,7 +50,7 @@ class ManifestExecutionError(ValueError):
 # thin vertical has been verified.  Keeping the list explicit prevents a
 # newly discovered manifest from being treated as runnable merely because its
 # schema happens to validate.
-CERTIFIED_EXECUTOR_PIPELINES = frozenset({"screen-demo"})
+CERTIFIED_EXECUTOR_PIPELINES = frozenset({"screen-demo", "talking-head"})
 
 
 @dataclass(frozen=True)
