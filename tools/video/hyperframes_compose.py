@@ -19,10 +19,8 @@ import hashlib
 import logging
 import os
 import re
-import signal
 import shutil
 import subprocess
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -2297,134 +2295,6 @@ class HyperFramesCompose(BaseTool):
             if resolved:
                 cmd[0] = resolved
         return self._run_bounded_process(cmd, cwd=cwd, timeout=timeout)
-
-    @staticmethod
-    def _terminate_process_tree(process: subprocess.Popen) -> None:
-        """Terminate a bounded subprocess and any wrapper children it spawned.
-
-        On Windows, invoking `.CMD` shims such as npm/npx creates a child Node
-        process. Killing only the shim can leave that child holding the pipe
-        handles, which makes ``communicate()`` wait forever despite a timeout.
-        Use ``taskkill /T`` for the whole tree, then fall back to ``kill``. On
-        POSIX, the process is started in its own session so the complete
-        process group can be terminated as well.
-        """
-        if os.name == "nt":
-            try:
-                subprocess.run(
-                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                    check=False,
-                )
-            except (OSError, subprocess.SubprocessError):
-                pass
-        else:
-            try:
-                if process.poll() is None:
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            except (OSError, ProcessLookupError):
-                pass
-        try:
-            if process.poll() is None:
-                process.kill()
-        except (OSError, subprocess.SubprocessError):
-            pass
-
-    @classmethod
-    def _run_bounded_process(
-        cls,
-        cmd: list[str],
-        *,
-        timeout: float,
-        cwd: Optional[Path] = None,
-    ) -> subprocess.CompletedProcess:
-        """Run a CLI with a real wall-clock bound on every supported OS.
-
-        ``subprocess.run(timeout=...)`` does not reliably close descendants of
-        Windows `.CMD` wrappers. This helper owns the process, kills the full
-        wrapper tree on timeout, and returns a uniform failed result so callers
-        can surface a structured blocker instead of hanging a preflight or
-        render request.
-        """
-        creationflags = (
-            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-            if os.name == "nt"
-            else 0
-        )
-        # Redirect to regular temporary files instead of OS pipes. A child
-        # created by a Windows ``.CMD`` shim can retain inherited pipe handles
-        # after the wrapper exits; closing/draining those pipes can block the
-        # caller long after ``communicate(timeout=...)`` has expired. Files
-        # preserve diagnostics without coupling cleanup to descendants.
-        stdout_file = tempfile.TemporaryFile(mode="w+b")
-        stderr_file = tempfile.TemporaryFile(mode="w+b")
-
-        def read_capture(stream: Any) -> str:
-            try:
-                stream.flush()
-                stream.seek(0)
-                return stream.read().decode("utf-8", errors="replace")
-            except (OSError, ValueError, AttributeError):
-                return ""
-
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                cwd=str(cwd) if cwd else None,
-                creationflags=creationflags,
-                start_new_session=(os.name != "nt"),
-            )
-        except BaseException:
-            stdout_file.close()
-            stderr_file.close()
-            raise
-        try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            cls._terminate_process_tree(process)
-            try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                # A defensive final kill protects against a misbehaving child
-                # even if taskkill is unavailable or denied. Never wait again
-                # on output streams after this point.
-                try:
-                    process.kill()
-                except (OSError, subprocess.SubprocessError):
-                    pass
-                try:
-                    process.wait(timeout=1)
-                except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
-                    pass
-            return subprocess.CompletedProcess(
-                args=cmd,
-                returncode=124,
-                stdout=read_capture(stdout_file),
-                stderr=f"{read_capture(stderr_file)}\n[timeout after {timeout}s]",
-            )
-        else:
-            return subprocess.CompletedProcess(
-                args=cmd,
-                returncode=process.returncode,
-                stdout=read_capture(stdout_file),
-                stderr=read_capture(stderr_file),
-            )
-        finally:
-            # Temporary files are private run artifacts; cleanup is safe even
-            # if a best-effort kill could not reap a descendant immediately.
-            try:
-                stdout_file.close()
-            except (OSError, ValueError):
-                pass
-            try:
-                stderr_file.close()
-            except (OSError, ValueError):
-                pass
 
     @staticmethod
     def _parse_json_output(stdout: str) -> Optional[Any]:

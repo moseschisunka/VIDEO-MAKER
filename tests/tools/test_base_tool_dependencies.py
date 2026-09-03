@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -46,6 +47,19 @@ class BinaryDependencyTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.returncode, 7)
         self.assertIn("specific stderr", str(ctx.exception))
+
+    def test_run_command_timeout_is_bounded_and_preserves_timeout_exception(self) -> None:
+        tool = DummyTool()
+        started = time.perf_counter()
+
+        with self.assertRaises(subprocess.TimeoutExpired) as ctx:
+            tool.run_command(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                timeout=0.1,
+            )
+
+        self.assertLess(time.perf_counter() - started, 4.0)
+        self.assertIn("timeout after 0.1s", ctx.exception.stderr or "")
 
 
 if __name__ == "__main__":

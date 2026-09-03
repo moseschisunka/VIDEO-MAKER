@@ -12,8 +12,10 @@ import inspect
 import json
 import os
 import platform
+import signal
 import subprocess
 import shutil
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -506,6 +508,123 @@ class BaseTool(ABC):
 
     # ---- CLI helper ----
 
+    @staticmethod
+    def _terminate_process_tree(process: subprocess.Popen) -> None:
+        """Terminate a CLI process and any wrapper children it spawned.
+
+        Windows ``.CMD`` shims such as npm/npx create a child Node process.
+        Killing only the shim can leave that child holding inherited output
+        handles, which makes timeout cleanup block forever.  ``taskkill /T``
+        handles the Windows tree; POSIX commands run in their own session so
+        the complete process group can be terminated there as well.
+        """
+        if os.name == "nt":
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+        else:
+            try:
+                if process.poll() is None:
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                pass
+        try:
+            if process.poll() is None:
+                process.kill()
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    @classmethod
+    def _run_bounded_process(
+        cls,
+        cmd: list[str],
+        *,
+        timeout: Optional[float],
+        cwd: Optional[Path] = None,
+    ) -> subprocess.CompletedProcess:
+        """Run a CLI without allowing wrapper descendants to defeat timeout.
+
+        Output is captured in temporary files rather than OS pipes. A child
+        retaining a pipe after a Windows ``.CMD`` wrapper exits can otherwise
+        make ``communicate()`` wait indefinitely after the deadline.
+        """
+        creationflags = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            if os.name == "nt"
+            else 0
+        )
+        stdout_file = tempfile.TemporaryFile(mode="w+b")
+        stderr_file = tempfile.TemporaryFile(mode="w+b")
+
+        def read_capture(stream: Any) -> str:
+            try:
+                stream.flush()
+                stream.seek(0)
+                return stream.read().decode("utf-8", errors="replace")
+            except (OSError, ValueError, AttributeError):
+                return ""
+
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                cwd=str(cwd) if cwd else None,
+                creationflags=creationflags,
+                start_new_session=(os.name != "nt"),
+            )
+        except BaseException:
+            stdout_file.close()
+            stderr_file.close()
+            raise
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            cls._terminate_process_tree(process)
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    process.kill()
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                try:
+                    process.wait(timeout=1)
+                except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+                    pass
+            result = subprocess.CompletedProcess(
+                args=cmd,
+                returncode=124,
+                stdout=read_capture(stdout_file),
+                stderr=f"{read_capture(stderr_file)}\n[timeout after {timeout}s]",
+            )
+            setattr(result, "_openmontage_timed_out", True)
+            return result
+        else:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=process.returncode,
+                stdout=read_capture(stdout_file),
+                stderr=read_capture(stderr_file),
+            )
+        finally:
+            try:
+                stdout_file.close()
+            except (OSError, ValueError):
+                pass
+            try:
+                stderr_file.close()
+            except (OSError, ValueError):
+                pass
+
     def run_command(
         self,
         cmd: list[str],
@@ -516,39 +635,38 @@ class BaseTool(ABC):
         """Run a subprocess command with standard error handling.
 
         On Windows, resolves .cmd/.bat wrappers (e.g. npx, npm) via
-        shutil.which() so subprocess.run() can find them without shell=True.
+        shutil.which() so the bounded process helper can resolve them without
+        shell=True.
         """
         resolved_cmd = list(cmd)
         if platform.system() == "Windows" and resolved_cmd:
             exe = shutil.which(resolved_cmd[0])
             if exe:
                 resolved_cmd[0] = exe
-        try:
-            return subprocess.run(
+        completed = self._run_bounded_process(
+            resolved_cmd,
+            timeout=timeout,
+            cwd=cwd,
+        )
+        if getattr(completed, "_openmontage_timed_out", False):
+            raise subprocess.TimeoutExpired(
                 resolved_cmd,
-                capture_output=True,
-                text=True,
-                # Force UTF-8 decoding. The default uses the OS locale (cp1252 on
-                # Windows), which raises UnicodeDecodeError on a subprocess that
-                # emits Unicode/emoji (e.g. Remotion's progress output), killing the
-                # reader thread and potentially swallowing the real error text.
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                cwd=cwd,
-                check=True,
+                timeout,
+                output=completed.stdout,
+                stderr=completed.stderr,
             )
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or "").strip()
-            stdout = (exc.stdout or "").strip()
-            detail = stderr or stdout or str(exc)
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            stdout = (completed.stdout or "").strip()
+            detail = stderr or stdout or f"command exited with status {completed.returncode}"
             raise ToolCommandError(
-                exc.returncode,
-                exc.cmd,
-                output=exc.output,
-                stderr=exc.stderr,
+                completed.returncode,
+                resolved_cmd,
+                output=completed.stdout,
+                stderr=completed.stderr,
                 detail=detail,
-            ) from exc
+            )
+        return completed
 
 
 class ToolCommandError(subprocess.CalledProcessError):

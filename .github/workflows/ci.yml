@@ -371,6 +371,11 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
@@ -380,4 +385,5 @@ jobs:
       - name: Run HyperFrames QA explicitly
         env:
           HYPERFRAMES_QA: "1"
+          HYPERFRAMES_QA_RENDER: "1"
         run: .venv/bin/python -m pytest tests -m hyperframes_qa -q

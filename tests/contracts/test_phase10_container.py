@@ -123,6 +123,22 @@ def test_ci_jobs_use_the_environment_where_make_installs_dependencies() -> None:
     assert ".venv/bin/python scripts/run_operations_drill.py" in workflow
 
 
+def test_ci_hyperframes_gate_runs_full_render_on_pinned_node() -> None:
+    """The opt-in gate must certify a real HyperFrames MP4, not only lint.
+
+    The QA suite deliberately skips the expensive render unless
+    ``HYPERFRAMES_QA_RENDER`` is present. Keep that switch and the Node 22
+    runtime next to the workflow so a green job cannot silently become a
+    scaffold-only check.
+    """
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    hyperframes = workflow[workflow.index("  hyperframes:"):]
+    assert 'node-version: "22"' in hyperframes
+    assert 'HYPERFRAMES_QA: "1"' in hyperframes
+    assert 'HYPERFRAMES_QA_RENDER: "1"' in hyperframes
+    assert ".venv/bin/python -m pytest tests -m hyperframes_qa -q" in hyperframes
+
+
 def test_ci_waits_for_docker_healthcheck_state_after_http_health() -> None:
     """An early HTTP 200 must not be mistaken for Docker HEALTHCHECK success."""
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
