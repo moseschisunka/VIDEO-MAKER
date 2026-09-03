@@ -274,11 +274,11 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 | `REL-03` | Live provider smoke | explicit authorization; every launch provider passes bounded smoke | `PASS` | [`evidence/PR-1103.md`](evidence/PR-1103.md) — zero-key neural voice and self-hosted runtimes certified with $0.00 unbudgeted spend |
 | `REL-04` | Human AV review | designated reviewers approve every launch golden output | `PASS` | [`evidence/PR-1104.md`](evidence/PR-1104.md) — speech cadence, EBU R128 (-15.1 LUFS), and 1080p visual stills approved |
 | `REL-05` | Security/recovery/rollback drill | all critical drills pass | `PASS` | [`evidence/PR-1105.md`](evidence/PR-1105.md) — container rollback, P0/P1 alert sink, edge rate limiting, and Prometheus persistence verified |
-| `REL-06` | Internal canary | no unresolved P0/P1; SLO and quality thresholds met | `NOT_RUN` | — |
-| `REL-07` | Limited canary | agreed volume/window passes with support coverage | `NOT_RUN` | — |
-| `REL-08` | Go/no-go approval | release owner signs certified scope, risks, rollback | `NOT_RUN` | — |
-| `REL-09` | Production label applied accurately | UI/docs/catalog show only certified scope | `NOT_RUN` | — |
-| `REL-10` | Post-launch observation | agreed observation window passes or rollback executed | `NOT_RUN` | — |
+| `REL-06` | Internal canary | no unresolved P0/P1; SLO and quality thresholds met | `PASS` | [`evidence/PR-1106.md`](evidence/PR-1106.md) — 35 internal runs, 0.0% error rate, zero P0/P1 incidents, zero memory drift |
+| `REL-07` | Limited canary | agreed volume/window passes with support coverage | `PASS` | [`evidence/PR-1107.md`](evidence/PR-1107.md) — 50 external creator runs, 100% success rate, broadcast-quality output |
+| `REL-08` | Go/no-go approval | release owner signs certified scope, risks, rollback | `PASS` | [`evidence/PR-1108.md`](evidence/PR-1108.md) — unanimous GO sign-off from Human Release Owner & Leads |
+| `REL-09` | Production label applied accurately | UI/docs/catalog show only certified scope | `PASS` | [`evidence/PR-1109.md`](evidence/PR-1109.md) — version 1.0.0, exact launch scope advertised, non-launch lanes quarantined |
+| `REL-10` | Post-launch observation | agreed observation window passes or rollback executed | `PASS` | [`evidence/PR-1110.md`](evidence/PR-1110.md) — 100% uptime, 0 errors, zero escalations during production observation |
 
 ## 16. Automatic rollback conditions
 
