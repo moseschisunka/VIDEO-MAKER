@@ -305,7 +305,13 @@ def inspect_video(
             + ", ".join(f"{item['timestamp_seconds']:.3f}s" for item in black_samples)
         )
     if report["black_intervals"]:
-        errors.append("blackdetect found one or more blank intervals")
+        errors.append(
+            "decoded black/blank intervals detected by blackdetect: "
+            + ", ".join(
+                f"{item['start_seconds']:.3f}-{item['end_seconds']:.3f}s"
+                for item in report["black_intervals"]
+            )
+        )
     long_freezes = [item for item in report["frozen_intervals"] if item.get("duration_seconds", 0) >= 0.8]
     allowed_holds = []
     for raw in allowed_static_holds or []:

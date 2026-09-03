@@ -26,6 +26,44 @@ def test_dockerfile_has_pinned_runtime_non_root_user_and_healthcheck() -> None:
     assert "authorization:'Bearer '+t" in dockerfile
     assert "npm ci --prefix remotion-composer" in dockerfile
     assert "npx --no-install remotion browser ensure" in dockerfile
+    # Remotion's headless Chromium is a project-local immutable binary.  The
+    # image must still include its Debian runtime libraries or the browser
+    # ensure step will pass while every real render fails at process launch.
+    for package in (
+        "ca-certificates",
+        "fonts-liberation",
+        "libasound2",
+        "libatk-bridge2.0-0",
+        "libatk1.0-0",
+        "libatspi2.0-0",
+        "libcairo2",
+        "libcups2",
+        "libdbus-1-3",
+        "libdrm2",
+        "libgbm1",
+        "libglib2.0-0",
+        "libgtk-3-0",
+        "libnspr4",
+        "libnss3",
+        "libpango-1.0-0",
+        "libpangocairo-1.0-0",
+        "libstdc++6",
+        "libwayland-client0",
+        "libwayland-egl1",
+        "libwayland-server0",
+        "libx11-6",
+        "libx11-xcb1",
+        "libxcb1",
+        "libxcomposite1",
+        "libxdamage1",
+        "libxext6",
+        "libxfixes3",
+        "libxkbcommon0",
+        "libxrandr2",
+        "libxshmfence1",
+        "xdg-utils",
+    ):
+        assert package in dockerfile, package
     assert "python3 -m pip install --break-system-packages --no-cache-dir ." in dockerfile
     assert "COPY .env" not in dockerfile
     assert not re.search(r"^(?:ARG|ENV)\s+\w*(?:KEY|TOKEN|SECRET|PASSWORD)\s*=", dockerfile, re.MULTILINE | re.IGNORECASE)

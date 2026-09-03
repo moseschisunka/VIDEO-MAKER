@@ -93,13 +93,11 @@ include = [
 "remotion-composer/src/components" = ["remotion-composer/src/components/*.tsx", "remotion-composer/src/components/*.ts"]
 "remotion-composer/src/components/charts" = ["remotion-composer/src/components/charts/*.tsx", "remotion-composer/src/components/charts/*.ts"]
 "remotion-composer/src/lib" = ["remotion-composer/src/lib/*.tsx", "remotion-composer/src/lib/*.ts", "remotion-composer/src/lib/*.json"]
-"remotion-composer/public" = ["remotion-composer/public/*.json", "remotion-composer/public/*.png", "remotion-composer/public/*.mp3", "remotion-composer/public/*.mp4"]
-"remotion-composer/public/demo-props" = ["remotion-composer/public/demo-props/*.json"]
-"remotion-composer/public/projects" = ["remotion-composer/public/projects/*.json", "remotion-composer/public/projects/*.png", "remotion-composer/public/projects/*.mp3", "remotion-composer/public/projects/*.mp4"]
-"remotion-composer/public/projects/explainer-what-is-biology" = ["remotion-composer/public/projects/explainer-what-is-biology/*.json"]
-"remotion-composer/public/projects/explainer-what-is-biology/assets" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/*.json", "remotion-composer/public/projects/explainer-what-is-biology/assets/*.png", "remotion-composer/public/projects/explainer-what-is-biology/assets/*.mp3", "remotion-composer/public/projects/explainer-what-is-biology/assets/*.mp4"]
-"remotion-composer/public/projects/explainer-what-is-biology/assets/audio" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/audio/*"]
-"remotion-composer/public/projects/explainer-what-is-biology/assets/images" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/images/*"]
-"remotion-composer/public/projects/explainer-what-is-biology/assets/music" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/music/*"]
-"remotion-composer/public/projects/explainer-what-is-biology/assets/video" = ["remotion-composer/public/projects/explainer-what-is-biology/assets/video/*"]
-"remotion-composer/public/talking-head" = ["remotion-composer/public/talking-head/*"]
+# Curated, tracked demo props are safe to ship.  User footage, downloaded
+# stock, generated project media, and per-run caption props are runtime inputs
+# and must never enter a wheel merely because they exist in a dirty checkout.
+"remotion-composer/public/demo-props" = [
+    "remotion-composer/public/demo-props/code-to-screen.json",
+    "remotion-composer/public/demo-props/focusflow-pitch.json",
+    "remotion-composer/public/demo-props/world-in-numbers.json",
+]

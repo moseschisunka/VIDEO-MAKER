@@ -51,9 +51,18 @@ def test_release_assets_are_present_in_built_wheel(tmp_path: Path) -> None:
         f"{data_prefix}remotion-composer/package-lock.json",
         f"{data_prefix}remotion-composer/src/Root.tsx",
         f"{data_prefix}remotion-composer/src/components/CaptionOverlay.tsx",
-        f"{data_prefix}remotion-composer/public/talking-head/in.mp4",
+        f"{data_prefix}remotion-composer/public/demo-props/code-to-screen.json",
     }
     assert expected <= names
+    # Talking-head footage, downloaded stock, and generated project media are
+    # user/runtime inputs.  They are intentionally ignored and must not become
+    # accidental release assets merely because a developer has them locally.
+    assert not any(
+        name.endswith("/remotion-composer/public/talking-head/in.mp4")
+        or "/remotion-composer/public/projects/" in name
+        or "/remotion-composer/public/demo-props/caption-burn-" in name
+        for name in names
+    )
 
     install_dir = tmp_path / "install"
     subprocess.run(

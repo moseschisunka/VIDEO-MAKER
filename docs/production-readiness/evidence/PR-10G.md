@@ -55,8 +55,19 @@ The container cache contract was also checked against the installed Remotion
 4.0.484 implementation: its browser download directory resolves to the
 project-local `remotion-composer/node_modules/.remotion`, so the
 `/home/node/.cache` tmpfs used for transient profiles does not hide the baked
-browser. The static PR-1003 contract remains green (**4 passed**); this does
+browser. The static PR-1003 contract remains green (**7 passed**); this does
 not replace the required in-image Docker build/render evidence.
+
+The next supported run (`33709698659`) reached all the way through image
+build, authenticated health, and browser bootstrap, then exposed three
+independent release defects: the image lacked Chromium's Debian runtime
+libraries (`libnspr4.so` was the first loader failure), the package-data test
+mistook ignored user footage for a required release asset, and the black-video
+fault report omitted the corpus's canonical `decoded black` signal when only
+`blackdetect` found an interval. The Dockerfile now carries the complete
+headless-browser dependency set; wheel mappings now ship only tracked curated
+fixtures; and interval diagnostics now report decoded black/blank ranges. A
+fresh supported CI run is required to validate those corrections.
 
 ## Blocking proof
 
