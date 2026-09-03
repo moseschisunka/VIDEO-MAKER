@@ -9,24 +9,24 @@ This is an audit record, not a production approval. The release lock remains
 
 | Area | Result | Evidence |
 |---|---|---|
-| Offline release-blocker contracts | PASS (supported CI) | GitHub Actions runs `33710765514` and latest checkpoint `33722648046`, `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1047 passed, 5 skipped, 1 deselected, 1 warning in 135.20s** on the prior evidence run |
-| Phase 10 targeted contracts | PASS | `python -m pytest tests/contracts/test_phase10_*.py -q` (all Phase 10 contract modules: clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **58 passed, 1 warning in 57.63s** |
-| UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **5 passed**; manifests, playbooks, and runtime config load explicit UTF-8, title-only briefs are rejected, and wizard dialog/labels/keyboard controls are verified |
+| Offline release-blocker contracts | PASS (supported CI) | Latest supported run `33730564062` on `2a2af84` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1057 passed, 5 skipped, 1 deselected, 1 warning in 141.43s**; earlier runs remain historical evidence |
+| Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **70 passed, 2 warnings in 107.86s** on the current Windows diagnostic run; supported CI remains authoritative |
+| UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **7 passed** in the current checkpoint; manifests, playbooks, and runtime config load explicit UTF-8, title-only briefs are rejected, wizard catalogs fail closed, run-start failures are visible, and dialog/labels/keyboard controls are verified |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
-| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported runs `33710765514` and latest checkpoint `33722648046` |
-| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported runs `33710765514` and latest checkpoint `33722648046` |
+| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and latest supported run `33730564062` |
+| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and latest supported run `33730564062` |
 | Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
 | HyperFrames CLI/browser QA | PASS (latest supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — latest run `33724899296` on `ac4fd9b` executes scaffold/lint/validate/inspect plus the real render (**2 passed, 1 skipped, 1 warning in 72.92s**); raw log retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33724899296/artifacts/9881651965) |
 | Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
-| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and runs `33710765514`/`33722648046` — clean checkout package-data contract and PR-1002 smoke pass |
-| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in runs `33710765514` and `33722648046` |
-| Remotion dependency vulnerability audit | PASS (supported CI) | `npm audit --audit-level=high` reports **0 vulnerabilities** in the current lock (browserslist 4.28.8, fast-uri 4.1.4, postcss 8.5.26); clean-install run `33722648046` passed the audit gate, which fails on any future high/critical advisory |
-| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; latest container job in run `33722648046` also passed |
+| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and latest supported run `33730564062` — clean checkout package-data contract and PR-1002 smoke pass |
+| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in the latest supported run `33730564062` |
+| Remotion dependency vulnerability audit | PASS (supported CI) | `npm audit --audit-level=high` reports **0 vulnerabilities** in the current lock (browserslist 4.28.8, fast-uri 4.1.4, postcss 8.5.26); clean-install job in supported run `33730564062` passed the audit gate, which fails on any future high/critical advisory |
+| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; latest container job in run `33730564062` passed |
 | Web security boundary | PARTIAL (policy/test pass; deployed edge pending) | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and PR-1004 security contracts — same-origin/no-cookie bearer posture is explicit; reverse-proxy CORS/CSRF/rate-limit enforcement still needs a deployment drill |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
-| Full repository regression suite | PASS (local and supported offline CI) | Local `python -m pytest -q` → **1499 passed, 10 skipped, 1 warning, 1 subtests passed**; supported offline regression in run `33710765514` → **1503 passed, 6 skipped, 3 deselected, 1 warning, 1 subtests passed in 199.15s** |
+| Full repository regression suite | PASS (supported offline CI) | Supported offline regression in run `33730564062` → **1515 passed, 6 skipped, 3 deselected, 1 warning, 1 subtests passed in 174.37s**; the default Windows temp-root run is diagnostic-only because the host denies pytest's per-user temp directory |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
 
 ## Supported CI feedback (2026-09-03)
@@ -121,6 +121,18 @@ The follow-up supported push run `33727762122` on commit `2562b67` also passed
 all five required non-opt-in jobs. It includes the wizard guard and accessible
 keyboard-selection changes, with the release-blocking UI contract suite green;
 the live-provider and HyperFrames opt-ins remained intentionally skipped.
+
+The latest supported push run `33730564062` on commit `2a2af84` passed all five
+required non-opt-in jobs: clean install (including the zero-vulnerability npm
+audit), **1057** release-blocker contracts, **1515** offline regression tests,
+the hardened container/browser matrix, and Phase 10 SLO/load/operations
+evidence. It also includes the catalog/launch reliability corrections: the
+wizard consumes authoritative API catalogs, filters playbooks to the selected
+pipeline contract, fails closed when options are unavailable, enforces input
+limits, and surfaces a failed automatic run instead of claiming success. The
+live-provider and HyperFrames opt-ins were intentionally skipped; this is a
+supported checkpoint, not frozen release-candidate or production evidence.
+The Phase 10 raw evidence artifact is [openmontage-phase10-evidence](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33730564062/artifacts/9883844320).
 
 ## Blocking proof
 
