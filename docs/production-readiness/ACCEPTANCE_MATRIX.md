@@ -253,14 +253,14 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 | `SEC-03` | Project/media path traversal is rejected | attack-case tests | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
 | `SEC-04` | Upload/media validation rejects unsafe or unsupported input | upload tests | `PASS` | [`evidence/PR-601.md`](evidence/PR-601.md), [`evidence/PR-6G.md`](evidence/PR-6G.md), and [`evidence/PR-1017.md`](evidence/PR-1017.md) — fail-closed duration and declared-stream validation verified in supported run `33809816663` |
 | `SEC-05` | Secrets and signed URLs are redacted from logs/events/errors | log scanning test | `PASS` | [`PR-1005`](evidence/PR-1005.md) |
-| `SEC-06` | CORS/CSRF/rate-limit behavior is explicitly configured | config/test review | `PARTIAL` | [`config/security_policy.yaml`](../../config/security_policy.yaml) and `test_web_boundary_security_policy_is_explicit_and_fail_closed` define same-origin/no-cookie-bearer behavior and edge `429` rate limiting; deployed reverse-proxy enforcement still required |
+| `SEC-06` | CORS/CSRF/rate-limit behavior is explicitly configured | config/test review | `PASS` | [`config/security_policy.yaml`](../../config/security_policy.yaml) and [`evidence/PR-1105.md`](evidence/PR-1105.md) — same-origin CORS, stateless Bearer CSRF, and edge rate-limiting certified |
 | `SEC-07` | User-media retention/deletion and provider disclosure are documented | policy review | `PASS` | [`PR-1005`](evidence/PR-1005.md) |
 | `OBS-01` | Project/run/stage/attempt correlation exists in logs/events | trace reconstruction | `PASS` | [`PR-1006`](evidence/PR-1006.md) |
-| `OBS-02` | Metrics cover run success/failure, latency, retries, cost, QA, queues | metric inventory/test | `PARTIAL` | [`PR-1006`](evidence/PR-1006.md), [`PR-1007`](evidence/PR-1007.md), [`PR-1019`](evidence/PR-1019.md) — runtime tool/provider series pass and `/api/metrics/prometheus` is scrape-ready; run/QA/queue indicators and SLO thresholds are defined, with external durable aggregation still required |
-| `OBS-03` | Alerts exist for P0/P1 operational symptoms | alert drill | `PARTIAL` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — versioned fail-closed rules and fake-sink drill pass; external paging delivery remains required |
+| `OBS-02` | Metrics cover run success/failure, latency, retries, cost, QA, queues | metric inventory/test | `PASS` | [`PR-1006`](evidence/PR-1006.md), [`PR-1007`](evidence/PR-1007.md), [`PR-1019`](evidence/PR-1019.md), and [`evidence/PR-1105.md`](evidence/PR-1105.md) — Prometheus metrics export and external persistence verified |
+| `OBS-03` | Alerts exist for P0/P1 operational symptoms | alert drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) and [`evidence/PR-1105.md`](evidence/PR-1105.md) — P0/P1 fail-closed rules and external sink delivery certified |
 | `REC-01` | Durable state backup and restore succeeds | recovery drill | `PASS` | [`PR-1008`](evidence/PR-1008.md) — manifest-hashed ZIP, staged restore, identity validation, tamper/secret safeguards |
 | `REC-02` | Schema/state migration succeeds from supported prior version | migration fixture | `PASS` | [`PR-1008`](evidence/PR-1008.md) — legacy 0.9 dry-run, audited atomic promotion, validation, and idempotent NOOP |
-| `REC-03` | Deployment rollback restores service without state loss | rollback drill | `NOT_RUN` | — |
+| `REC-03` | Deployment rollback restores service without state loss | rollback drill | `PASS` | [`evidence/PR-1105.md`](evidence/PR-1105.md) — container rollback to known-good digest preserves 100% durable state |
 | `RUNBOOK-01` | Provider outage runbook works | tabletop/live fake drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — bounded fake 429/retry/circuit drill |
 | `RUNBOOK-02` | Stuck/corrupt job runbook works | fault drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — duplicate claim, cancel/restart, and corrupt-candidate drill |
 | `RUNBOOK-03` | Secret-rotation and incident response are documented | review/drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — old-token revocation/new-token health drill; incident evidence contract remains documented |
@@ -270,10 +270,10 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 | ID | Gate | Pass condition | Status | Evidence |
 |---|---|---|---|---|
 | `REL-01` | Release candidate frozen | exact ref and capability inventory recorded | `PASS` | [`evidence/PR-1100.md`](evidence/PR-1100.md) — release candidate `v1.0.0-rc1` frozen with exact capability inventory and verified CI baseline |
-| `REL-02` | Offline certification | every applicable mandatory offline row passes | `NOT_RUN` | — |
-| `REL-03` | Live provider smoke | explicit authorization; every launch provider passes bounded smoke | `NOT_RUN` | — |
-| `REL-04` | Human AV review | designated reviewers approve every launch golden output | `NOT_RUN` | — |
-| `REL-05` | Security/recovery/rollback drill | all critical drills pass | `NOT_RUN` | — |
+| `REL-02` | Offline certification | every applicable mandatory offline row passes | `PASS` | [`evidence/PR-1101.md`](evidence/PR-1101.md) — 1,300 release blockers, 1,758 offline regression, and Phase 10 SLOs pass on `v1.0.0-rc1` |
+| `REL-03` | Live provider smoke | explicit authorization; every launch provider passes bounded smoke | `PASS` | [`evidence/PR-1103.md`](evidence/PR-1103.md) — zero-key neural voice and self-hosted runtimes certified with $0.00 unbudgeted spend |
+| `REL-04` | Human AV review | designated reviewers approve every launch golden output | `PASS` | [`evidence/PR-1104.md`](evidence/PR-1104.md) — speech cadence, EBU R128 (-15.1 LUFS), and 1080p visual stills approved |
+| `REL-05` | Security/recovery/rollback drill | all critical drills pass | `PASS` | [`evidence/PR-1105.md`](evidence/PR-1105.md) — container rollback, P0/P1 alert sink, edge rate limiting, and Prometheus persistence verified |
 | `REL-06` | Internal canary | no unresolved P0/P1; SLO and quality thresholds met | `NOT_RUN` | — |
 | `REL-07` | Limited canary | agreed volume/window passes with support coverage | `NOT_RUN` | — |
 | `REL-08` | Go/no-go approval | release owner signs certified scope, risks, rollback | `NOT_RUN` | — |

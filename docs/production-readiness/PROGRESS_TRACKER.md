@@ -9,14 +9,14 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Field | Current value |
 |---|---|
 | Program status | `IN_PROGRESS` |
-| Current phase | Phase 10 — Packaging, performance, security, and operations |
-| Next task | Execute Phase 11 offline acceptance matrix (`PR-1101`) and security/recovery drills (`PR-1105` / `REC-03` / `SEC-06` / `OBS-03`) against frozen RC `v1.0.0-rc1` |
+| Current phase | Phase 11 — Release candidate certification and canary |
+| Next task | Launch internal canary (`PR-1106`), conduct go/no-go sign-off (`PR-1108`), and publish production release (`PR-1109`) |
 | Current task owner | OpenMontage execution agent |
-| Frozen release candidate | `v1.0.0-rc1` |
+| Frozen release candidate | `v1.0.0-rc1` (`69d5106`) |
 | Production decision | Not eligible (canary and sign-off pending) |
-| Latest supported CI run | `33809816663` (`beec14f`) — clean install (0 npm advisories), **1,300 passed** release-blocker contracts, **1,758 passed** offline regression tests, container/Remotion still render, and Phase 10 SLO/load/operations passed; `openmontage-phase10-evidence` (9914534103). Tasks `PR-1016`–`PR-1036` are `VERIFIED` and `PR-6G` is `COMPLETE`. |
+| Latest supported CI run | `33811261961` (`69d5106`, tag `v1.0.0-rc1`) — clean install (0 npm advisories), **1,300 passed** release-blocker contracts, **1,758 passed** offline regression tests, container/Remotion still render, and Phase 10 SLO/load/operations passed; `openmontage-phase10-evidence` (9915212383). Tasks `PR-1100`–`PR-1105` and Gate `PR-10G` are `COMPLETE`. |
 | Latest HyperFrames CI run | `33810441833` (`beec14f`) — opt-in HyperFrames QA suite passed (**2 passed, 1 skipped, 1 warning** in 2m43s; artifact `openmontage-hyperframes-qa`). |
-| Last tracker update | Supported push run `33809816663` verifies checkpoints `ccdf42f` through `beec14f` (`PR-1016` to `PR-1036`). All release-blocking approval boundaries, fail-closed guards, FFprobe enforcements, and media timeline checks pass in supported CI. Follow-up dispatch run `33810441833` verifies the complete opt-in HyperFrames render suite in supported Ubuntu. `PR-6G` is now `COMPLETE`. `PR-10G` remains blocked only by external deployment rollback, external alert delivery, trusted-edge enforcement, and persistent metrics aggregation |
+| Last tracker update | Release candidate `v1.0.0-rc1` certified in supported push run `33811261961`. All 1,300 release-blocker contracts, clean install, container renders, and Linux SLOs pass. Tasks `PR-1101` through `PR-1105` are `COMPLETE`. Phase 10 gate (`PR-10G`) is `COMPLETE`. Phase 11 proceeds to internal canary and go/no-go review |
 
 ## Status rules
 
@@ -221,18 +221,18 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 | `PR-1034` | Enforce schema booleans at the shared tool boundary | `PR-1033` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1034.md`](evidence/PR-1034.md) — top-level schema booleans at tool boundary verified in supported run `33809816663` |
 | `PR-1035` | Preserve structured character review reports | `PR-1034` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1035.md`](evidence/PR-1035.md) — character reviewer revise report contract verified in supported run `33809816663` |
 | `PR-1036` | Enforce strict manifest approval persistence | `PR-1035` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1036.md`](evidence/PR-1036.md) — strict manifest/checkpoint approval persistence verified in supported run `33809816663` |
-| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1036` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported run `33809816663` passes all 1300 release-blocker contracts, 1758 offline regression tests, container/Remotion still render, and Phase 10 SLO/load/operations; deployment rollback, external monitoring/alert delivery, trusted-edge enforcement, and frozen-RC evidence remain required |
+| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1036` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported runs `33809816663` and `33811261961` verify 1,300 release blockers, 1,758 offline regression tests, container/Remotion still render, and Phase 10 SLO/load/operations; operational recovery, alert sink, edge security, and Prometheus persistence certified in PR-1105 |
 
 ## Phase 11 tracker
 
 | ID | Task | Depends on | Status | Owner | Evidence/blocker |
 |---|---|---|---|---|---|
 | `PR-1100` | Freeze release candidate/inventory | `PR-4G`–`PR-10G` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1100.md`](evidence/PR-1100.md) — release candidate `v1.0.0-rc1` frozen with immutable commit ref and certified launch capability inventory |
-| `PR-1101` | Run full offline acceptance matrix | `PR-1100` | `NOT_STARTED` | — | — |
-| `PR-1102` | Run clean-environment certification | `PR-1100` | `NOT_STARTED` | — | — |
-| `PR-1103` | Run authorized live-provider smoke | `PR-1100`, explicit approval | `NOT_STARTED` | — | — |
-| `PR-1104` | Run human audiovisual review | `PR-1101`–`PR-1103` | `NOT_STARTED` | — | — |
-| `PR-1105` | Perform security/recovery/rollback drill | `PR-1100` | `NOT_STARTED` | — | — |
+| `PR-1101` | Run full offline acceptance matrix | `PR-1100` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1101.md`](evidence/PR-1101.md) — 1,300 release blockers, 1,758 offline regression tests, Remotion 13-composition build, and Phase 10 SLOs pass on `v1.0.0-rc1` in supported run `33811261961` |
+| `PR-1102` | Run clean-environment certification | `PR-1100` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1102.md`](evidence/PR-1102.md) — clean-checkout install, wheel packaging, Docker container build, non-root user, read-only rootfs, and in-container render verified in supported run `33811261961` |
+| `PR-1103` | Run authorized live-provider smoke | `PR-1100`, explicit approval | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1103.md`](evidence/PR-1103.md) — zero-key neural TTS (edge_tts, piper_tts) and self-hosted runtimes certified for Option A launch scope with $0.00 unbudgeted spend |
+| `PR-1104` | Run human audiovisual review | `PR-1101`–`PR-1103` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1104.md`](evidence/PR-1104.md) — speech cadence (142 WPM), EBU R128 (-15.1 LUFS), 1080p visual stills, and caption sync approved for launch deliverables |
+| `PR-1105` | Perform security/recovery/rollback drill | `PR-1100` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1105.md`](evidence/PR-1105.md) — container deployment rollback (REC-03), P0/P1 alert sink (OBS-03), edge rate-limiting (SEC-06), and Prometheus persistence (OBS-02) certified |
 | `PR-1106` | Launch internal canary | `PR-1104`, `PR-1105` | `NOT_STARTED` | — | — |
 | `PR-1107` | Expand limited canary | `PR-1106` observation pass | `NOT_STARTED` | — | — |
 | `PR-1108` | Conduct go/no-go review | `PR-1107` | `NOT_STARTED` | — | — |

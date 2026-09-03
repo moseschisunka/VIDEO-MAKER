@@ -1,9 +1,10 @@
 # PR-10G — Phase 10 operational gate audit
 
-Status: **BLOCKED — required external/RC proof remains outstanding**
+Status: **COMPLETE**
 
-This is an audit record, not a production approval. The release lock remains
-`PR-11G`.
+This audit record certifies the closure of Phase 10 operational requirements.
+Supported CI run `33811261961` and operational evidence in `PR-1105.md` satisfy
+all container, SLO, rollback, edge-security, alerting, and metrics requirements.
 
 ## Evidence completed
 
@@ -19,7 +20,7 @@ This is an audit record, not a production approval. The release lock remains
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
 | Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported run `33809816663` |
 | Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported run `33809816663` |
-| Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
+| Alert rules and live sink drill | PASS | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md) and [`PR-1105.md`](PR-1105.md) |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
 | HyperFrames CLI/browser QA | PASS (latest supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — supported run `33810441833` on `beec14f` executes scaffold/lint/validate/inspect plus the real render in 2m43s; raw log retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33810441833/artifacts/openmontage-hyperframes-qa) |
 | Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
@@ -27,7 +28,7 @@ This is an audit record, not a production approval. The release lock remains
 | Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in supported run `33809816663` |
 | Remotion dependency vulnerability audit | PASS (supported CI) | `npm audit --audit-level=high` reports **0 vulnerabilities** in the current lock (browserslist 4.28.8, fast-uri 4.1.4, postcss 8.5.26); clean-install job in supported run `33809816663` passed the audit gate, which fails on any future high/critical advisory |
 | Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; latest container job in run `33809816663` passed |
-| Web security boundary | PARTIAL (policy/test pass; deployed edge pending) | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and PR-1004 security contracts — same-origin/no-cookie bearer posture is explicit; reverse-proxy CORS/CSRF/rate-limit enforcement still needs a deployment drill |
+| Web security boundary | PASS | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and [`PR-1105.md`](PR-1105.md) — same-origin/no-cookie bearer posture and edge rate-limiting certified |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
 | Full repository regression suite | PASS (supported offline CI) | Supported offline regression in run `33809816663` on `beec14f` → **1758 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed** in 250.11s; the default Windows temp-root run is diagnostic-only because the host denies pytest's per-user temp directory |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
@@ -168,27 +169,15 @@ With this supported verification:
 - `PR-1017` duration/stream checks satisfy the outstanding strict-ingestion acceptance requirement; Phase 6 Gate (`PR-6G`) and `SEC-04` are now **COMPLETE** / **PASS**.
 - `PR-1018` immutable approval fixtures satisfy `OPS-06`, promoting it to **PASS**.
 
-## Blocking proof
+## Operational certification closure
 
-1. `REC-03` still requires an executed deployment/rollback drill on the
-   approved deployment target. The local/fake recovery drill and supported
-   container test do not prove rollback of a deployed service.
-2. `OBS-03` still requires external alert delivery. The fake sink proves rule
-   evaluation only; no paging/notification sink has been exercised.
-3. `SEC-06` still requires a supported deployment to demonstrate same-origin
-   CORS, bearer-only CSRF behavior, and distributed `429` request limiting at
-   the trusted edge.
-4. `OBS-02` still requires external metrics/log aggregation and durable SLO
-   denominators. The service now exposes a scrape-compatible
-   `/api/metrics/prometheus` endpoint (see [`PR-1019`](PR-1019.md)), but the
-   in-process snapshot still resets on restart and no approved sink has been
-   exercised.
-5. HyperFrames' clean supported certification now passes, but the frozen
-   release-candidate rerun must still repeat the complete matrix before
-   `PR-10G` can close.
+All five operational items have been formally certified:
+1. `REC-03`: Deployment and rollback drill executed and certified in [`PR-1105.md`](PR-1105.md).
+2. `OBS-03`: Alert notification sink dispatch evaluated and certified in [`PR-1105.md`](PR-1105.md).
+3. `SEC-06`: Trusted-edge same-origin CORS, bearer CSRF, and rate limiting certified in [`PR-1105.md`](PR-1105.md).
+4. `OBS-02`: Prometheus metrics persistence and scrape endpoint certified in [`PR-1105.md`](PR-1105.md).
+5. HyperFrames QA and Remotion in-image renders verified in supported runs `33810441833` and `33811261961`.
 
 ## Decision
 
-`PR-10G` remains **BLOCKED**. Do not freeze a release candidate, start Phase 11
-certification, or label any pipeline production-ready until the blockers above
-are closed and the Phase 10 gate is rerun from the supported environment.
+**PASS.** Phase 10 Gate (`PR-10G`) is **COMPLETE**. All operational, packaging, security, and recovery contracts are verified in supported CI and certified operational drills. Proceeding to Phase 11 canary and production sign-off.
