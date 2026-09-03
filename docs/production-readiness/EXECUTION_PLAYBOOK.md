@@ -747,6 +747,7 @@ Dependencies: stable contracts from Phases 1-3; final certification after `PR-9G
 | `PR-1014` | Derive library completion metrics from truthful project state | Backlot library | aggregate metrics and filters share one completion predicate |
 | `PR-1015` | Preserve project-relative caption evidence through final review | video compose/final review | source-footage render with project-relative subtitles passes burn-in and final-review verification from a repository-root caller |
 | `PR-1016` | Certify the approved source-footage talking-head launch path | manifest executor, Backlot `/run`, contract fixtures | a deterministic talking-head work order traverses every manifest stage, renders current local output without a provider call, publishes only after gates, and ordinary `/run` returns a manifest-agent handoff |
+| `PR-1017` | Enforce positive media timelines and declared stream types at ingestion | `lib/media_ingestion.py`, Phase 6 media contracts | ffprobe-readable zero-duration or mismatched audio/video inputs are rejected, while valid stream-duration fallback remains accepted |
 | `PR-10G` | Phase 10 operational gate | clean install, security, load, restore evidence | supported environment is reproducible and operable |
 
 ### Implementation instructions

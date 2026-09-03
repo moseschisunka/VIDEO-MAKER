@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import lib.media_ingestion as media_ingestion
 from lib.asset_cache import AssetCache
 from lib.contact_sheet import approve_contact_sheet, build_contact_sheet_manifest, write_contact_sheet
 from lib.diagram_contracts import DiagramContractError, validate_diagram_spec
@@ -109,6 +110,98 @@ def test_phase6_user_media_and_download_fail_closed(tmp_path: Path):
     with pytest.raises(MediaValidationError, match="non-media MIME"):
         download_stream_atomic("https://example.test/bad", tmp_path / "bad.png", media_type="image", request_get=lambda *args, **kwargs: BadResponse())
     assert not (tmp_path / "bad.png.part").exists()
+
+
+def test_phase6_media_ingestion_rejects_zero_duration_video(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A decodable container with no positive duration is not usable media."""
+
+    candidate = tmp_path / "zero-duration.mp4"
+    # Enough bytes to pass the size floor and an ISO-BMFF magic signature; the
+    # ffprobe response below is the authoritative decode result for this
+    # contract fixture.
+    candidate.write_bytes(b"\x00\x00\x00\x18ftypisom" + (b"\x00" * 256))
+
+    class ProbeResult:
+        stdout = (
+            '{"streams":[{"codec_type":"video","width":320,"height":180}],'
+            '"format":{"duration":"0"}}'
+        )
+
+    monkeypatch.setattr(media_ingestion.shutil, "which", lambda name: "ffprobe")
+    monkeypatch.setattr(media_ingestion.subprocess, "run", lambda *args, **kwargs: ProbeResult())
+
+    with pytest.raises(MediaValidationError, match="positive duration"):
+        media_ingestion.validate_media_file(candidate, "video")
+
+
+@pytest.mark.parametrize("duration", ["NaN", "inf", "-inf", "-0.5"])
+def test_phase6_media_ingestion_rejects_nonfinite_or_negative_duration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, duration: str
+) -> None:
+    """Non-finite and negative probe durations cannot enter a timeline."""
+
+    candidate = tmp_path / f"invalid-duration-{duration.replace('-', 'neg').replace('.', '_')}.mp4"
+    candidate.write_bytes(b"\x00\x00\x00\x18ftypisom" + (b"\x00" * 256))
+
+    class ProbeResult:
+        stdout = (
+            '{"streams":[{"codec_type":"video","width":320,"height":180}],'
+            f'"format":{{"duration":"{duration}"}}}}'
+        )
+
+    monkeypatch.setattr(media_ingestion.shutil, "which", lambda name: "ffprobe")
+    monkeypatch.setattr(media_ingestion.subprocess, "run", lambda *args, **kwargs: ProbeResult())
+
+    with pytest.raises(MediaValidationError, match="positive duration"):
+        media_ingestion.validate_media_file(candidate, "video")
+
+
+def test_phase6_media_ingestion_uses_positive_stream_duration_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A valid stream duration is retained when the container omits one."""
+
+    candidate = tmp_path / "stream-duration.mp4"
+    candidate.write_bytes(b"\x00\x00\x00\x18ftypisom" + (b"\x00" * 256))
+
+    class ProbeResult:
+        stdout = (
+            '{"streams":[{"codec_type":"video","width":320,"height":180,'
+            '"duration":"1.25"}],"format":{"duration":"N/A"}}'
+        )
+
+    monkeypatch.setattr(media_ingestion.shutil, "which", lambda name: "ffprobe")
+    monkeypatch.setattr(media_ingestion.subprocess, "run", lambda *args, **kwargs: ProbeResult())
+
+    facts = media_ingestion.validate_media_file(candidate, "video")
+
+    assert facts["decoded"] is True
+    assert facts["duration_seconds"] == 1.25
+
+
+def test_phase6_media_ingestion_rejects_missing_declared_stream_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A video-only probe cannot satisfy an audio asset declaration."""
+
+    candidate = tmp_path / "video-as-audio.mp3"
+    # Match the declared audio family so the ffprobe stream-type contract is
+    # reached instead of being short-circuited by the MIME-family guard.
+    candidate.write_bytes(b"ID3" + (b"\x00" * 256))
+
+    class ProbeResult:
+        stdout = (
+            '{"streams":[{"codec_type":"video","width":320,"height":180,'
+            '"duration":"1.25"}],"format":{"duration":"1.25"}}'
+        )
+
+    monkeypatch.setattr(media_ingestion.shutil, "which", lambda name: "ffprobe")
+    monkeypatch.setattr(media_ingestion.subprocess, "run", lambda *args, **kwargs: ProbeResult())
+
+    with pytest.raises(MediaValidationError, match="no audio stream"):
+        media_ingestion.validate_media_file(candidate, "audio")
 
 
 def test_phase6_generation_sample_plan_cache_and_motion(tmp_path: Path):

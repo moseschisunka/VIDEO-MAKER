@@ -154,6 +154,13 @@ Live-provider and HyperFrames opt-ins were intentionally skipped. This
 checkpoint satisfies the `PR-1015` integration prerequisite but is not a
 frozen release-candidate or production certification.
 
+The unpublished local follow-ups `PR-1016` and `PR-1017` are intentionally not
+represented as supported-CI evidence. `PR-1016` adds the source-footage
+talking-head manifest executor lane; `PR-1017` rejects zero-duration or
+mismatched-stream media at ingestion. Both have local regression evidence, but
+the supported workflow must rerun from the published checkpoint before the
+corresponding tasks can become `VERIFIED`.
+
 ## Blocking proof
 
 1. `REC-03` still requires an executed deployment/rollback drill on the

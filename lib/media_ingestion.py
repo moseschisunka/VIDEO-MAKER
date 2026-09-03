@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import mimetypes
 import os
 import shutil
@@ -135,10 +136,50 @@ def validate_media_file(
 
                 payload = json.loads(process.stdout or "{}")
                 streams = payload.get("streams") or []
-                if not streams:
+                if not isinstance(streams, list) or not streams:
                     raise MediaValidationError("ffprobe found no decodable streams")
                 fmt = payload.get("format") or {}
-                facts["duration_seconds"] = float(fmt.get("duration") or 0.0)
+                expected_stream_type = {
+                    "audio": "audio",
+                    "video": "video",
+                    "animation": "video",
+                    "stock": "video",
+                }.get(str(media_type or "").strip().lower())
+                stream_types = {
+                    str(stream.get("codec_type")).strip().lower()
+                    for stream in streams
+                    if isinstance(stream, dict) and stream.get("codec_type")
+                }
+                if expected_stream_type and expected_stream_type not in stream_types:
+                    raise MediaValidationError(
+                        f"ffprobe found no {expected_stream_type} stream for declared type {media_type!r}"
+                    )
+
+                # A container can be syntactically decodable while carrying no
+                # usable timeline (for example a zero-duration or N/A probe).
+                # Do not admit it into a user/stock/generated asset manifest;
+                # downstream renderers cannot produce a reliable cut from it.
+                duration_candidates: list[float] = []
+                try:
+                    duration_candidates.append(float(fmt.get("duration")))
+                except (TypeError, ValueError):
+                    pass
+                for stream in streams:
+                    if not isinstance(stream, dict):
+                        continue
+                    try:
+                        duration_candidates.append(float(stream.get("duration")))
+                    except (TypeError, ValueError):
+                        continue
+                duration = max(
+                    (value for value in duration_candidates if math.isfinite(value)),
+                    default=0.0,
+                )
+                if duration <= 0:
+                    raise MediaValidationError(
+                        "ffprobe media must report a positive duration"
+                    )
+                facts["duration_seconds"] = duration
                 facts["stream_count"] = len(streams)
                 facts["decoded"] = True
             except MediaValidationError:
