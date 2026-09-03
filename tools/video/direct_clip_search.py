@@ -34,6 +34,7 @@ No CLIP model. No embeddings. No corpus index. Just files on disk.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import math
 import subprocess
 import time
 import urllib.parse
@@ -275,17 +276,48 @@ class DirectClipSearch(BaseTool):
             )
             from tools.video.stock_sources.base import stock_provenance
             from tools.video.stock_sources.base import download_candidate_atomic
+            from lib.media_contracts import MediaContractError, strict_bool
 
             output_dir = Path(inputs["output_dir"])
             queries: list[dict] = list(inputs["queries"])
             source_names: Optional[list[str]] = inputs.get("sources")
             filters_in: dict = inputs.get("filters") or {}
             clips_per_query = int(inputs.get("clips_per_query", 3))
-            extract_thumbs = bool(inputs.get("extract_thumbnails", True))
-            skip_existing = bool(inputs.get("skip_existing", True))
-            strict_media_validation = bool(inputs.get("strict_media_validation", False) or inputs.get("production_mode", False))
-            require_provenance = bool(inputs.get("require_provenance", True))
-            timeout_seconds = float(inputs.get("timeout_seconds", 600))
+            try:
+                extract_thumbs = strict_bool(
+                    inputs.get("extract_thumbnails", True), "extract_thumbnails"
+                )
+                skip_existing = strict_bool(
+                    inputs.get("skip_existing", True), "skip_existing"
+                )
+                requested_strict = strict_bool(
+                    inputs.get("strict_media_validation", False),
+                    "strict_media_validation",
+                )
+                requested_production = strict_bool(
+                    inputs.get("production_mode", False), "production_mode"
+                )
+                require_provenance = strict_bool(
+                    inputs.get("require_provenance", True), "require_provenance"
+                )
+            except MediaContractError as exc:
+                return ToolResult(success=False, error=f"Invalid media policy control: {exc}")
+            strict_media_validation = requested_strict or requested_production
+            raw_timeout = inputs.get("timeout_seconds", 600)
+            if isinstance(raw_timeout, bool):
+                return ToolResult(
+                    success=False, error="timeout_seconds must be a finite positive number"
+                )
+            try:
+                timeout_seconds = float(raw_timeout)
+            except (TypeError, ValueError):
+                return ToolResult(
+                    success=False, error="timeout_seconds must be a finite positive number"
+                )
+            if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+                return ToolResult(
+                    success=False, error="timeout_seconds must be a finite positive number"
+                )
             deadline = start + timeout_seconds
 
             clips_dir = output_dir / "clips"

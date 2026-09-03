@@ -239,8 +239,34 @@ class ImageSelector(BaseTool):
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         import logging
         from lib.scoring import rank_providers
+        from lib.media_contracts import MediaContractError, AssetRequest, build_asset_request, strict_bool
 
         logger = logging.getLogger(__name__)
+
+        # Parse all release/spend controls before provider discovery, ranking,
+        # or any other provider-facing work.  Python truthiness is unsafe here:
+        # values such as ``"false"`` and ``1`` must never silently enable or
+        # disable a production gate.
+        try:
+            requested_sample = (
+                strict_bool(inputs["sample_required"], "sample_required")
+                if "sample_required" in inputs else False
+            )
+            requested_batch = (
+                strict_bool(inputs["batch"], "batch")
+                if "batch" in inputs else False
+            )
+            requested_strict = (
+                strict_bool(inputs["strict_media_validation"], "strict_media_validation")
+                if "strict_media_validation" in inputs else False
+            )
+            requested_production = (
+                strict_bool(inputs["production_mode"], "production_mode")
+                if "production_mode" in inputs else False
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid media gate control: {exc}")
+
         task_context = self._prepare_task_context(inputs)
         candidates = self._filter_candidates(inputs, self._providers())
 
@@ -272,25 +298,12 @@ class ImageSelector(BaseTool):
         if tool is None:
             return ToolResult(success=False, error="No image provider available.")
 
-        from lib.media_contracts import AssetRequest, MediaContractError, build_asset_request, strict_bool
         from lib.media_generation import (
             build_generation_plan,
             collect_output_paths,
             require_sample_approval,
             validate_generation_output,
         )
-
-        try:
-            requested_sample = (
-                strict_bool(inputs["sample_required"], "sample_required")
-                if "sample_required" in inputs else False
-            )
-            requested_batch = (
-                strict_bool(inputs["batch"], "batch")
-                if "batch" in inputs else False
-            )
-        except MediaContractError as exc:
-            return ToolResult(success=False, error=f"Invalid media gate control: {exc}")
 
         raw_request = inputs.get("asset_request")
         if raw_request:
@@ -428,7 +441,7 @@ class ImageSelector(BaseTool):
         # approval-aware.
         result = execute_with_provider_executor(tool, adapted)
         if result.success:
-            strict = bool(inputs.get("strict_media_validation") or inputs.get("production_mode"))
+            strict = requested_strict or requested_production
             if strict:
                 try:
                     validation = validate_generation_output(

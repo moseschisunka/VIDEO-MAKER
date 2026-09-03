@@ -266,16 +266,27 @@ class CorpusBuilder(BaseTool):
                 source_summary,
             )
             from tools.video.stock_sources.base import stock_provenance
+            from lib.media_contracts import MediaContractError, strict_bool
 
             corpus_dir = Path(inputs["corpus_dir"])
             queries: list[dict] = list(inputs["queries"])
             source_names: Optional[list[str]] = inputs.get("sources")
             filters_in: dict = inputs.get("filters") or {}
             max_new = int(inputs.get("max_new_clips", 100))
-            skip_existing = bool(inputs.get("skip_existing", True))
+            try:
+                skip_existing = strict_bool(
+                    inputs.get("skip_existing", True), "skip_existing"
+                )
+                strict_media_validation = strict_bool(
+                    inputs.get("strict_media_validation", True),
+                    "strict_media_validation",
+                )
+                require_provenance = strict_bool(
+                    inputs.get("require_provenance", True), "require_provenance"
+                )
+            except MediaContractError as exc:
+                return ToolResult(success=False, error=f"Invalid media policy control: {exc}")
             thumbs_per_video = int(inputs.get("thumbs_per_video", 5))
-            strict_media_validation = bool(inputs.get("strict_media_validation", True))
-            require_provenance = bool(inputs.get("require_provenance", True))
 
             # Resolve sources. If the caller passed an explicit list we
             # must not silently degrade: pinned-but-unavailable sources
