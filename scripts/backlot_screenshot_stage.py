@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -32,7 +33,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from PIL import Image, ImageDraw, ImageFilter  # noqa: E402
 
-from lib.checkpoint import init_project, write_checkpoint  # noqa: E402
+from lib.approval_contracts import build_checkpoint_approval  # noqa: E402
+from lib.checkpoint import init_project, read_checkpoint, write_checkpoint  # noqa: E402
 from lib.events import emit_event  # noqa: E402
 from tests.contracts.test_phase0_contracts import sample_artifact  # noqa: E402
 
@@ -172,13 +174,36 @@ def stage_project(pid: str, title: str, palette: str, scenes: list, *,
     top, bottom, glow = PALETTES[palette]
     pdir = STAGE_DIR / pid
     init_project(pid, title=title, pipeline_type="cinematic",
-                 pipeline_dir=STAGE_DIR, style_playbook="clean-professional")
+                 pipeline_dir=STAGE_DIR, style_playbook="clean-professional",
+                 run_id=str(uuid.uuid4()))
     art_dir = pdir / "artifacts"
 
     def cp(stage, status, artifacts, **kw):
         write_checkpoint(STAGE_DIR, pid, stage, status, artifacts,
                          pipeline_type="cinematic", **kw)
         time.sleep(0.02)  # distinct mtimes/timestamps
+
+    def approve(stage: str, artifacts: dict, **kw) -> None:
+        """Complete a gated fixture stage through immutable approval evidence."""
+        pending = read_checkpoint(STAGE_DIR, pid, stage)
+        if pending is None or pending.get("status") != "awaiting_human":
+            raise RuntimeError(f"cannot approve missing awaiting checkpoint: {stage}")
+        approval = build_checkpoint_approval(
+            pending,
+            approver_id="backlot-visual-fixture",
+            decision="approve",
+            notes="Synthetic staging fixture approval for read-only visual evaluation.",
+        )
+        # Preserve the awaiting checkpoint's artifact version so the approval
+        # remains bound to exactly the bytes the fixture presented.
+        cp(
+            stage,
+            "completed",
+            artifacts,
+            timestamp=pending["timestamp"],
+            approval_record=approval,
+            **kw,
+        )
 
     brief = sample_artifact("research_brief")
     brief["topic"] = title
@@ -203,10 +228,10 @@ def stage_project(pid: str, title: str, palette: str, scenes: list, *,
     cp("script", "awaiting_human", {"script": script},
        review={"round": 1, "decision": "pass", "critical": 0, "suggestions": 1,
                "nitpicks": 0, "summary": "Strong spine; trimmed s2."})
-    cp("script", "completed", {"script": script}, human_approved=True)
+    approve("script", {"script": script})
     (art_dir / "scene_plan.json").write_text(json.dumps(plan, indent=2))
     cp("scene_plan", "awaiting_human", {"scene_plan": plan})
-    cp("scene_plan", "completed", {"scene_plan": plan}, human_approved=True)
+    approve("scene_plan", {"scene_plan": plan})
 
     # assets
     cp("assets", "in_progress", {})
@@ -248,7 +273,10 @@ def stage_project(pid: str, title: str, palette: str, scenes: list, *,
        cost_snapshot={"total_spent_usd": manifest["total_cost_usd"],
                       "total_reserved_usd": 0.0,
                       "budget_remaining_usd": round(4 - manifest["total_cost_usd"], 2)})
-    cp("assets", "completed", {"asset_manifest": manifest}, human_approved=True)
+    approve("assets", {"asset_manifest": manifest},
+            cost_snapshot={"total_spent_usd": manifest["total_cost_usd"],
+                           "total_reserved_usd": 0.0,
+                           "budget_remaining_usd": round(4 - manifest["total_cost_usd"], 2)})
 
     # edit + compose (render via ffmpeg slideshow from the frames)
     edit = {"version": "1.0", "cuts": [], "metadata": {"note": "demo"}}

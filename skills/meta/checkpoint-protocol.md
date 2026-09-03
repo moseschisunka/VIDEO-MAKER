@@ -49,7 +49,7 @@ write_checkpoint(
 
 The checkpoint utility will:
 - Validate the artifact against its schema
-- Enforce the approval gate (a gated stage cannot be written `completed` without `human_approved=True`)
+- Enforce the approval gate (a gated stage cannot be written `completed` without an immutable `approval_record` bound to the exact pending artifact version; `human_approved` is derived compatibility state)
 - Archive any superseded checkpoint to `projects/<id>/history/` (stage versions and gate transitions are never destroyed)
 - Write the checkpoint JSON to disk
 - Include timestamp and stage metadata
@@ -105,7 +105,8 @@ Long-running stages (like `assets` or `compose` loops) can fail midway due to AP
 manifest is the single source of truth for whether a stage gates. This skill
 never overrides it, and neither do you — there is no "this case is different."
 (`lib/checkpoint.py` enforces this: writing `status="completed"` for a gated
-stage without `human_approved=True` raises a `GATE VIOLATION` error.)
+stage without an immutable `approval_record` bound to the pending artifact
+raises a `GATE VIOLATION` error.)
 
 When `human_approval_default: true`:
 
@@ -135,8 +136,9 @@ When `human_approval_default: true`:
    be caused by the user's reply.
 
 4. **On the user's response:**
-   - **Approved** → re-write the checkpoint with `status="completed"`,
-     `human_approved=True`, then proceed to the next stage
+   - **Approved** → create the immutable approval record from the pending
+     checkpoint, re-write it with `status="completed"` and that
+     `approval_record`, then proceed to the next stage
    - **Revision requested** → go back to the stage director skill with the
      human's feedback, produce revised artifacts, re-review, re-checkpoint
      (the superseded checkpoint is preserved automatically in `history/`)

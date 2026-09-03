@@ -242,6 +242,8 @@ Specialized pipelines may insert domain-specific stages. For example,
 ## Checkpoint System
 
 Checkpoints persist pipeline state as JSON in the project's `pipeline/` directory.
+The approval object below is abbreviated; the complete required fields are
+defined in `schemas/approvals/approval_record.schema.json`.
 
 ```json
 {
@@ -251,8 +253,15 @@ Checkpoints persist pipeline state as JSON in the project's `pipeline/` director
   "status": "completed",
   "timestamp": "2026-03-28T10:00:00Z",
   "checkpoint_policy": "guided",
-  "human_approval_required": false,
+  "human_approval_required": true,
   "human_approved": true,
+  "approval_record": {
+    "decision": "approve",
+    "artifact_ref": "checkpoint_script.json",
+    "artifact_version": "2026-03-28T10:00:00Z",
+    "artifact_digest": "<sha256 of the exact script artifact>",
+    "approver_id": "backlot-user"
+  },
   "artifacts": { "script": { ... } },
   "review": { ... },
   "cost_snapshot": { ... }
@@ -260,6 +269,12 @@ Checkpoints persist pipeline state as JSON in the project's `pipeline/` director
 ```
 
 **Status values:** `pending` | `in_progress` | `awaiting_human` | `completed` | `failed`
+
+For a gated stage, `completed` is authoritative only with an immutable
+`approval_record` whose project/run/stage identity, artifact digest, and
+checkpoint timestamp match the reviewed pending checkpoint. The
+`human_approved` field is retained only as derived compatibility state and is
+not an approval mechanism.
 
 **Checkpoint policies:**
 - `guided` — checkpoint at key creative stages, auto-proceed on mechanical ones

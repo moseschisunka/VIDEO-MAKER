@@ -22,7 +22,8 @@ from typing import Any
 
 import edge_tts
 
-from lib.checkpoint import init_project, write_checkpoint
+from lib.approval_contracts import build_checkpoint_approval
+from lib.checkpoint import init_project, read_checkpoint, write_checkpoint
 from lib.demo_runner import assert_internal_demo_project
 from lib.events import emit_event
 from lib.audio_assembly import assemble_audio_segments
@@ -1350,6 +1351,56 @@ async def _generate_narration(
     return timeline
 
 
+def _write_internal_demo_checkpoint(
+    project_id: str,
+    stage: str,
+    artifacts: dict[str, Any],
+    *,
+    pipeline_type: str,
+    run_id: str,
+    **checkpoint_kwargs: Any,
+) -> Path:
+    """Advance one explicitly marked demo gate through immutable evidence.
+
+    The internal runner is quarantined and never represents a production user,
+    but its fixtures must still exercise the same checkpoint contract as the
+    real control plane.  The synthetic approval is deliberately scoped to this
+    helper and is never available to ordinary executor callers.
+    """
+    common = {
+        "pipeline_type": pipeline_type,
+        "run_id": run_id,
+        **checkpoint_kwargs,
+    }
+    write_checkpoint(
+        PROJECTS_DIR,
+        project_id,
+        stage,
+        "awaiting_human",
+        artifacts,
+        **common,
+    )
+    pending = read_checkpoint(PROJECTS_DIR, project_id, stage)
+    if pending is None or pending.get("status") != "awaiting_human":
+        raise RuntimeError(f"internal demo gate did not enter awaiting_human: {stage}")
+    approval = build_checkpoint_approval(
+        pending,
+        approver_id="internal-demo-fixture",
+        decision="approve",
+        notes="Synthetic approval for the explicitly marked internal demo fixture.",
+    )
+    return write_checkpoint(
+        PROJECTS_DIR,
+        project_id,
+        stage,
+        "completed",
+        artifacts,
+        timestamp=pending["timestamp"],
+        approval_record=approval,
+        **common,
+    )
+
+
 def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
     if not allow_internal_demo:
         raise RuntimeError(
@@ -1458,8 +1509,6 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
         title=title,
         pipeline_type=pipeline_type,
         run_id=run_id,
-        locale=voice_locale,
-        settings=voice_identity.settings,
         pipeline_dir=PROJECTS_DIR,
         style_playbook=playbook,
     )
@@ -1575,15 +1624,12 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
         }
         validate_artifact("proposal_packet", proposal_packet)
         _write_json(artifacts_dir / "proposal_packet.json", proposal_packet)
-        write_checkpoint(
-            PROJECTS_DIR,
+        _write_internal_demo_checkpoint(
             project_id,
             "proposal",
-            "completed",
             {"proposal_packet": proposal_packet},
             pipeline_type=pipeline_type,
             run_id=run_id,
-            human_approved=True,
         )
 
         narration_path = audio_dir / "narration.mp3"
@@ -1645,30 +1691,24 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
         })
         validate_artifact("script", script)
         _write_json(artifacts_dir / "script.json", script)
-        write_checkpoint(
-            PROJECTS_DIR,
+        _write_internal_demo_checkpoint(
             project_id,
             "script",
-            "completed",
             {"script": script, "voice_plan": voice_plan},
             pipeline_type=pipeline_type,
             run_id=run_id,
-            human_approved=True,
         )
 
         scene_plan = _build_scene_plan(script, playbook, project_id, beats, narration_timeline)
         image_paths = _write_lesson_slides(images_dir, title, beats)
         validate_artifact("scene_plan", scene_plan)
         _write_json(artifacts_dir / "scene_plan.json", scene_plan)
-        write_checkpoint(
-            PROJECTS_DIR,
+        _write_internal_demo_checkpoint(
             project_id,
             "scene_plan",
-            "completed",
             {"scene_plan": scene_plan},
             pipeline_type=pipeline_type,
             run_id=run_id,
-            human_approved=True,
         )
 
         narration_source_tool = "openai_tts" if tts_provider == "openai" else "edge_tts"
@@ -1720,15 +1760,12 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
         }
         validate_artifact("asset_manifest", asset_manifest)
         _write_json(artifacts_dir / "asset_manifest.json", asset_manifest)
-        write_checkpoint(
-            PROJECTS_DIR,
+        _write_internal_demo_checkpoint(
             project_id,
             "assets",
-            "completed",
             {"asset_manifest": asset_manifest},
             pipeline_type=pipeline_type,
             run_id=run_id,
-            human_approved=True,
         )
 
         edit_decisions = _build_edit_decisions(
@@ -1767,7 +1804,6 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
             {"edit_decisions": edit_decisions},
             pipeline_type=pipeline_type,
             run_id=run_id,
-            human_approved=True,
         )
 
         output_path = renders_dir / "final.mp4"
@@ -1845,7 +1881,6 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
             {"render_report": render_report},
             pipeline_type=pipeline_type,
             run_id=run_id,
-            human_approved=True,
         )
         emit_event(project_dir, {
             "tool": "project_pipeline",
@@ -2083,7 +2118,6 @@ def refresh_visuals(project_id: str, *, allow_internal_demo: bool = False) -> Pa
         {"edit_decisions": edit_decisions},
         pipeline_type=pipeline_type,
         run_id=run_id,
-        human_approved=True,
     )
     write_checkpoint(
         PROJECTS_DIR,
@@ -2093,7 +2127,6 @@ def refresh_visuals(project_id: str, *, allow_internal_demo: bool = False) -> Pa
         {"render_report": render_report},
         pipeline_type=pipeline_type,
         run_id=run_id,
-        human_approved=True,
     )
     emit_event(project_dir, {
         "tool": "project_pipeline",

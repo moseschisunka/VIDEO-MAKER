@@ -154,14 +154,18 @@ Live-provider and HyperFrames opt-ins were intentionally skipped. This
 checkpoint satisfies the `PR-1015` integration prerequisite but is not a
 frozen release-candidate or production certification.
 
-The unpublished local follow-ups `PR-1016` and `PR-1017` are intentionally not
-represented as supported-CI evidence. `PR-1016` adds the source-footage
-talking-head manifest executor lane; `PR-1017` rejects zero-duration or
-mismatched-stream media at ingestion. Both have local regression evidence, but
-the supported workflow must rerun from the published checkpoint before the
-corresponding tasks can become `VERIFIED`; because PR-1017 covers a Phase 6
-acceptance boundary, the Phase 6 gate and `SEC-04` remain reopened/partial until
-that supported verification is attached.
+The unpublished local follow-ups `PR-1016`, `PR-1017`, and `PR-1018` are
+intentionally not represented as supported-CI evidence. `PR-1016` adds the
+source-footage talking-head manifest executor lane; `PR-1017` rejects
+zero-duration or mismatched-stream media at ingestion; and `PR-1018` routes the
+canonical Backlot screenshot/simulation fixtures through UUID-bound immutable
+approval records and removes stale initializer arguments from the quarantined
+internal demo runner. They have local regression evidence, but the supported
+workflow must rerun from the published checkpoint before the corresponding
+tasks can become `VERIFIED`; because PR-1017 covers a Phase 6 acceptance
+boundary, the Phase 6 gate and `SEC-04` remain reopened/partial until that
+supported verification is attached. `OPS-06` also remains partial until the
+corrected fixture path is exercised in supported CI.
 
 ## Blocking proof
 

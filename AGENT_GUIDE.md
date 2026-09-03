@@ -581,7 +581,7 @@ The reviewer is a meta skill (`skills/meta/reviewer.md`) — advisory, never dir
 
 The checkpoint protocol meta skill (`skills/meta/checkpoint-protocol.md`) teaches the agent when to pause:
 
-- Read `human_approval_default` from the pipeline manifest per stage. **The manifest value is binding** — never re-judge it. `lib/checkpoint.py` enforces this: a gated stage cannot be written `completed` without `human_approved=True`.
+- Read `human_approval_default` from the pipeline manifest per stage. **The manifest value is binding** — never re-judge it. `lib/checkpoint.py` enforces this: a gated stage cannot be written `completed` without an immutable `approval_record` bound to the pending artifact version; `human_approved` is only a derived compatibility field.
 - Typical gated stages: `idea`/`proposal`, `script`, `scene_plan`, **`assets`** (review the generated assets scene-by-scene — the Backlot board's filmstrip — before compose locks them in), and `publish` where the pipeline has one. Most pipelines auto-proceed on `edit` and `compose`, but not all (documentary-montage gates `edit`) — the manifest you loaded is the only authority.
 - When approval is required: write the checkpoint as `awaiting_human`, present artifact summary, review findings, and cost snapshot — then **END YOUR TURN**. Doing further pipeline work in the same response is a gate violation.
 - **Approval is per-gate.** An early "go ahead" never covers later gates; explicit full-run pre-authorization must be recorded as a `decision_log` entry (`category: "approval_policy"`) to count.
@@ -609,7 +609,7 @@ Checkpoint rules:
 - `status` may be `completed`, `failed`, `awaiting_human`, or `in_progress`.
 - Write an `in_progress` checkpoint on entering each stage; during `assets`/`compose`, refresh `metadata.partial_progress` after each completed scene/asset unit — this powers live progress on the board.
 - `completed` and `awaiting_human` checkpoints must include the canonical artifact.
-- A gated stage (`human_approval_default: true`) can only be written `completed` with `human_approved=True` — the writer raises a GATE VIOLATION otherwise.
+- A gated stage (`human_approval_default: true`) can only be written `completed` with an immutable `approval_record` bound to the exact artifact digest and checkpoint timestamp — the writer raises a GATE VIOLATION otherwise. Do not use `human_approved=True` as an approval authority.
 - Superseded checkpoints are archived automatically to `projects/<project_id>/history/` — stage re-runs never destroy run history.
 - Invalid checkpoints or invalid canonical artifacts are contract violations and should fail fast.
 

@@ -19,11 +19,13 @@ import json
 import shutil
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib.checkpoint import PROJECTS_DIR, init_project, write_checkpoint
+from lib.approval_contracts import build_checkpoint_approval
+from lib.checkpoint import PROJECTS_DIR, init_project, read_checkpoint, write_checkpoint
 from lib.events import emit_event
 
 SCENES = [
@@ -74,7 +76,7 @@ def main() -> int:
 
     print(f"[sim] init_project {pid}")
     init_project(pid, title="The Last Lighthouse", pipeline_type="cinematic",
-                 style_playbook="clean-professional")
+                 style_playbook="clean-professional", run_id=str(uuid.uuid4()))
     art = artifacts_for(pid)
 
     def save_artifact(name: str, data: dict) -> None:
@@ -86,6 +88,26 @@ def main() -> int:
                          pipeline_type="cinematic", **kw)
         print(f"[sim] checkpoint {stage} -> {status}")
         time.sleep(wait)
+
+    def approve(stage: str, artifacts: dict, **kw) -> None:
+        """Complete a gated simulation stage through immutable approval evidence."""
+        pending = read_checkpoint(PROJECTS_DIR, pid, stage)
+        if pending is None or pending.get("status") != "awaiting_human":
+            raise RuntimeError(f"cannot approve missing awaiting checkpoint: {stage}")
+        approval = build_checkpoint_approval(
+            pending,
+            approver_id="backlot-simulation-fixture",
+            decision="approve",
+            notes="Synthetic simulation approval for local Backlot demonstration.",
+        )
+        cp(
+            stage,
+            "completed",
+            artifacts,
+            timestamp=pending["timestamp"],
+            approval_record=approval,
+            **kw,
+        )
 
     # research auto-proceeds (schema-valid fixture from the contract tests)
     cp("research", "in_progress", {})
@@ -101,14 +123,14 @@ def main() -> int:
        review={"round": 1, "decision": "pass", "critical": 0, "suggestions": 1,
                "nitpicks": 0, "summary": "Hook is strong; tightened s3."})
     time.sleep(wait)  # "user reads the script on the board"
-    cp("script", "completed", {"script": art["script"]}, human_approved=True)
+    approve("script", {"script": art["script"]})
 
     # scene_plan gates too
     cp("scene_plan", "in_progress", {})
     save_artifact("scene_plan", art["scene_plan"])
     cp("scene_plan", "awaiting_human", {"scene_plan": art["scene_plan"]})
     time.sleep(wait)
-    cp("scene_plan", "completed", {"scene_plan": art["scene_plan"]}, human_approved=True)
+    approve("scene_plan", {"scene_plan": art["scene_plan"]})
 
     # assets: per-scene tool events + growing manifest + partial progress
     cp("assets", "in_progress", {})
@@ -148,7 +170,10 @@ def main() -> int:
                       "total_reserved_usd": 0.0,
                       "budget_remaining_usd": 5 - manifest["total_cost_usd"]})
     time.sleep(wait)
-    cp("assets", "completed", {"asset_manifest": manifest}, human_approved=True)
+    approve("assets", {"asset_manifest": manifest},
+            cost_snapshot={"total_spent_usd": manifest["total_cost_usd"],
+                           "total_reserved_usd": 0.0,
+                           "budget_remaining_usd": 5 - manifest["total_cost_usd"]})
 
     print(f"[sim] done — board at http://127.0.0.1:4750/p/{pid}")
     if args.cleanup:
