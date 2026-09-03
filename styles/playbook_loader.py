@@ -30,7 +30,7 @@ SCHEMA_PATH = (
 
 
 def _load_playbook_schema() -> dict:
-    with open(SCHEMA_PATH) as f:
+    with open(SCHEMA_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -57,7 +57,7 @@ def load_playbook(name: str, styles_dir: Optional[Path] = None) -> dict[str, Any
             f"(searched {styles_dir} and {styles_dir / CUSTOM_SUBDIR})"
         )
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         playbook = yaml.safe_load(f)
 
     validate_playbook(playbook)
