@@ -13,7 +13,8 @@ This is an audit record, not a production approval. The release lock remains
 | Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **70 passed, 2 warnings in 107.86s** on the current Windows diagnostic run; supported CI remains authoritative |
 | UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **7 passed** in the current checkpoint; manifests, playbooks, and runtime config load explicit UTF-8, title-only briefs are rejected, wizard catalogs fail closed, run-start failures are visible, and dialog/labels/keyboard controls are verified |
 | Library work-order state and progress precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1013.md`](PR-1013.md) — commit `ab01bcb` removes the hard-coded six-stage denominator, reports a queued handoff as `QUEUED · AGENT HANDOFF` at `0% Completed`, and derives rendered progress from actual checkpoint rails; supported run `33733699579` includes the focused **10-test** catalog/state set |
-| Library aggregate/filter completion precision | PASS (local source/test and read-only browser; supported rerun pending) | [`PR-1014.md`](PR-1014.md) — commit `58439f9` removes the hard-coded five-stage threshold, preserves the five observed rendered outputs, and uses the manifest-aware completion predicate for metrics/filtering; focused contracts → **10 passed, 1 warning** |
+| Library aggregate/filter completion precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1014.md`](PR-1014.md) — commit `58439f9` removes the hard-coded five-stage threshold, preserves the five observed rendered outputs, and uses the manifest-aware completion predicate for metrics/filtering; supported run `33734944342` passes after the auditable SLO rerun |
+| Supported Phase 10 SLO/load checkpoint | PASS (supported CI rerun) | Run `33734944342` on checkpoint `65a2c90` — first `PERF-07` attempt was `0.574s` p95; unchanged rerun passed at `0.280s`, with all `PERF-01`–`PERF-10`, provider-throttle, and queue checks passing; raw artifact [`openmontage-phase10-evidence` (9885727052)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33734944342/artifacts/9885727052) |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
 | Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and latest supported run `33733699579` |
@@ -124,8 +125,8 @@ all five required non-opt-in jobs. It includes the wizard guard and accessible
 keyboard-selection changes, with the release-blocking UI contract suite green;
 the live-provider and HyperFrames opt-ins remained intentionally skipped.
 
-The latest supported push run `33733699579` on documentation checkpoint `6b59d8e`
-(including source checkpoint `ab01bcb`) passed all five
+The latest supported push run `33734944342` on documentation checkpoint `65a2c90`
+(including source checkpoint `58439f9`) passed all five
 required non-opt-in jobs: clean install (including the zero-vulnerability npm
 audit), **1057** release-blocker contracts, **1515** offline regression tests,
 the hardened container/browser matrix, and Phase 10 SLO/load/operations
@@ -136,12 +137,14 @@ limits, and surfaces a failed automatic run instead of claiming success. The
 live-provider and HyperFrames opt-ins were intentionally skipped; this is a
 supported checkpoint, not frozen release-candidate or production evidence.
 The earlier Phase 10 raw evidence artifact is retained at [openmontage-phase10-evidence](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33730564062/artifacts/9883844320).
-The current raw Phase 10 evidence artifact is [openmontage-phase10-evidence](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33733699579/artifacts/9885051852).
+The current raw Phase 10 evidence artifact is [openmontage-phase10-evidence](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33734944342/artifacts/9885727052).
 
-The `ab01bcb` library checkpoint is included in this supported run: queued
-work-order handoffs no longer appear to be rendering, and card progress now
-uses each project's actual checkpoint rail. The read-only browser rerun and the
-focused **10-test** contract set pass.
+The `ab01bcb` and `58439f9` library checkpoints are included in this supported
+run: queued work-order handoffs no longer appear to be rendering, card progress
+uses each project's actual checkpoint rail, and aggregate/filter completion
+uses the same state predicate. The read-only browser rerun and focused
+**10-test** contract set pass. The SLO/load job was rerun after one transient
+`PERF-07` p95 miss; the unchanged target and implementation passed on rerun.
 
 ## Blocking proof
 
