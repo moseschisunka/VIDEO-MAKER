@@ -19,6 +19,13 @@ MEDIA_TYPES = frozenset({"image", "video", "audio", "diagram", "animation", "use
 STRATEGIES = frozenset({"user", "stock", "ai", "diagram", "generated", "local", "source"})
 
 
+def strict_bool(value: Any, field_name: str) -> bool:
+    """Accept only a real boolean for media gating and policy fields."""
+    if not isinstance(value, bool):
+        raise MediaContractError(f"{field_name} must be boolean")
+    return value
+
+
 def _text(value: Any, field: str, *, required: bool = True) -> str:
     if value in (None, ""):
         if required:
@@ -64,6 +71,8 @@ class AssetRequest:
             raise MediaContractError("constraints must be an object")
         if not isinstance(self.source_refs, Sequence) or isinstance(self.source_refs, (str, bytes)):
             raise MediaContractError("source_refs must be an array")
+        strict_bool(self.provenance_required, "provenance_required")
+        strict_bool(self.sample_required, "sample_required")
         object.__setattr__(self, "constraints", json.loads(_canonical(dict(self.constraints))))
         object.__setattr__(self, "source_refs", tuple(_text(item, "source_refs[]") for item in self.source_refs))
 
@@ -150,9 +159,15 @@ def build_asset_request(value: Mapping[str, Any] | AssetRequest) -> AssetRequest
         media_type=str(value.get("media_type") or value.get("type") or ""),
         strategy=str(value.get("strategy") or value.get("source_strategy") or value.get("source") or ""),
         constraints=value.get("constraints") or {},
-        provenance_required=bool(value.get("provenance_required", True)),
+        provenance_required=(
+            strict_bool(value["provenance_required"], "provenance_required")
+            if "provenance_required" in value else True
+        ),
         source_refs=value.get("source_refs") or (),
-        sample_required=bool(value.get("sample_required", False)),
+        sample_required=(
+            strict_bool(value["sample_required"], "sample_required")
+            if "sample_required" in value else False
+        ),
     )
 
 
@@ -332,6 +347,6 @@ def validate_mixed_media_coverage(
 
 __all__ = [
     "MEDIA_TYPES", "STRATEGIES", "MediaContractError", "AssetRequest", "AssetResult",
-    "build_asset_request", "validate_asset_request", "validate_asset_result",
+    "build_asset_request", "strict_bool", "validate_asset_request", "validate_asset_result",
     "validate_mixed_media_coverage",
 ]

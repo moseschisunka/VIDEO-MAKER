@@ -10,11 +10,13 @@ import pytest
 
 import lib.media_ingestion as media_ingestion
 from lib.asset_cache import AssetCache
-from lib.contact_sheet import approve_contact_sheet, build_contact_sheet_manifest, write_contact_sheet
+from lib.contact_sheet import ContactSheetError, approve_contact_sheet, build_contact_sheet_manifest, write_contact_sheet
 from lib.diagram_contracts import DiagramContractError, validate_diagram_spec
 from lib.media_contracts import (
     AssetRequest,
     AssetResult,
+    MediaContractError,
+    build_asset_request,
     validate_asset_request,
     validate_asset_result,
     validate_mixed_media_coverage,
@@ -280,6 +282,36 @@ def test_phase6_generation_sample_plan_cache_and_motion(tmp_path: Path):
     assert cache.get(request) is None
 
 
+@pytest.mark.parametrize("field,value", [("sample_required", "false"), ("sample_required", 0), ("provenance_required", "false"), ("provenance_required", 0)])
+def test_phase6_asset_request_rejects_non_boolean_policy_flags(field: str, value: object):
+    raw = {
+        "request_id": "r1",
+        "scene_id": "scene-1",
+        "intent": "a moving product reveal",
+        "media_type": "video",
+        "strategy": "ai",
+        field: value,
+    }
+    with pytest.raises(MediaContractError, match=f"{field} must be boolean"):
+        build_asset_request(raw)
+
+
+@pytest.mark.parametrize("value", ["false", 0, 1, None])
+def test_phase6_contact_sheet_rejects_malformed_approval_requirement(value: object):
+    candidate = {
+        "asset_id": "a1",
+        "scene_id": "s1",
+        "provider": "pexels",
+        "strategy": "stock",
+        "source_url": "https://example.test/a1",
+        "creator": "Creator",
+        "license": "Pexels",
+        "cost_usd": 0,
+    }
+    with pytest.raises(ContactSheetError, match="required_approval must be boolean"):
+        build_contact_sheet_manifest([candidate], batch_id="batch-policy", required_approval=value)
+
+
 def test_phase6_stock_ranking_provenance_and_duplicate_rejection():
     candidate = Candidate(
         source="pexels", source_id="1", source_url="https://pexels.test/1", download_url="https://cdn.test/1.mp4",
@@ -341,6 +373,40 @@ def test_phase6_selector_sample_gate_runs_before_provider(monkeypatch):
     result = selector.execute({"prompt": "approved image", "batch": True})
     assert result.success is False
     assert "sample" in (result.error or "").lower()
+
+
+@pytest.mark.parametrize("field,value", [("sample_required", 0), ("batch", "false")])
+def test_phase6_image_selector_rejects_malformed_sample_controls(monkeypatch, field: str, value: object):
+    from tools.base_tool import ToolResult, ToolStatus
+    from tools.graphics.image_selector import ImageSelector
+
+    class DummyProvider:
+        name = "dummy_image"
+        provider = "dummy"
+        version = "v1"
+        input_schema = {"properties": {"prompt": {}, "output_path": {}}}
+        best_for = []
+        supports = {"image_edit": False}
+
+        def get_status(self):
+            return ToolStatus.AVAILABLE
+
+        def estimate_cost(self, inputs):
+            return 0.0
+
+        def get_info(self, *args, **kwargs):
+            return {"agent_skills": [], "best_for": []}
+
+        def execute(self, inputs):  # pragma: no cover - must not be called
+            raise AssertionError("provider called with malformed sample control")
+
+    provider = DummyProvider()
+    selector = ImageSelector()
+    monkeypatch.setattr(selector, "_providers", lambda: [provider])
+    monkeypatch.setattr(selector, "_select_best_tool", lambda *args, **kwargs: (provider, None))
+    result = selector.execute({"prompt": "sample control", field: value})
+    assert result.success is False
+    assert "boolean" in (result.error or "").lower()
 
 
 def test_phase6_gate_keeps_global_production_lock():

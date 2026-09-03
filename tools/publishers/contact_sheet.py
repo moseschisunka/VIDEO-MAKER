@@ -46,7 +46,9 @@ class ContactSheetBuilder(BaseTool):
             manifest = build_contact_sheet_manifest(
                 inputs.get("candidates") or [],
                 batch_id=str(inputs.get("batch_id") or ""),
-                required_approval=bool(inputs.get("required_approval", True)),
+                required_approval=(
+                    inputs["required_approval"] if "required_approval" in inputs else True
+                ),
             )
             validate_artifact("contact_sheet", manifest)
             output = inputs.get("output_path")

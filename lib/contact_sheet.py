@@ -27,6 +27,8 @@ def build_contact_sheet_manifest(
     """Normalize candidates for Backlot before any batch generation."""
     if not isinstance(batch_id, str) or not batch_id.strip():
         raise ContactSheetError("batch_id is required")
+    if not isinstance(required_approval, bool):
+        raise ContactSheetError("required_approval must be boolean")
     normalized: list[dict[str, Any]] = []
     for index, raw in enumerate(candidates):
         if not isinstance(raw, Mapping):
@@ -76,7 +78,7 @@ def build_contact_sheet_manifest(
     body = {
         "version": "1.0",
         "batch_id": batch_id.strip(),
-        "required_approval": bool(required_approval),
+        "required_approval": required_approval,
         "approval_status": "pending" if required_approval else "not_required",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "candidates": normalized,

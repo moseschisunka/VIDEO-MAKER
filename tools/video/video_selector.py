@@ -334,15 +334,27 @@ class VideoSelector(BaseTool):
         if tool is None:
             return ToolResult(success=False, error="No video generation provider available.")
 
-        from lib.media_contracts import AssetRequest, build_asset_request
+        from lib.media_contracts import AssetRequest, MediaContractError, build_asset_request, strict_bool
         from lib.media_generation import build_generation_plan, collect_output_paths, require_sample_approval, validate_generation_output
 
         operation = str(inputs.get("operation") or "text_to_video")
+        try:
+            requested_sample = (
+                strict_bool(inputs["sample_required"], "sample_required")
+                if "sample_required" in inputs else False
+            )
+            requested_batch = (
+                strict_bool(inputs["batch"], "batch")
+                if "batch" in inputs else False
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid media gate control: {exc}")
+
         raw_request = inputs.get("asset_request")
         if raw_request:
             try:
                 asset_request = build_asset_request(raw_request)
-                if inputs.get("sample_required") or inputs.get("batch"):
+                if requested_sample or requested_batch:
                     asset_request = replace(asset_request, sample_required=True)
             except Exception as exc:
                 return ToolResult(success=False, error=f"Invalid asset_request: {exc}")
@@ -357,7 +369,7 @@ class VideoSelector(BaseTool):
                     "min_duration_seconds": float(inputs["duration"]) if str(inputs.get("duration", "")).replace(".", "", 1).isdigit() else 0,
                     "orientation": "portrait" if inputs.get("aspect_ratio") == "9:16" else "square" if inputs.get("aspect_ratio") == "1:1" else "landscape",
                 },
-                sample_required=bool(inputs.get("sample_required") or inputs.get("batch")),
+                sample_required=requested_sample or requested_batch,
             )
         try:
             plan = build_generation_plan(
