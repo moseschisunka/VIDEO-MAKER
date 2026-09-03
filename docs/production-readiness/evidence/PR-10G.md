@@ -155,7 +155,7 @@ checkpoint satisfies the `PR-1015` integration prerequisite but is not a
 frozen release-candidate or production certification.
 
 The unpublished local follow-ups `PR-1016`, `PR-1017`, `PR-1018`, `PR-1019`,
-`PR-1020`, `PR-1021`, `PR-1022`, `PR-1023`, `PR-1024`, and `PR-1025` are intentionally not represented as supported-CI
+`PR-1020`, `PR-1021`, `PR-1022`, `PR-1023`, `PR-1024`, `PR-1025`, and `PR-1026` are intentionally not represented as supported-CI
 evidence. `PR-1016` adds the
 source-footage talking-head manifest executor lane; `PR-1017` rejects
 zero-duration or mismatched-stream media at ingestion; and `PR-1018` routes the
@@ -170,7 +170,9 @@ provenance, batch, and contact-sheet approval controls, and `PR-1024` rejects
 malformed visual-review, transcript verification, HyperFrames motion/audio,
 and contrast opt-out controls. `PR-1025` makes FFprobe mandatory for VideoCompose,
 fails closed on probe errors/timeouts, validates direct-compose intervals, and
-rejects missing requested audio. They have local regression evidence, but the supported workflow
+rejects missing requested audio. `PR-1026` enforces strict AudioMixer
+normalization, stem, quality-check, and ducking controls. They have local
+regression evidence, but the supported workflow
 must rerun from the published checkpoint before the corresponding tasks can
 become `VERIFIED`; because PR-1017 covers a Phase 6 acceptance boundary, the
 Phase 6 gate and `SEC-04` remain reopened/partial until that supported
