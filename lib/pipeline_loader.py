@@ -516,6 +516,24 @@ def get_permitted_extensions(manifest: dict) -> dict[str, bool]:
     return {k: extensions.get(k, v) for k, v in defaults.items()}
 
 
+def _compatible_playbook_ids(manifest: Mapping[str, Any]) -> list[str]:
+    """Return the built-in playbooks declared compatible by a manifest."""
+    raw = manifest.get("compatible_playbooks")
+    values: list[Any] = []
+    if isinstance(raw, list):
+        values = raw
+    elif isinstance(raw, Mapping):
+        for key in ("recommended", "also_works"):
+            candidate = raw.get(key)
+            if isinstance(candidate, list):
+                values.extend(candidate)
+    return list(dict.fromkeys(
+        str(value).strip().lower()
+        for value in values
+        if str(value).strip()
+    ))
+
+
 def _list_pipeline_catalog_uncached(
     defs_dir: Optional[Path] = None,
     *,
@@ -587,6 +605,11 @@ def _list_pipeline_catalog_uncached(
             "version": manifest.get("version"),
             "description": manifest.get("description", ""),
             "default_playbook": manifest.get("default_playbook", "premium-minimalist"),
+            "compatible_playbooks": _compatible_playbook_ids(manifest),
+            "custom_playbooks_allowed": bool(
+                isinstance(manifest.get("compatible_playbooks"), Mapping)
+                and manifest["compatible_playbooks"].get("custom_allowed", False)
+            ),
             "category": manifest.get("category"),
             "manifest_stability": manifest.get("stability"),
             "maturity": release["manifest_maturity"],

@@ -114,11 +114,14 @@ def test_creation_wizard_uses_authoritative_catalogs_and_fails_closed() -> None:
     assert 'if (wizardOptionsState !== "ready")' in library_js
     assert 'Current production options could not be loaded. Retry before creating a video.' in library_js
     assert 'const pipelines = availablePipelines;' in library_js
-    assert 'const playbooks = availablePlaybooks;' in library_js
+    assert 'const playbooks = compatiblePlaybooksForSelectedPipeline();' in library_js
     assert 'const voices = availableVoices;' in library_js
     assert 'const validPipelines = Array.isArray(pipelines)' in library_js
     assert 'const validVoices = Array.isArray(voices)' in library_js
     assert 'normalizeWizardSelections();' in library_js
+    assert 'compatiblePlaybooksForSelectedPipeline' in library_js
+    pipeline_loader = (REPO_ROOT / "lib" / "pipeline_loader.py").read_text(encoding="utf-8")
+    assert '"compatible_playbooks": _compatible_playbook_ids(manifest)' in pipeline_loader
     assert 'pipeline && pipeline.id === selectedPipeline && pipeline.creation_enabled === true' in library_js
     assert 'availablePipelines.length ? availablePipelines :' not in library_js
     assert 'availablePlaybooks.length ? availablePlaybooks :' not in library_js

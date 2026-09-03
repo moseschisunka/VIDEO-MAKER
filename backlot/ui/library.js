@@ -210,9 +210,20 @@ function normalizeWizardSelections() {
   ))) {
     selectedPipeline = launchPipeline?.id || "";
   }
-  if (!availablePlaybooks.some((playbook) => playbook && playbook.id === selectedPlaybook)) {
-    selectedPlaybook = availablePlaybooks[0]?.id || "";
+  const compatiblePlaybooks = compatiblePlaybooksForSelectedPipeline();
+  if (!compatiblePlaybooks.some((playbook) => playbook && playbook.id === selectedPlaybook)) {
+    selectedPlaybook = compatiblePlaybooks[0]?.id || "";
   }
+}
+
+function compatiblePlaybooksForSelectedPipeline() {
+  const pipeline = availablePipelines.find((candidate) => (
+    candidate && candidate.id === selectedPipeline
+  ));
+  const allowed = new Set((pipeline?.compatible_playbooks || []).map((id) => String(id).toLowerCase()));
+  return allowed.size === 0
+    ? availablePlaybooks
+    : availablePlaybooks.filter((playbook) => allowed.has(String(playbook.id).toLowerCase()));
 }
 
 async function loadWizardOptions() {
@@ -308,7 +319,9 @@ function renderPipelineOptions() {
     const selectPipeline = () => {
       if (!canCreate) return;
       selectedPipeline = pipe.id;
+      normalizeWizardSelections();
       renderPipelineOptions();
+      renderPlaybookOptions();
     };
     const card = el("div", { 
       class: `selector-card lane-${lane}${pipe.id === selectedPipeline ? " selected" : ""}${canCreate ? "" : " disabled"}`,
@@ -341,7 +354,7 @@ function renderPipelineOptions() {
 function renderPlaybookOptions() {
   const container = document.getElementById("playbookSelectionGrid");
   container.innerHTML = "";
-  const playbooks = availablePlaybooks;
+  const playbooks = compatiblePlaybooksForSelectedPipeline();
   if (playbooks.length === 0) {
     container.append(el("div", { class: "field-hint" }, "No visual style playbooks are available."));
     return;
