@@ -9,12 +9,12 @@ This is an audit record, not a production approval. The release lock remains
 
 | Area | Result | Evidence |
 |---|---|---|
-| Offline release-blocker contracts | PASS (supported CI) | Latest supported run `33736220396` on `0f3421d` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1057 passed, 5 skipped, 1 deselected, 1 warning**; raw Phase 10 artifact [`openmontage-phase10-evidence` (9886009100)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33736220396/artifacts/9886009100); earlier runs remain historical evidence |
+| Offline release-blocker contracts | PASS (supported CI) | Latest supported run `33740027654` on `7646d46` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1058 passed, 5 skipped, 1 deselected, 1 warning**; Phase 10 raw artifact [`openmontage-phase10-evidence` (9887525457)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33740027654/artifacts/9887525457); earlier runs remain historical evidence |
 | Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **70 passed, 2 warnings in 107.86s** on the current Windows diagnostic run; supported CI remains authoritative |
 | UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **7 passed** in the current checkpoint; manifests, playbooks, and runtime config load explicit UTF-8, title-only briefs are rejected, wizard catalogs fail closed, run-start failures are visible, and dialog/labels/keyboard controls are verified |
 | Library work-order state and progress precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1013.md`](PR-1013.md) — commit `ab01bcb` removes the hard-coded six-stage denominator, reports a queued handoff as `QUEUED · AGENT HANDOFF` at `0% Completed`, and derives rendered progress from actual checkpoint rails; supported run `33736220396` includes the focused **10-test** catalog/state set |
 | Library aggregate/filter completion precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1014.md`](PR-1014.md) — commit `58439f9` removes the hard-coded five-stage threshold, preserves the five observed rendered outputs, and uses the manifest-aware completion predicate for metrics/filtering; supported run `33736220396` passes |
-| Supported Phase 10 SLO/load checkpoint | PASS (supported CI) | Run `33736220396` on checkpoint `0f3421d` — `PERF-07` p95 `0.290s`, with all `PERF-01`–`PERF-10`, provider-throttle, and queue checks passing; the immediately preceding run's transient `0.574s` sample and successful `0.280s` rerun remain recorded in [`PR-1014.md`](PR-1014.md); raw artifact [`openmontage-phase10-evidence` (9886009100)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33736220396/artifacts/9886009100) |
+| Supported Phase 10 SLO/load checkpoint | PASS (supported CI) | Run `33740027654` on checkpoint `7646d46` — all `PERF-01`–`PERF-10`, provider-throttle, and queue checks pass; raw artifact [`openmontage-phase10-evidence` (9887525457)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33740027654/artifacts/9887525457) |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
 | Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and latest supported run `33736220396` |
@@ -29,7 +29,7 @@ This is an audit record, not a production approval. The release lock remains
 | Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; latest container job in run `33736220396` passed (artifact `9885989279`) |
 | Web security boundary | PARTIAL (policy/test pass; deployed edge pending) | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and PR-1004 security contracts — same-origin/no-cookie bearer posture is explicit; reverse-proxy CORS/CSRF/rate-limit enforcement still needs a deployment drill |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
-| Full repository regression suite | PASS (supported offline CI) | Supported offline regression in run `33736220396` → **1515 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed**; the default Windows temp-root run is diagnostic-only because the host denies pytest's per-user temp directory |
+| Full repository regression suite | PASS (supported offline CI) | Supported offline regression in run `33740027654` → **1516 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed**; the default Windows temp-root run is diagnostic-only because the host denies pytest's per-user temp directory |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
 
 ## Supported CI feedback (2026-09-03)
@@ -145,6 +145,14 @@ uses each project's actual checkpoint rail, and aggregate/filter completion
 uses the same state predicate. The read-only browser rerun and focused
 **10-test** contract set pass. The SLO/load job was rerun after one transient
 `PERF-07` p95 miss; the unchanged target and implementation passed on rerun.
+
+The subsequent supported push run `33740027654` on commit `7646d46` verifies
+the `PR-1015` project-relative caption final-review fix. Its release-blocker
+job passed **1058** tests and its offline regression job passed **1516** tests;
+clean install, container/browser, and Phase 10 SLO/load/operations also passed.
+Live-provider and HyperFrames opt-ins were intentionally skipped. This
+checkpoint satisfies the `PR-1015` integration prerequisite but is not a
+frozen release-candidate or production certification.
 
 ## Blocking proof
 
