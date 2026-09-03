@@ -134,6 +134,37 @@ def test_ducking_rejects_invalid_level(tmp_path: Path):
     assert "between 0 and 1" in (result.error or "")
 
 
+@pytest.mark.parametrize("field", ["normalize", "preserve_stems", "quality_check"])
+@pytest.mark.parametrize("malformed", ["false", "true", 0, 1, None, []])
+def test_full_mix_rejects_malformed_boolean_controls(field, malformed, tmp_path: Path):
+    result = AudioMixer().execute(
+        {
+            "operation": "full_mix",
+            "tracks": [{"path": str(tmp_path / "missing.wav"), "role": "speech"}],
+            field: malformed,
+            "output_path": str(tmp_path / "mix.wav"),
+        }
+    )
+
+    assert result.success is False
+    assert f"{field} must be boolean" in (result.error or "")
+
+
+@pytest.mark.parametrize("malformed", ["false", "true", 0, 1, None, []])
+def test_full_mix_rejects_malformed_ducking_enabled(malformed, tmp_path: Path):
+    result = AudioMixer().execute(
+        {
+            "operation": "full_mix",
+            "tracks": [{"path": str(tmp_path / "missing.wav"), "role": "speech"}],
+            "ducking": {"enabled": malformed},
+            "output_path": str(tmp_path / "mix.wav"),
+        }
+    )
+
+    assert result.success is False
+    assert result.error == "ducking.enabled must be boolean"
+
+
 def _verified_transcript() -> dict:
     return {
         "verified": True,

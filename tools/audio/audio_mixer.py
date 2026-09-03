@@ -218,6 +218,17 @@ class AudioMixer(BaseTool):
     ]
 
     @staticmethod
+    def _strict_flag(inputs: dict[str, Any], field_name: str, *, default: bool) -> bool:
+        """Read a mixer policy flag without Python truthiness coercion."""
+
+        if field_name not in inputs:
+            return default
+        value = inputs[field_name]
+        if not isinstance(value, bool):
+            raise ValueError(f"{field_name} must be boolean")
+        return value
+
+    @staticmethod
     def _loudnorm_filter(inputs: dict[str, Any], in_label: str, out_label: str) -> str:
         """Build a loudnorm filter graph edge honoring the per-call LUFS target.
 
@@ -320,7 +331,7 @@ class AudioMixer(BaseTool):
             return ToolResult(success=False, error="No tracks provided")
 
         output_path = Path(inputs.get("output_path", "mixed_audio.wav"))
-        normalize = inputs.get("normalize", True)
+        normalize = self._strict_flag(inputs, "normalize", default=True)
 
         # Validate all inputs exist
         for t in tracks:
@@ -551,9 +562,18 @@ class AudioMixer(BaseTool):
 
         output_path = Path(inputs.get("output_path", "full_mix_output.wav"))
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        normalize = inputs.get("normalize", True)
+        normalize = self._strict_flag(inputs, "normalize", default=True)
         ducking = inputs.get("ducking", {"enabled": True})
-        preserve_stems = bool(inputs.get("preserve_stems", False))
+        preserve_stems = self._strict_flag(inputs, "preserve_stems", default=False)
+        quality_check = self._strict_flag(inputs, "quality_check", default=False)
+        if isinstance(ducking, dict):
+            if "enabled" in ducking and not isinstance(ducking["enabled"], bool):
+                return ToolResult(success=False, error="ducking.enabled must be boolean")
+            duck_enabled = ducking.get("enabled", True)
+        elif isinstance(ducking, bool):
+            duck_enabled = ducking
+        else:
+            return ToolResult(success=False, error="ducking must be an object or boolean")
 
         speech_tracks = [t for t in tracks if t.get("role") in ("speech", "primary")]
         music_tracks = [t for t in tracks if t.get("role") in ("music", "secondary")]
@@ -635,8 +655,6 @@ class AudioMixer(BaseTool):
                 filter_parts.append(f"[{i}:a]acopy[a{i}]")
 
         # If ducking is enabled and we have both speech and music, apply sidechain
-        duck_enabled = ducking.get("enabled", True) if isinstance(ducking, dict) else bool(ducking)
-
         if duck_enabled and speech_tracks and music_tracks:
             # Build ONE speech stream, then split it into two independent
             # branches: one feeds the sidechain compressor as the ducking key,
@@ -729,7 +747,7 @@ class AudioMixer(BaseTool):
         self.run_command(cmd)
 
         quality_report = None
-        if bool(inputs.get("quality_check", False)):
+        if quality_check:
             from tools.analysis.audio_quality import probe_audio_quality
 
             quality_report = probe_audio_quality(
