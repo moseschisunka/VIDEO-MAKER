@@ -191,6 +191,7 @@ let selectedPlaybook = "premium-minimalist";
 
 async function openWizard() {
   wizardModal.style.display = "flex";
+  wizardModal.setAttribute("aria-hidden", "false");
   document.getElementById("projectTitle").focus();
 
   // Load pipelines, playbooks, voices if not loaded
@@ -215,8 +216,15 @@ async function openWizard() {
 
 function closeWizard() {
   wizardModal.style.display = "none";
+  wizardModal.setAttribute("aria-hidden", "true");
   createProjectForm.reset();
 }
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && wizardModal.style.display !== "none") {
+    closeWizard();
+  }
+});
 
 function renderPipelineOptions() {
   const container = document.getElementById("pipelineSelectionGrid");
@@ -232,15 +240,23 @@ function renderPipelineOptions() {
     const lane = pipe.release_lane || "experimental";
     const canCreate = pipe.creation_enabled === true;
     const statusText = pipe.release_label || "Not production-certified";
+    const selectPipeline = () => {
+      if (!canCreate) return;
+      selectedPipeline = pipe.id;
+      renderPipelineOptions();
+    };
     const card = el("div", { 
       class: `selector-card lane-${lane}${pipe.id === selectedPipeline ? " selected" : ""}${canCreate ? "" : " disabled"}`,
       role: "button",
       tabindex: canCreate ? "0" : "-1",
       "aria-disabled": canCreate ? "false" : "true",
-      onclick: () => {
-        if (!canCreate) return;
-        selectedPipeline = pipe.id;
-        renderPipelineOptions();
+      "aria-pressed": pipe.id === selectedPipeline ? "true" : "false",
+      onclick: selectPipeline,
+      onkeydown: (event) => {
+        if (canCreate && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          selectPipeline();
+        }
       }
     },
       el("div", { class: "selector-card-header" },
@@ -280,9 +296,19 @@ function renderPlaybookOptions() {
 
     const card = el("div", {
       class: `playbook-card${pb.id === selectedPlaybook ? " selected" : ""}`,
+      role: "button",
+      tabindex: "0",
+      "aria-pressed": pb.id === selectedPlaybook ? "true" : "false",
       onclick: () => {
         selectedPlaybook = pb.id;
         renderPlaybookOptions();
+      },
+      onkeydown: (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectedPlaybook = pb.id;
+          renderPlaybookOptions();
+        }
       }
     },
       el("div", { class: "playbook-card-header" },

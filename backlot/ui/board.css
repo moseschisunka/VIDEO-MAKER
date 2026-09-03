@@ -1921,6 +1921,11 @@ body:not(.first) .approval-review, body:not(.first) .packaging-review { animatio
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.selector-card:focus-visible, .playbook-card:focus-visible {
+  outline: 2px solid #00e5ff;
+  outline-offset: 2px;
+}
+
 .selector-card.selected, .playbook-card.selected {
   background: rgba(0, 229, 255, 0.08);
   border-color: #00e5ff;

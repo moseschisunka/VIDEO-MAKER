@@ -74,3 +74,26 @@ def test_creation_wizard_guards_title_only_submissions() -> None:
     assert 'if (!title)' in library_js
     assert 'if (!topic)' in library_js
     assert 'Please describe the video topic and key takeaways.' in library_js
+
+
+@pytest.mark.release_blocker
+def test_creation_wizard_controls_are_accessible_and_keyboard_selectable() -> None:
+    html = (REPO_ROOT / "backlot" / "ui" / "index.html").read_text(encoding="utf-8")
+    library_js = (REPO_ROOT / "backlot" / "ui" / "library.js").read_text(
+        encoding="utf-8"
+    )
+    board_css = (REPO_ROOT / "backlot" / "ui" / "board.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'role="dialog"' in html
+    assert 'aria-modal="true"' in html
+    assert 'aria-labelledby="createWizardTitle"' in html
+    assert 'for="projectTitle"' in html
+    assert 'for="projectTopic"' in html
+    assert 'aria-label="Close video creation wizard"' in html
+    assert 'wizardModal.setAttribute("aria-hidden", "false")' in library_js
+    assert 'wizardModal.setAttribute("aria-hidden", "true")' in library_js
+    assert 'event.key === "Escape"' in library_js
+    assert 'event.key === "Enter" || event.key === " "' in library_js
+    assert '.selector-card:focus-visible, .playbook-card:focus-visible' in board_css
