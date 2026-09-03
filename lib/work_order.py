@@ -564,6 +564,14 @@ def claim_work_order(
                 f"work order is leased by another live agent: {owner!r}"
             )
 
+        # A repeated claim by the same live owner is an idempotent lease
+        # renewal.  The work order still needs its lease timestamp persisted,
+        # but the paired run record has no lease fields and therefore does not
+        # change for this path.  Avoiding that second fsync keeps duplicate
+        # ``/run`` requests inside the queue-start latency budget while the
+        # ordinary claim/recovery paths continue to synchronize both ledgers.
+        renewing_live_claim = owner == agent and not expired
+
         recovered_owner = owner if owner and expired and owner != agent else None
         if owner != agent or expired:
             claim["lease_version"] = int(claim.get("lease_version") or 0) + 1
@@ -604,8 +612,10 @@ def claim_work_order(
         order["updated_at"] = current_time.isoformat()
         validate_work_order(order, manifest=manifest, manifest_path=manifest_path)
         _atomic_write_order(project_path, order)
-        from lib.run_record import sync_run_record
-        sync_run_record(project_path, order, now=current_time)
+        if not renewing_live_claim:
+            from lib.run_record import sync_run_record
+
+            sync_run_record(project_path, order, now=current_time)
         return order
 
 

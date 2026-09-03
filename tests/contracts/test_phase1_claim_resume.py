@@ -122,6 +122,38 @@ def test_only_one_live_agent_can_claim_and_heartbeat(tmp_path: Path) -> None:
     assert renewed["claim"]["lease_version"] == 1
 
 
+def test_live_claim_renewal_skips_redundant_run_record_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    claim_work_order(project, "agent-a", lease_seconds=60, now=T0)
+
+    from lib import run_record
+
+    sync_calls: list[tuple[tuple, dict]] = []
+    monkeypatch.setattr(
+        run_record,
+        "sync_run_record",
+        lambda *args, **kwargs: sync_calls.append((args, kwargs)),
+    )
+
+    renewed = claim_work_order(
+        project,
+        "agent-a",
+        lease_seconds=120,
+        now=T0.replace(second=30),
+    )
+
+    assert renewed["claim"]["claimed_by"] == "agent-a"
+    assert renewed["claim"]["lease_version"] == 1
+    assert sync_calls == []
+    # Skipping the redundant write must not make the existing run ledger
+    # unreadable or alter its immutable execution identity.
+    record = run_record.read_run_record(project, RUN_ID)
+    assert record["project_id"] == PROJECT_ID
+    assert record["run_id"] == RUN_ID
+
+
 def test_expired_lease_can_be_reclaimed_and_increments_version(tmp_path: Path) -> None:
     _project(tmp_path)
     claim_work_order(tmp_path / PROJECT_ID, "agent-a", lease_seconds=1, now=T0)
