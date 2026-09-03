@@ -113,6 +113,40 @@ def test_phase7_unsupported_cut_fails_closed():
         build_edit_mapping(edit, {"assets": []})
 
 
+@pytest.mark.parametrize("malformed", ["false", "true", 0, 1, None, []])
+def test_phase7_rejects_malformed_audio_boolean_controls(malformed):
+    edit = _edit_with_audio()
+    edit["audio"]["music"]["loop"] = malformed
+    with pytest.raises(HyperFramesContractError, match="audio.music.loop must be boolean"):
+        build_edit_mapping(edit, {"assets": []})
+
+    edit = _edit_with_audio()
+    edit["audio"]["music"]["ducking"]["enabled"] = malformed
+    with pytest.raises(HyperFramesContractError, match="audio.music.ducking.enabled must be boolean"):
+        build_edit_mapping(edit, {"assets": []})
+
+
+@pytest.mark.parametrize("malformed", ["false", "true", 0, 1, None, []])
+def test_phase7_rejects_malformed_motion_requirement(malformed):
+    edit = _edit_with_audio()
+    edit["cuts"][0]["motion_required"] = malformed
+    with pytest.raises(HyperFramesContractError, match=r"cuts\[0\]\.motion_required must be boolean"):
+        build_edit_mapping(edit, {"assets": []})
+
+
+def test_phase7_validate_rejects_malformed_contrast_opt_out(tmp_path: Path):
+    workspace = tmp_path / "hyperframes"
+    workspace.mkdir()
+    (workspace / "index.html").write_text("<!doctype html>", encoding="utf-8")
+
+    result = HyperFramesCompose()._validate(
+        {"workspace_path": str(workspace), "skip_contrast": "false"}
+    )
+
+    assert result.success is False
+    assert result.error == "skip_contrast must be boolean"
+
+
 def test_phase7_worker_policy_is_conservative_for_video():
     mapping = build_edit_mapping(
         {

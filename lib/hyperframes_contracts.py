@@ -96,6 +96,16 @@ def _number(value: Any, field: str, *, default: float | None = None) -> float:
     return result
 
 
+def _strict_bool(value: Any, field: str, *, default: bool | None = None) -> bool:
+    """Read a HyperFrames contract boolean without truthiness coercion."""
+
+    if value is None and default is not None:
+        return default
+    if not isinstance(value, bool):
+        raise HyperFramesContractError(f"{field} must be boolean")
+    return value
+
+
 def _asset_lookup(asset_manifest: Mapping[str, Any] | None) -> dict[str, Mapping[str, Any]]:
     values = (asset_manifest or {}).get("assets", [])
     if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
@@ -235,10 +245,12 @@ def build_audio_plan(
         raw_ducking = music.get("ducking", False)
         if isinstance(raw_ducking, Mapping):
             ducking = dict(raw_ducking)
-            ducking_enabled = bool(ducking.get("enabled", True))
+            ducking_enabled = _strict_bool(
+                ducking["enabled"], "audio.music.ducking.enabled"
+            ) if "enabled" in ducking else True
         else:
             ducking = {}
-            ducking_enabled = bool(raw_ducking)
+            ducking_enabled = _strict_bool(raw_ducking, "audio.music.ducking")
         reduction_db = ducking.get("reduction_db", -12)
         reduction_db = _number(reduction_db, "audio.music.ducking.reduction_db", default=-12)
         if reduction_db > 0:
@@ -260,7 +272,11 @@ def build_audio_plan(
             "volume": round(volume, 6),
             "fade_in_seconds": round(fade_in, 6),
             "fade_out_seconds": round(fade_out, 6),
-            "loop": bool(music.get("loop", False)),
+            "loop": (
+                _strict_bool(music["loop"], "audio.music.loop")
+                if "loop" in music
+                else False
+            ),
             "ducking": {
                 "enabled": ducking_enabled,
                 "reduction_db": round(reduction_db, 6),
@@ -421,7 +437,11 @@ def build_edit_mapping(
                 "transition_duration": round(transition_duration, 6),
                 "animation": animation or "static",
                 "keyframe_count": keyframes,
-                "motion_required": bool(raw_cut.get("motion_required", animation not in STATIC_ANIMATIONS)),
+                "motion_required": (
+                    _strict_bool(raw_cut["motion_required"], f"cuts[{index}].motion_required")
+                    if "motion_required" in raw_cut
+                    else animation not in STATIC_ANIMATIONS
+                ),
                 "text": raw_cut.get("text") or raw_cut.get("title") or "",
                 "subtitle": raw_cut.get("subtitle") or raw_cut.get("caption") or "",
                 "mapped_fields": sorted(set(raw_cut.keys()) & _KNOWN_CUT_FIELDS),
@@ -470,7 +490,10 @@ def build_motion_sidecar(mapping: Mapping[str, Any]) -> dict[str, Any]:
                 "end_seconds": end,
                 "animation": cut.get("animation") or "static",
                 "keyframe_count": int(cut.get("keyframe_count") or 0),
-                "motion_required": bool(cut.get("motion_required")),
+                "motion_required": _strict_bool(
+                    cut.get("motion_required"),
+                    f"mapping.cuts[{len(layers)}].motion_required",
+                ),
                 "sample_times": [round(start, 6), round((start + end) / 2, 6), round(end, 6)],
             }
         )

@@ -45,6 +45,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
+from lib.media_contracts import MediaContractError, strict_bool
 from tools.base_tool import (
     BaseTool,
     Determinism,
@@ -2302,6 +2303,19 @@ class VideoCompose(BaseTool):
         verification: dict[str, Any] | None = None
         words: list[dict[str, Any]] = []
         raw_cues: list[dict[str, Any]] | None = None
+        try:
+            require_verified = (
+                strict_bool(inputs["require_verified_transcript"], "require_verified_transcript")
+                if "require_verified_transcript" in inputs
+                else False
+            )
+            transcript_verified = (
+                strict_bool(inputs["transcript_verified"], "transcript_verified")
+                if "transcript_verified" in inputs
+                else False
+            )
+        except MediaContractError as exc:
+            raise CaptionContractError(str(exc)) from exc
 
         def words_from_transcript(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
             output: list[dict[str, Any]] = []
@@ -2335,11 +2349,11 @@ class VideoCompose(BaseTool):
             return output
 
         if isinstance(transcript, dict):
-            if bool(inputs.get("require_verified_transcript", False)):
+            if require_verified:
                 payload = dict(transcript)
                 payload.setdefault("segments", [])
                 if "verified" not in payload and "verification_status" not in payload:
-                    payload["verified"] = bool(inputs.get("transcript_verified", False))
+                    payload["verified"] = transcript_verified
                 verification = validate_verified_transcript(
                     payload,
                     expected_language=inputs.get("expected_language"),
@@ -2396,7 +2410,7 @@ class VideoCompose(BaseTool):
                     )
 
         if not words or not raw_cues:
-            if bool((props.get("subtitles") or {}).get("enabled")) or bool(inputs.get("require_verified_transcript")):
+            if bool((props.get("subtitles") or {}).get("enabled")) or require_verified:
                 raise CaptionContractError("captions are expected but no renderable caption cues were provided")
             return None, verification
         props["captions"] = words
@@ -4002,6 +4016,19 @@ class VideoCompose(BaseTool):
         transcript = inputs.get("transcript") or inputs.get("verified_transcript")
         raw_cues = inputs.get("captions")
         verification: dict[str, Any] | None = None
+        try:
+            require_verified = (
+                strict_bool(inputs["require_verified_transcript"], "require_verified_transcript")
+                if "require_verified_transcript" in inputs
+                else False
+            )
+            transcript_verified = (
+                strict_bool(inputs["transcript_verified"], "transcript_verified")
+                if "transcript_verified" in inputs
+                else False
+            )
+        except MediaContractError as exc:
+            raise CaptionContractError(str(exc)) from exc
         if isinstance(transcript, dict):
             if raw_cues is None and isinstance(transcript.get("segments"), list):
                 raw_cues = cues_from_transcript(
@@ -4009,11 +4036,11 @@ class VideoCompose(BaseTool):
                     max_words_per_cue=int(inputs.get("max_words_per_cue", 6) or 6),
                     max_chars_per_line=int(inputs.get("max_chars_per_line", 42) or 42),
                 )
-        if bool(inputs.get("require_verified_transcript", False)):
+        if require_verified:
             payload = dict(transcript or {}) if isinstance(transcript, dict) else {}
             payload.setdefault("segments", [])
             if "verified" not in payload and "verification_status" not in payload:
-                payload["verified"] = bool(inputs.get("transcript_verified", False))
+                payload["verified"] = transcript_verified
             verification = validate_verified_transcript(
                 payload,
                 expected_language=inputs.get("expected_language"),

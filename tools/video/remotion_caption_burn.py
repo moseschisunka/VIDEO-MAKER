@@ -35,6 +35,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lib.media_contracts import MediaContractError, strict_bool
 from tools.base_tool import (
     BaseTool,
     Determinism,
@@ -608,7 +609,19 @@ class RemotionCaptionBurn(BaseTool):
         # or a sidecar. A production caller must use the first path so the
         # render can carry the verification digest into its evidence.
         transcript = inputs.get("transcript") or inputs.get("verified_transcript")
-        require_verified = bool(inputs.get("require_verified_transcript", False))
+        try:
+            require_verified = (
+                strict_bool(inputs["require_verified_transcript"], "require_verified_transcript")
+                if "require_verified_transcript" in inputs
+                else False
+            )
+            transcript_verified = (
+                strict_bool(inputs["transcript_verified"], "transcript_verified")
+                if "transcript_verified" in inputs
+                else False
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=str(exc))
         verification: dict[str, Any] | None = None
         segments = inputs.get("segments")
         srt_path = inputs.get("srt_path")
@@ -621,7 +634,7 @@ class RemotionCaptionBurn(BaseTool):
             payload = dict(transcript or {}) if isinstance(transcript, dict) else {}
             payload.setdefault("segments", segments if isinstance(segments, list) else [])
             if "verified" not in payload and "verification_status" not in payload:
-                payload["verified"] = bool(inputs.get("transcript_verified", False))
+                payload["verified"] = transcript_verified
             verification = validate_verified_transcript(
                 payload,
                 expected_language=inputs.get("expected_language"),

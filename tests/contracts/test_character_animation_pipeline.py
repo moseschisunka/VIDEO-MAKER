@@ -177,6 +177,9 @@ def test_character_animation_smoke_flow(tmp_path):
             "pose_library": pose_library,
             "action_timeline": action_timeline,
             "preview_path": str(preview_path),
+            "review_level": "final",
+            "browser_preview_checked": True,
+            "frame_samples_checked": True,
             "output_path": str(tmp_path / "character_qa_report.json"),
         }
     )
@@ -185,6 +188,30 @@ def test_character_animation_smoke_flow(tmp_path):
     validate_artifact("character_qa_report", qa_report)
     assert qa_report["status"] == "pass"
     assert qa_report["checks"]["schema_valid"] is True
+
+
+@pytest.mark.parametrize("malformed", ["false", "true", 0, 1, None, []])
+def test_character_reviewer_does_not_coerce_review_gate_flags(malformed):
+    result = CharacterAnimationReviewer().execute(
+        {
+            "review_level": "final",
+            "browser_preview_checked": malformed,
+            "frame_samples_checked": True,
+        }
+    )
+
+    report = result.data["character_qa_report"]
+    assert report["status"] == "revise"
+    assert "browser_preview_checked must be boolean" in report["issues"]
+    assert report["checks"]["browser_preview_checked"] is False
+
+
+def test_character_reviewer_rejects_unknown_review_level():
+    result = CharacterAnimationReviewer().execute({"review_level": "production"})
+
+    report = result.data["character_qa_report"]
+    assert report["status"] == "revise"
+    assert "review_level must be one of: static, browser, final." in report["issues"]
 
 
 def test_character_reviewer_success_false_when_qa_finds_issues():

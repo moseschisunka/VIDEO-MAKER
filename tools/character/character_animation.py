@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lib.media_contracts import MediaContractError, strict_bool
 from schemas.artifacts import validate_artifact
 from tools.base_tool import (
     BaseTool,
@@ -821,8 +822,24 @@ class CharacterAnimationReviewer(BaseTool):
         timeline = inputs.get("action_timeline") or {}
         preview_path = inputs.get("preview_path")
         review_level = inputs.get("review_level", "static")
-        browser_preview_checked = bool(inputs.get("browser_preview_checked", False))
-        frame_samples_checked = bool(inputs.get("frame_samples_checked", False))
+        browser_preview_checked = False
+        frame_samples_checked = False
+        if review_level not in {"static", "browser", "final"}:
+            issues.append(
+                "review_level must be one of: static, browser, final."
+            )
+        for field_name in ("browser_preview_checked", "frame_samples_checked"):
+            if field_name not in inputs:
+                continue
+            try:
+                value = strict_bool(inputs[field_name], field_name)
+            except MediaContractError as exc:
+                issues.append(str(exc))
+                continue
+            if field_name == "browser_preview_checked":
+                browser_preview_checked = value
+            else:
+                frame_samples_checked = value
         assets_exist = True
         if not preview_path:
             assets_exist = False

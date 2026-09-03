@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lib.media_contracts import MediaContractError, strict_bool
 from tools.base_tool import (
     BaseTool,
     Determinism,
@@ -99,11 +100,24 @@ class SubtitleGen(BaseTool):
             candidate_segments = transcript.get("segments") or transcript.get("word_timestamps")
             if isinstance(candidate_segments, list) and candidate_segments:
                 segments = candidate_segments
-        if bool(inputs.get("require_verified_transcript", False)):
+        try:
+            require_verified = (
+                strict_bool(inputs["require_verified_transcript"], "require_verified_transcript")
+                if "require_verified_transcript" in inputs
+                else False
+            )
+            transcript_verified = (
+                strict_bool(inputs["transcript_verified"], "transcript_verified")
+                if "transcript_verified" in inputs
+                else False
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=str(exc))
+        if require_verified:
             payload = dict(transcript or {}) if isinstance(transcript, dict) else {}
             payload.setdefault("segments", segments)
             if "verified" not in payload and "verification_status" not in payload:
-                payload["verified"] = bool(inputs.get("transcript_verified", False))
+                payload["verified"] = transcript_verified
             if "language" not in payload and inputs.get("language"):
                 payload["language"] = inputs["language"]
             verification = validate_verified_transcript(

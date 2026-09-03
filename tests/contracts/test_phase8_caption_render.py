@@ -16,6 +16,7 @@ from lib.caption_contracts import (
     normalize_caption_cues,
 )
 from tools.analysis.audio_quality import probe_audio_quality
+from tools.subtitle.subtitle_gen import SubtitleGen
 from tools.video.hyperframes_compose import HyperFramesCompose
 from tools.video.remotion_caption_burn import RemotionCaptionBurn
 from tools.video.video_compose import VideoCompose
@@ -231,6 +232,80 @@ def test_audio_quality_rejects_full_silence(tmp_path: Path):
     assert report["audio_channels"] == 2
     assert report["silence_ratio"] == 1.0
     assert any("silence ratio" in error for error in report["errors"])
+
+
+@pytest.mark.parametrize("field", ["require_verified_transcript", "transcript_verified"])
+@pytest.mark.parametrize("malformed", ["false", "true", 0, 1, None, []])
+def test_subtitle_generation_rejects_malformed_transcript_controls(field, malformed, tmp_path: Path):
+    result = SubtitleGen().execute(
+        {
+            "segments": [{"words": [{"word": "hello", "start": 0.0, "end": 0.5}]}],
+            field: malformed,
+            "output_path": str(tmp_path / "captions.srt"),
+        }
+    )
+
+    assert result.success is False
+    assert f"{field} must be boolean" in (result.error or "")
+
+
+def test_remotion_caption_burn_rejects_malformed_transcript_controls(tmp_path: Path):
+    source = tmp_path / "source.mp4"
+    _video(source)
+    result = RemotionCaptionBurn().execute(
+        {
+            "input_path": str(source),
+            "output_path": str(tmp_path / "captioned.mp4"),
+            "segments": _transcript()["segments"],
+            "require_verified_transcript": True,
+            "transcript_verified": "true",
+            "force_ffmpeg": True,
+        }
+    )
+
+    assert result.success is False
+    assert "transcript_verified must be boolean" in (result.error or "")
+
+
+def test_hyperframes_caption_contract_rejects_malformed_transcript_controls(tmp_path: Path):
+    result = HyperFramesCompose().execute(
+        {
+            "operation": "scaffold_workspace",
+            "workspace_path": str(tmp_path / "hyperframes"),
+            "edit_decisions": {
+                "render_runtime": "hyperframes",
+                "cuts": [
+                    {
+                        "id": "title",
+                        "source": "",
+                        "type": "text_card",
+                        "text": "Scene",
+                        "in_seconds": 0,
+                        "out_seconds": 2,
+                    }
+                ],
+            },
+            "asset_manifest": {"assets": []},
+            "require_verified_transcript": "false",
+        }
+    )
+
+    assert result.success is False
+    assert "require_verified_transcript must be boolean" in (result.error or "")
+
+
+def test_ffmpeg_caption_contract_rejects_malformed_transcript_controls():
+    with pytest.raises(CaptionContractError, match="transcript_verified must be boolean"):
+        VideoCompose()._caption_contract_for_inputs(
+            {
+                "require_verified_transcript": True,
+                "transcript_verified": "true",
+            },
+            subtitle_path=None,
+            width=1920,
+            height=1080,
+            duration_seconds=2,
+        )
 
 
 def test_audio_quality_rejects_clipped_samples_and_true_peak(tmp_path: Path):

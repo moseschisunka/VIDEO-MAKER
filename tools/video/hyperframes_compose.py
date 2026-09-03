@@ -26,6 +26,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from lib.media_contracts import MediaContractError, strict_bool
 from tools.base_tool import (
     BaseTool,
     Determinism,
@@ -927,8 +928,16 @@ class HyperFramesCompose(BaseTool):
                 success=False,
                 error=f"No index.html in {workspace}. Run scaffold_workspace first.",
             )
+        try:
+            skip_contrast = (
+                strict_bool(inputs["skip_contrast"], "skip_contrast")
+                if "skip_contrast" in inputs
+                else False
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=str(exc))
         args = ["validate", "--json"]
-        if inputs.get("skip_contrast"):
+        if skip_contrast:
             args.append("--no-contrast")
         proc = self._run_hf(args, cwd=workspace, timeout=300, check=False)
         data: dict[str, Any] = {"exit_code": proc.returncode}
@@ -1439,7 +1448,19 @@ class HyperFramesCompose(BaseTool):
         source_value = inputs.get("subtitle_path") or subtitles.get("source")
         raw_cues = inputs.get("captions")
         transcript = inputs.get("transcript") or inputs.get("verified_transcript")
-        require_verified = bool(inputs.get("require_verified_transcript", False))
+        try:
+            require_verified = (
+                strict_bool(inputs["require_verified_transcript"], "require_verified_transcript")
+                if "require_verified_transcript" in inputs
+                else False
+            )
+            transcript_verified = (
+                strict_bool(inputs["transcript_verified"], "transcript_verified")
+                if "transcript_verified" in inputs
+                else False
+            )
+        except MediaContractError as exc:
+            raise CaptionContractError(str(exc)) from exc
         production_mode = bool(inputs.get("production_mode") or inputs.get("strict"))
         verification: dict[str, Any] | None = None
 
@@ -1457,7 +1478,7 @@ class HyperFramesCompose(BaseTool):
             if "segments" not in payload:
                 payload["segments"] = []
             if "verified" not in payload and "verification_status" not in payload:
-                payload["verified"] = bool(inputs.get("transcript_verified", False))
+                payload["verified"] = transcript_verified
             verification = validate_verified_transcript(
                 payload,
                 expected_language=inputs.get("expected_language"),
