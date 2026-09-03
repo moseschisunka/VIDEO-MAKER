@@ -264,8 +264,16 @@ class ImageSelector(BaseTool):
                 strict_bool(inputs["production_mode"], "production_mode")
                 if "production_mode" in inputs else False
             )
+            requested_watermark = (
+                strict_bool(inputs["watermark"], "watermark")
+                if "watermark" in inputs else None
+            )
         except MediaContractError as exc:
             return ToolResult(success=False, error=f"Invalid media gate control: {exc}")
+
+        if requested_watermark is not None:
+            inputs = dict(inputs)
+            inputs["watermark"] = requested_watermark
 
         task_context = self._prepare_task_context(inputs)
         candidates = self._filter_candidates(inputs, self._providers())

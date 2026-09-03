@@ -55,6 +55,21 @@ class MusicSelector(BaseTool):
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         from lib.providers.plans import build_ranked_plan
         from lib.scoring import rank_providers
+        from lib.media_contracts import MediaContractError, strict_bool
+
+        operation = inputs.get("operation", "generate")
+        if operation not in {"generate", "rank"}:
+            return ToolResult(success=False, error=f"Unknown operation: {operation}")
+        try:
+            requested_instrumental = (
+                strict_bool(inputs["force_instrumental"], "force_instrumental")
+                if "force_instrumental" in inputs else None
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid music control: {exc}")
+        if requested_instrumental is not None:
+            inputs = dict(inputs)
+            inputs["force_instrumental"] = requested_instrumental
 
         candidates = self._filter(inputs, self._providers())
         task_context = {
@@ -63,7 +78,7 @@ class MusicSelector(BaseTool):
         }
         rankings = rank_providers(candidates, task_context)
         serialized = [score.to_dict() for score in rankings]
-        if inputs.get("operation") == "rank":
+        if operation == "rank":
             plan = build_ranked_plan(
                 capability=self.capability,
                 operation="generate",

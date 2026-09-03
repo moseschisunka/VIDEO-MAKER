@@ -305,11 +305,70 @@ class VideoSelector(BaseTool):
 
     def execute(self, inputs: dict[str, object]) -> ToolResult:
         from lib.scoring import rank_providers
+        from lib.media_contracts import MediaContractError, strict_bool
+
+        allowed_operations = {"text_to_video", "image_to_video", "reference_to_video", "rank"}
+        raw_operation = inputs.get("operation", "text_to_video")
+        if not isinstance(raw_operation, str) or raw_operation not in allowed_operations:
+            return ToolResult(
+                success=False,
+                error=f"Unsupported video operation: {raw_operation}",
+            )
+        if raw_operation == "rank":
+            target_operation = inputs.get("target_operation", "text_to_video")
+            if target_operation not in {"text_to_video", "image_to_video", "reference_to_video"}:
+                return ToolResult(
+                    success=False,
+                    error=f"Unsupported video operation: {target_operation}",
+                )
+
+        # Provider-neutral audiovisual controls must be strict before provider
+        # discovery/ranking.  In particular, a truthy string can otherwise
+        # turn on multi-shot or a watermark and silently change the authored
+        # output contract.
+        try:
+            requested_sample = (
+                strict_bool(inputs["sample_required"], "sample_required")
+                if "sample_required" in inputs else False
+            )
+            requested_batch = (
+                strict_bool(inputs["batch"], "batch")
+                if "batch" in inputs else False
+            )
+            requested_motion = (
+                strict_bool(inputs["motion_required"], "motion_required")
+                if "motion_required" in inputs else False
+            )
+            requested_strict = (
+                strict_bool(inputs["strict_media_validation"], "strict_media_validation")
+                if "strict_media_validation" in inputs else False
+            )
+            requested_production = (
+                strict_bool(inputs["production_mode"], "production_mode")
+                if "production_mode" in inputs else False
+            )
+            requested_multi_shot = (
+                strict_bool(inputs["multi_shot"], "multi_shot")
+                if "multi_shot" in inputs else None
+            )
+            requested_watermark = (
+                strict_bool(inputs["watermark"], "watermark")
+                if "watermark" in inputs else None
+            )
+        except MediaContractError as exc:
+            return ToolResult(success=False, error=f"Invalid video control: {exc}")
+
+        if any(value is not None for value in (requested_multi_shot, requested_watermark)):
+            inputs = dict(inputs)
+            if requested_multi_shot is not None:
+                inputs["multi_shot"] = requested_multi_shot
+            if requested_watermark is not None:
+                inputs["watermark"] = requested_watermark
 
         candidates = self._providers()
 
         # Rank mode — return scored provider rankings without generating
-        if inputs.get("operation") == "rank":
+        if raw_operation == "rank":
             rank_inputs = self._rank_inputs(inputs)
             task_context = self._prepare_task_context(rank_inputs)
             candidates = self._filter_candidates(rank_inputs, candidates)
@@ -334,48 +393,16 @@ class VideoSelector(BaseTool):
                 },
             )
 
-        allowed_operations = {"text_to_video", "image_to_video", "reference_to_video"}
-        raw_operation = inputs.get("operation", "text_to_video")
-        if not isinstance(raw_operation, str) or raw_operation not in allowed_operations:
-            return ToolResult(
-                success=False,
-                error=f"Unsupported video operation: {raw_operation}",
-            )
-
         # Normal generation — use scored selection
         task_context = self._prepare_task_context(inputs)
         tool, score = self._select_best_tool(inputs, candidates, task_context)
         if tool is None:
             return ToolResult(success=False, error="No video generation provider available.")
 
-        from lib.media_contracts import AssetRequest, MediaContractError, build_asset_request, strict_bool
+        from lib.media_contracts import AssetRequest, build_asset_request
         from lib.media_generation import build_generation_plan, collect_output_paths, require_sample_approval, validate_generation_output
 
         operation = raw_operation
-        try:
-            requested_sample = (
-                strict_bool(inputs["sample_required"], "sample_required")
-                if "sample_required" in inputs else False
-            )
-            requested_batch = (
-                strict_bool(inputs["batch"], "batch")
-                if "batch" in inputs else False
-            )
-            requested_motion = (
-                strict_bool(inputs["motion_required"], "motion_required")
-                if "motion_required" in inputs else False
-            )
-            requested_strict = (
-                strict_bool(inputs["strict_media_validation"], "strict_media_validation")
-                if "strict_media_validation" in inputs else False
-            )
-            requested_production = (
-                strict_bool(inputs["production_mode"], "production_mode")
-                if "production_mode" in inputs else False
-            )
-        except MediaContractError as exc:
-            return ToolResult(success=False, error=f"Invalid media gate control: {exc}")
-
         raw_request = inputs.get("asset_request")
         if raw_request:
             try:
