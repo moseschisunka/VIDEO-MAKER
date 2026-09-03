@@ -55,7 +55,7 @@ jobs:
         run: make lint
 
       - name: Run release-blocking contract suite
-        run: python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q
+        run: .venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q
 
   clean-install-smoke:
     name: Clean-install smoke (PR-1002)
@@ -167,6 +167,26 @@ jobs:
             fi
             sleep 2
           done
+          # The endpoint can answer before Docker's HEALTHCHECK has completed
+          # its start period. Wait for the authoritative container state rather
+          # than treating an early HTTP 200 as a healthy container.
+          for health_attempt in $(seq 1 30); do
+            health_status="$(docker inspect --format='{{.State.Health.Status}}' openmontage-backlot-ci)"
+            case "$health_status" in
+              healthy)
+                break
+                ;;
+              unhealthy)
+                docker logs openmontage-backlot-ci
+                exit 1
+                ;;
+            esac
+            if [ "$health_attempt" = "30" ]; then
+              docker logs openmontage-backlot-ci
+              exit 1
+            fi
+            sleep 2
+          done
           test "$(docker inspect --format='{{.State.Health.Status}}' openmontage-backlot-ci)" = "healthy"
 
       - name: Verify the baked Remotion browser with an in-image still
@@ -258,16 +278,16 @@ jobs:
           printf '%s\n' '{"status":"PASS","install":"npm ci","browser":"ensure","typecheck":"PASS","bundle":"PASS","compositions":"PASS"}' > remotion-clean-build-evidence.json
 
       - name: Measure the documented Linux SLO baseline
-        run: python scripts/measure_slos.py > slo-baseline.json
+        run: .venv/bin/python scripts/measure_slos.py > slo-baseline.json
 
       - name: Fail when an SLO sample is missing or over target
-        run: python -c "import json; d=json.load(open('slo-baseline.json', encoding='utf-8')); bad=[r for r in d.get('results', []) if r.get('status') != 'PASS']; assert not bad, bad"
+        run: .venv/bin/python -c "import json; d=json.load(open('slo-baseline.json', encoding='utf-8')); bad=[r for r in d.get('results', []) if r.get('status') != 'PASS']; assert not bad, bad"
 
       - name: Run the bounded offline load and soak harness
-        run: python scripts/measure_load_soak.py --output pr1009-load-soak.json
+        run: .venv/bin/python scripts/measure_load_soak.py --output pr1009-load-soak.json
 
       - name: Run offline operational drills
-        run: python scripts/run_operations_drill.py --output pr10g-operations-drill.json
+        run: .venv/bin/python scripts/run_operations_drill.py --output pr10g-operations-drill.json
 
       - name: Retain Phase 10 raw evidence
         uses: actions/upload-artifact@v4
@@ -305,7 +325,7 @@ jobs:
         run: make install-dev
 
       - name: Run deterministic offline suite
-        run: python -m pytest tests -m "not live_provider and not hyperframes_qa" -q
+        run: .venv/bin/python -m pytest tests -m "not live_provider and not hyperframes_qa" -q
 
   live-provider:
     name: Opt-in live-provider checks
@@ -329,7 +349,7 @@ jobs:
         run: make install-dev
 
       - name: Run explicitly marked live checks
-        run: python -m pytest tests -m live_provider --run-live-provider -q
+        run: .venv/bin/python -m pytest tests -m live_provider --run-live-provider -q
 
   hyperframes:
     name: Opt-in HyperFrames QA
@@ -358,4 +378,4 @@ jobs:
       - name: Run HyperFrames QA explicitly
         env:
           HYPERFRAMES_QA: "1"
-        run: python -m pytest tests -m hyperframes_qa -q
+        run: .venv/bin/python -m pytest tests -m hyperframes_qa -q

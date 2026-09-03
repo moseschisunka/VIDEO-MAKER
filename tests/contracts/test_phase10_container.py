@@ -71,3 +71,26 @@ def test_ci_container_gate_checks_the_baked_remotion_browser() -> None:
     assert "npx --no-install remotion still src/index.tsx TitledVideo /tmp/container-titled-video-still.png --frame=0" in workflow
     assert "npx --no-install remotion still src/index.tsx LyricOverlay /tmp/container-lyric-still.png --frame=0" in workflow
     assert "openmontage-container-render" in workflow
+
+
+def test_ci_jobs_use_the_environment_where_make_installs_dependencies() -> None:
+    """CI must run pytest/scripts from the venv populated by make install-dev."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "run: python -m pytest tests" not in workflow
+    assert "run: python -m pytest tests/contracts" not in workflow
+    assert ".venv/bin/python -m pytest tests/contracts" in workflow
+    assert ".venv/bin/python -m pytest tests -m \"not live_provider and not hyperframes_qa\" -q" in workflow
+    assert ".venv/bin/python scripts/measure_slos.py" in workflow
+    assert ".venv/bin/python scripts/measure_load_soak.py" in workflow
+    assert ".venv/bin/python scripts/run_operations_drill.py" in workflow
+
+
+def test_ci_waits_for_docker_healthcheck_state_after_http_health() -> None:
+    """An early HTTP 200 must not be mistaken for Docker HEALTHCHECK success."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    wait_marker = "for health_attempt in $(seq 1 30); do"
+    final_check = "test \"$(docker inspect --format='{{.State.Health.Status}}' openmontage-backlot-ci)\" = \"healthy\""
+    assert wait_marker in workflow
+    assert "healthy)" in workflow
+    assert "unhealthy)" in workflow
+    assert workflow.index(wait_marker) < workflow.rindex(final_check)
