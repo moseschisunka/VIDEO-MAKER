@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from lib.providers.bridge import execute_with_provider_executor
 from lib.providers.contracts import ProviderResultStatus
 from lib.providers.executor import ProviderExecutor
@@ -81,6 +83,33 @@ def test_migrated_paid_provider_is_blocked_without_explicit_approval(tmp_path: P
     )
     assert not result.success
     assert "approved" in (result.error or "").lower()
+    assert called is False
+
+
+@pytest.mark.parametrize("field,value", [("provider_approved", "false"), ("approved", 1), ("provider_approved", None)])
+def test_migrated_provider_rejects_malformed_approval_before_execution(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    provider = _MigratedProvider()
+    called = False
+
+    def implementation(_inputs):
+        nonlocal called
+        called = True
+        return ToolResult(success=True)
+
+    result = execute_with_provider_executor(
+        provider,
+        {
+            "text": "malformed approval",
+            "output_path": str(tmp_path / "blocked-malformed.mp3"),
+            "provider_kernel": True,
+            field: value,
+        },
+        implementation=implementation,
+    )
+    assert not result.success
+    assert "boolean" in (result.error or "").lower()
     assert called is False
 
 

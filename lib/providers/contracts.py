@@ -28,6 +28,19 @@ class ProviderContractError(ValueError):
     """Raised when provider request/result data violates the common contract."""
 
 
+def strict_bool(value: Any, field_name: str) -> bool:
+    """Accept only a real JSON/Python boolean at a provider boundary.
+
+    Provider approval is a security and spend control, so values such as
+    ``"false"``, ``0``, ``1``, and ``None`` must not be interpreted through
+    Python truthiness.  Callers that support an optional field should resolve
+    the missing-key default before calling this helper.
+    """
+    if not isinstance(value, bool):
+        raise ProviderContractError(f"{field_name} must be boolean")
+    return value
+
+
 class ProviderResultStatus(str, Enum):
     SUCCESS = "success"
     CACHED = "cached"
@@ -234,6 +247,7 @@ class ProviderRequest:
             raise ProviderContractError("max_retries must be an integer between 0 and 10")
         if isinstance(self.estimated_cost_usd, bool) or not isinstance(self.estimated_cost_usd, (int, float)) or float(self.estimated_cost_usd) < 0:
             raise ProviderContractError("estimated_cost_usd must be non-negative")
+        strict_bool(self.approved, "approved")
         identity = (self.project_id, self.pipeline_type, self.run_id, self.attempt, self.stage)
         if any(value is not None for value in identity[:4]) and not all(value is not None for value in identity[:4]):
             raise ProviderContractError("project_id, pipeline_type, run_id, and attempt must be supplied together")
@@ -409,5 +423,6 @@ __all__ = [
     "RESULT_SCHEMA_PATH",
     "REQUEST_SCHEMA_PATH",
     "provider_artifact_from_path",
+    "strict_bool",
     "stable_idempotency_key",
 ]

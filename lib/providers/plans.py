@@ -6,6 +6,8 @@ import hashlib
 import json
 from typing import Any, Iterable, Mapping
 
+from .contracts import ProviderContractError, strict_bool
+
 
 def build_ranked_plan(
     *,
@@ -41,9 +43,30 @@ def build_ranked_plan(
     selected = next((item for item in candidates if item.get("available_for_execution")), None)
     alternatives = [item for item in candidates if not selected or item.get("tool") != selected.get("tool")]
     selected_cost = float((selected or {}).get("estimated_cost_usd") or 0)
-    approval_required = bool(selected_cost > 0 and not inputs.get("approved", False))
+    approval_error: str | None = None
+    if "provider_approved" in inputs:
+        approval_field = "provider_approved"
+        approval_value = inputs[approval_field]
+    elif "approved" in inputs:
+        approval_field = "approved"
+        approval_value = inputs[approval_field]
+    else:
+        approval_field = "approved"
+        approval_value = False
+    try:
+        approved = strict_bool(approval_value, approval_field)
+    except ProviderContractError as exc:
+        # A dry-run must remain a structured, no-spend result.  Preserve the
+        # malformed input as a visible blocker instead of coercing it into
+        # consent or raising out of a selector response.
+        approved = False
+        approval_error = str(exc)
+
+    approval_required = bool(approval_error or (selected_cost > 0 and not approved))
     if selected is None:
         execution = "blocked_unavailable"
+    elif approval_error:
+        execution = "blocked_invalid_approval"
     elif approval_required:
         execution = "awaiting_approval"
     else:
@@ -70,6 +93,7 @@ def build_ranked_plan(
         "alternatives": alternatives,
         "candidates": candidates,
         "approval_required": approval_required,
+        "approval_error": approval_error,
         "execution": execution,
     }
 

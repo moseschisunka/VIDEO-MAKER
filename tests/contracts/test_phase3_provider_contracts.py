@@ -115,3 +115,16 @@ def test_request_rejects_partial_identity_and_invalid_policy() -> None:
             idempotency_key="d" * 64,
             max_retries=99,
         )
+
+
+@pytest.mark.parametrize("approval", ["false", "true", 0, 1, None])
+def test_request_rejects_non_boolean_approval(approval: object) -> None:
+    with pytest.raises(ProviderContractError, match="approved must be boolean"):
+        ProviderRequest(
+            capability="image_generation",
+            operation="generate",
+            provider="test-provider",
+            payload={"prompt": "a diagram"},
+            idempotency_key="e" * 64,
+            approved=approval,  # type: ignore[arg-type]
+        )

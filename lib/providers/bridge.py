@@ -20,6 +20,7 @@ from .contracts import (
     ProviderRequest,
     ProviderResult,
     ProviderResultStatus,
+    strict_bool,
     stable_idempotency_key,
 )
 from .executor import ProviderExecutor
@@ -121,7 +122,12 @@ def build_provider_request(tool: BaseTool, inputs: Mapping[str, Any], *, operati
     # identity-bearing call (or explicit ``provider_kernel`` call) requires an
     # approval bit.  A production caller must therefore opt in explicitly;
     # ``provider_approved=False`` is always authoritative.
-    approved_value = raw.get("provider_approved", raw.get("approved", not production_context))
+    if "provider_approved" in raw:
+        approved_value = strict_bool(raw["provider_approved"], "provider_approved")
+    elif "approved" in raw:
+        approved_value = strict_bool(raw["approved"], "approved")
+    else:
+        approved_value = not production_context
     return ProviderRequest(
         capability=capability,
         operation=operation_name,
@@ -137,7 +143,7 @@ def build_provider_request(tool: BaseTool, inputs: Mapping[str, Any], *, operati
         timeout_seconds=float(timeout),
         max_retries=int(max_retries),
         estimated_cost_usd=estimated,
-        approved=bool(approved_value),
+        approved=approved_value,
         fallback_class=str(raw.get("fallback_class")) if raw.get("fallback_class") else None,
         metadata={
             "tool": tool.name,

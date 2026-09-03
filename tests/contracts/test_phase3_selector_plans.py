@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from lib.providers.plans import build_ranked_plan
 
 
@@ -47,3 +49,20 @@ def test_ranked_plan_exposes_selection_alternatives_and_no_spend() -> None:
     assert [item["tool"] for item in plan["alternatives"]] == ["backup-image", "offline-image"]
     assert plan["approval_required"] is True
     assert plan["execution"] == "awaiting_approval"
+
+
+@pytest.mark.parametrize("field,value", [("approved", "false"), ("approved", 1), ("provider_approved", "no")])
+def test_ranked_plan_blocks_malformed_approval_without_spend(field: str, value: object) -> None:
+    provider = _Provider("paid-image", "provider-a", "available", 0.03)
+    plan = build_ranked_plan(
+        capability="image_generation",
+        operation="generate",
+        inputs={"prompt": "a clean diagram", field: value},
+        rankings=[{"tool_name": "paid-image", "provider": "provider-a", "weighted_score": 0.91}],
+        providers=[provider],
+    )
+
+    assert plan["would_execute"] is False
+    assert plan["approval_required"] is True
+    assert plan["execution"] == "blocked_invalid_approval"
+    assert "boolean" in plan["approval_error"]
