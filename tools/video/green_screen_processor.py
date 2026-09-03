@@ -13,10 +13,12 @@ Methods:
 from __future__ import annotations
 
 import json
+import math
 import os
 import platform
 import shutil
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +45,7 @@ class GreenScreenProcessor(BaseTool):
     execution_mode = ExecutionMode.SYNC
     determinism = Determinism.DETERMINISTIC
 
-    dependencies = ["cmd:ffmpeg"]
+    dependencies = ["cmd:ffmpeg", "cmd:ffprobe"]
     install_instructions = (
         "Install FFmpeg: https://ffmpeg.org/download.html  "
         "For rembg method: pip install rembg[gpu] onnxruntime"
@@ -125,6 +127,13 @@ class GreenScreenProcessor(BaseTool):
         max_frames = inputs.get("max_frames", 0)
         start = time.time()
 
+        if method not in {"auto", "chromakey", "rembg"}:
+            return ToolResult(success=False, error=f"Unsupported keying method: {method}")
+        if not isinstance(fps, int) or isinstance(fps, bool) or fps <= 0:
+            return ToolResult(success=False, error="fps must be a positive integer")
+        if not isinstance(max_frames, int) or isinstance(max_frames, bool) or max_frames < 0:
+            return ToolResult(success=False, error="max_frames must be a non-negative integer")
+
         # Step 1: Probe input video
         probe = self._probe_video(input_path)
         if not probe:
@@ -155,6 +164,13 @@ class GreenScreenProcessor(BaseTool):
                     success=False, error="No frames extracted from input"
                 )
 
+            frame_files = sorted(frames_dir.glob("frame_*.png"))
+            if not self._frame_sequence_is_contiguous(frame_files, start_index=1):
+                return ToolResult(
+                    success=False,
+                    error="Extracted frame sequence is incomplete or non-contiguous",
+                )
+
             # Step 5: Process frames
             processed_dir = temp_dir / "processed"
             processed_dir.mkdir(exist_ok=True)
@@ -174,13 +190,43 @@ class GreenScreenProcessor(BaseTool):
                     error=f"Frame processing failed with method={method}",
                 )
 
-            # Step 6: Reconstruct video from processed frames
-            self._reconstruct_video(processed_dir, output_path, fps, width, height)
+            # Step 6: Reconstruct into a run-scoped candidate, validate it, and
+            # promote atomically.  A failed FFmpeg invocation must never leave a
+            # partial file at the caller's final path or allow an older output to
+            # be mistaken for this run's result.
+            candidate_path = output_path.with_name(
+                f".{output_path.stem}.{uuid.uuid4().hex}.candidate{output_path.suffix or '.mp4'}"
+            )
+            try:
+                self._reconstruct_video(processed_dir, candidate_path, fps, width, height)
 
-            if not output_path.exists() or output_path.stat().st_size == 0:
-                return ToolResult(
-                    success=False, error="Output video was not created"
-                )
+                if not self._is_nonempty_file(candidate_path):
+                    return ToolResult(
+                        success=False, error="Output video candidate was not created"
+                    )
+
+                rendered_probe = self._probe_video(candidate_path)
+                if (
+                    not rendered_probe
+                    or rendered_probe["width"] != width
+                    or rendered_probe["height"] != height
+                    or not math.isfinite(rendered_probe["duration"])
+                    or rendered_probe["duration"] <= 0
+                ):
+                    return ToolResult(
+                        success=False,
+                        error="Output video candidate failed media validation",
+                    )
+
+                os.replace(candidate_path, output_path)
+            finally:
+                # Only remove the run-scoped candidate.  Preserve any prior final
+                # output when this attempt fails so callers can decide whether to
+                # roll back or retry explicitly.
+                try:
+                    candidate_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
             elapsed = time.time() - start
 
@@ -231,6 +277,16 @@ class GreenScreenProcessor(BaseTool):
                 fps_val = float(num) / float(den) if float(den) != 0 else 30.0
             else:
                 fps_val = float(fps_str)
+
+            if (
+                not math.isfinite(duration)
+                or duration <= 0
+                or width <= 0
+                or height <= 0
+                or not math.isfinite(fps_val)
+                or fps_val <= 0
+            ):
+                return None
 
             return {
                 "duration": duration,
@@ -423,14 +479,21 @@ class GreenScreenProcessor(BaseTool):
             cmd.insert(-1, str(max_frames))
 
         try:
-            self.run_command(cmd, timeout=600)
-        except Exception as e:
-            # ffmpeg may return non-zero but still produce frames
-            pass
+            result = self.run_command(cmd, timeout=600)
+            if getattr(result, "returncode", 0) != 0:
+                return 0
+        except Exception:
+            # Partial frame output from a failed FFmpeg process is not a valid
+            # source for reconstruction.  Fail closed and let the caller report
+            # the extraction failure instead of silently shortening the video.
+            return 0
 
         # Count extracted frames
         frame_files = sorted(frames_dir.glob("frame_*.png"))
         count = len(frame_files)
+
+        if not self._frame_sequence_is_contiguous(frame_files, start_index=1):
+            return 0
 
         if count > 0:
             # Log progress for large frame counts
@@ -457,6 +520,12 @@ class GreenScreenProcessor(BaseTool):
         ffmpeg_bg = f"0x{bg_hex}"
 
         frame_files = sorted(frames_dir.glob("frame_*.png"))
+        if (
+            frame_count <= 0
+            or len(frame_files) != frame_count
+            or not self._frame_sequence_is_contiguous(frame_files)
+        ):
+            return False
         processed = 0
 
         for i, frame in enumerate(frame_files):
@@ -486,32 +555,29 @@ class GreenScreenProcessor(BaseTool):
             ]
             try:
                 self.run_command(cmd, timeout=30)
-                if out_path.exists():
+                if self._is_nonempty_file(out_path):
                     processed += 1
             except Exception:
-                # Try with the frame size explicitly to fix scale
+                # Retry with an explicit finite background.  Do not fall back to
+                # a key-only PNG: that would discard the requested background
+                # color and produce an inaccurate final video while still looking
+                # successful to the caller.
                 try:
                     cmd_retry = [
                         "ffmpeg", "-y",
+                        "-f", "lavfi", "-i", f"color=c={ffmpeg_bg}:size={width}x{height}:rate=1",
                         "-i", str(frame),
-                        "-vf",
-                        f"chromakey=color=0x00FF00:similarity=0.3:blend=0.08,"
-                        f"split[fg][alpha];"
-                        f"[alpha]alphaextract[a];"
-                        f"color=c={ffmpeg_bg}[bg];"
-                        f"[bg][fg][a]maskedmerge",
+                        "-filter_complex",
+                        (
+                            f"[1:v]chromakey=color=0x00FF00:similarity=0.3:blend=0.08,"
+                            f"format=yuva420p[fg];"
+                            f"[0:v][fg]overlay=0:0:shortest=1:format=auto,format=yuv420p"
+                        ),
                         "-frames:v", "1",
                         str(out_path),
                     ]
-                    # Simpler fallback: just apply chromakey without compositing
-                    cmd_simple = [
-                        "ffmpeg", "-y",
-                        "-i", str(frame),
-                        "-vf", f"chromakey=color=0x00FF00:similarity=0.3:blend=0.08",
-                        str(out_path),
-                    ]
-                    self.run_command(cmd_simple, timeout=30)
-                    if out_path.exists():
+                    self.run_command(cmd_retry, timeout=30)
+                    if self._is_nonempty_file(out_path):
                         processed += 1
                 except Exception:
                     continue
@@ -521,7 +587,7 @@ class GreenScreenProcessor(BaseTool):
                     f"[green_screen_processor] Chromakey: {i + 1}/{frame_count} frames"
                 )
 
-        return processed > 0
+        return processed == frame_count
 
     def _process_rembg(
         self,
@@ -550,6 +616,12 @@ class GreenScreenProcessor(BaseTool):
         session = rembg.new_session("u2net_human_seg")
 
         frame_files = sorted(frames_dir.glob("frame_*.png"))
+        if (
+            frame_count <= 0
+            or len(frame_files) != frame_count
+            or not self._frame_sequence_is_contiguous(frame_files)
+        ):
+            return False
         processed = 0
 
         for i, frame in enumerate(frame_files):
@@ -571,7 +643,8 @@ class GreenScreenProcessor(BaseTool):
                 # Save as RGB
                 out_path = processed_dir / frame.name
                 bg.convert("RGB").save(out_path)
-                processed += 1
+                if self._is_nonempty_file(out_path):
+                    processed += 1
 
             except Exception:
                 continue
@@ -581,7 +654,30 @@ class GreenScreenProcessor(BaseTool):
                     f"[green_screen_processor] rembg: {i + 1}/{frame_count} frames"
                 )
 
-        return processed > 0
+        return processed == frame_count
+
+    @staticmethod
+    def _is_nonempty_file(path: Path) -> bool:
+        """Return true only for a regular file with durable bytes."""
+        try:
+            return path.is_file() and path.stat().st_size > 0
+        except OSError:
+            return False
+
+    @staticmethod
+    def _frame_sequence_is_contiguous(
+        frame_files: list[Path], *, start_index: int | None = None
+    ) -> bool:
+        """Validate that frame names form one gap-free numeric sequence."""
+        if not frame_files:
+            return False
+        try:
+            indices = [int(path.stem.rsplit("_", 1)[1]) for path in frame_files]
+        except (IndexError, ValueError):
+            return False
+        if start_index is not None and indices[0] != start_index:
+            return False
+        return indices == list(range(indices[0], indices[0] + len(indices)))
 
     def _reconstruct_video(
         self,
