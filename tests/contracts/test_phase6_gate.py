@@ -179,6 +179,59 @@ def test_phase6_media_ingestion_uses_positive_stream_duration_fallback(
 
     assert facts["decoded"] is True
     assert facts["duration_seconds"] == 1.25
+    assert facts["duration_source"] == "stream"
+
+
+def test_phase6_media_ingestion_prefers_container_duration_over_longer_audio_track(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A longer companion audio stream must not extend the video timeline."""
+
+    candidate = tmp_path / "container-duration.mp4"
+    candidate.write_bytes(b"\x00\x00\x00\x18ftypisom" + (b"\x00" * 256))
+
+    class ProbeResult:
+        stdout = (
+            '{"streams":['
+            '{"codec_type":"video","duration":"1.25"},'
+            '{"codec_type":"audio","duration":"9.5"}],'
+            '"format":{"duration":"1.25"}}'
+        )
+
+    monkeypatch.setattr(media_ingestion.shutil, "which", lambda name: "ffprobe")
+    monkeypatch.setattr(media_ingestion.subprocess, "run", lambda *args, **kwargs: ProbeResult())
+
+    facts = media_ingestion.validate_media_file(candidate, "video")
+
+    assert facts["decoded"] is True
+    assert facts["duration_seconds"] == 1.25
+    assert facts["duration_source"] == "format"
+
+
+def test_phase6_media_ingestion_stream_fallback_ignores_unrelated_longer_stream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When format duration is unavailable, use the declared stream timeline."""
+
+    candidate = tmp_path / "typed-stream-duration.mp4"
+    candidate.write_bytes(b"\x00\x00\x00\x18ftypisom" + (b"\x00" * 256))
+
+    class ProbeResult:
+        stdout = (
+            '{"streams":['
+            '{"codec_type":"video","duration":"1.25"},'
+            '{"codec_type":"audio","duration":"9.5"}],'
+            '"format":{"duration":"N/A"}}'
+        )
+
+    monkeypatch.setattr(media_ingestion.shutil, "which", lambda name: "ffprobe")
+    monkeypatch.setattr(media_ingestion.subprocess, "run", lambda *args, **kwargs: ProbeResult())
+
+    facts = media_ingestion.validate_media_file(candidate, "video")
+
+    assert facts["decoded"] is True
+    assert facts["duration_seconds"] == 1.25
+    assert facts["duration_source"] == "stream"
 
 
 def test_phase6_media_ingestion_rejects_missing_declared_stream_type(

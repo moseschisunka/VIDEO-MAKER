@@ -157,29 +157,51 @@ def validate_media_file(
 
                 # A container can be syntactically decodable while carrying no
                 # usable timeline (for example a zero-duration or N/A probe).
-                # Do not admit it into a user/stock/generated asset manifest;
-                # downstream renderers cannot produce a reliable cut from it.
-                duration_candidates: list[float] = []
-                try:
-                    duration_candidates.append(float(fmt.get("duration")))
-                except (TypeError, ValueError):
-                    pass
-                for stream in streams:
-                    if not isinstance(stream, dict):
-                        continue
+                # Prefer the container duration when it is valid: taking the
+                # maximum across every stream can let a longer audio track
+                # overstate a video asset's usable timeline and produce a
+                # frozen/late-ending cut.  Only fall back to the declared
+                # stream type (and finally any stream for legacy probes) when
+                # the container omits a usable duration.
+                def _positive_finite(value: Any) -> float | None:
                     try:
-                        duration_candidates.append(float(stream.get("duration")))
+                        parsed = float(value)
                     except (TypeError, ValueError):
-                        continue
-                duration = max(
-                    (value for value in duration_candidates if math.isfinite(value)),
-                    default=0.0,
-                )
+                        return None
+                    return parsed if math.isfinite(parsed) and parsed > 0 else None
+
+                format_duration = _positive_finite(fmt.get("duration"))
+                if format_duration is not None:
+                    duration = format_duration
+                    duration_source = "format"
+                else:
+                    typed_durations = [
+                        parsed
+                        for stream in streams
+                        if isinstance(stream, dict)
+                        and (
+                            expected_stream_type is None
+                            or str(stream.get("codec_type") or "").strip().lower()
+                            == expected_stream_type
+                        )
+                        for parsed in [_positive_finite(stream.get("duration"))]
+                        if parsed is not None
+                    ]
+                    all_durations = [
+                        parsed
+                        for stream in streams
+                        if isinstance(stream, dict)
+                        for parsed in [_positive_finite(stream.get("duration"))]
+                        if parsed is not None
+                    ]
+                    duration = max(typed_durations or all_durations, default=0.0)
+                    duration_source = "stream"
                 if duration <= 0:
                     raise MediaValidationError(
                         "ffprobe media must report a positive duration"
                     )
                 facts["duration_seconds"] = duration
+                facts["duration_source"] = duration_source
                 facts["stream_count"] = len(streams)
                 facts["decoded"] = True
             except MediaValidationError:
