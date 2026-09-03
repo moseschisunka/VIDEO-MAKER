@@ -11,6 +11,7 @@ This is an audit record, not a production approval. The release lock remains
 |---|---|---|
 | Offline release-blocker contracts | PASS (supported CI) | GitHub Actions runs `33710765514` and latest checkpoint `33722648046`, `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1047 passed, 5 skipped, 1 deselected, 1 warning in 135.20s** on the prior evidence run |
 | Phase 10 targeted contracts | PASS | `python -m pytest tests/contracts/test_phase10_*.py -q` (all Phase 10 contract modules: clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **58 passed, 1 warning in 57.63s** |
+| UTF-8 authored text integrity | PASS (local Windows and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **3 passed**; manifests, playbooks, and runtime config now load explicit UTF-8 so authored em dashes do not become mojibake in the creation UI or render metadata |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
 | Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported runs `33710765514` and latest checkpoint `33722648046` |
@@ -107,6 +108,14 @@ warning in 72.92s**), while the release-blocker, clean-install, offline
 regression, container/browser, and Phase 10 SLO/load/operations jobs also
 passed. The live-provider opt-in remained intentionally skipped; frozen-RC and
 external operational proof are still outstanding.
+
+The subsequent supported push run `33726592541` on commit `6d23cf8` passed all
+five required non-opt-in jobs: clean install (including the zero-vulnerability
+npm audit), release-blocker contracts, offline regression, the hardened
+container/browser matrix, and Phase 10 SLO/load/operations evidence. It also
+executed the new release-blocking UTF-8 text-integrity contracts. Live-provider
+and HyperFrames opt-ins were intentionally skipped on this push workflow; this
+run validates the loader fix but is not frozen release-candidate certification.
 
 ## Blocking proof
 
