@@ -1,0 +1,16 @@
+Supported CI run: 33710765514
+Environment: Ubuntu 24.04 / Node 22 / Remotion 4.0.484
+
+Explainer                      30      1920x1080      1800 (60.00 sec)
+CinematicRenderer              30      1920x1080      900 (30.00 sec)
+SignalFromTomorrowWithMusic    30      1920x1080      90 (3.00 sec)
+TalkingHead                    30      1080x1920      9000 (300.00 sec)
+TitledVideo                    30      1920x1080      1800 (60.00 sec)
+HeroTitle                      30      1920x1080      510 (17.00 sec)
+ProductReveal                  30      1280x720       240 (8.00 sec)
+ProductRevealVertical          30      720x1280       240 (8.00 sec)
+CaptionOverlayOnly             30      1920x1080      9000 (300.00 sec)
+CollageBurst                   30      1080x1920      900 (30.00 sec)
+LyricOverlay                   30      1080x1920      840 (28.00 sec)
+EndTag                         30      1920x1080      165 (5.50 sec)
+EndTagOverlay                  30      1920x1080      246 (8.20 sec)

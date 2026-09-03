@@ -36,7 +36,13 @@ Raw machine-readable output is attached at
 
 ## Limitations and remaining blockers
 
+The identical offline/fake drill also passed in supported GitHub Actions run
+`33710765514` under Python 3.11. It produced the same bounded provider outage,
+stuck/corrupt job, secret-rotation, and three-rule alert-evaluation evidence.
+The exact supported result is committed at
+[`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json).
+
 This is not evidence of a real deployment rollback, live-provider recovery, or
-external alert delivery. It also does not prove the Linux-reference SLO or a
-clean Remotion build. Those remain required for `PR-10G`; the release lock
-remains `PR-11G`.
+external alert delivery. The Linux-reference SLO and clean Remotion build are
+now supported-CI passes, but those external controls remain required for
+`PR-10G`; the release lock remains `PR-11G`.

@@ -140,8 +140,8 @@ Runtime-specific requirements:
 | `RUN-02` | Run-scoped workspace and candidate output | all | `NOT_RUN` | — |
 | `RUN-03` | Actual media properties are probed | all | `NOT_RUN` | — |
 | `RUN-04` | Unknown/unsupported edit feature fails before silent drop | all | `NOT_RUN` | — |
-| `RUN-05` | Remotion TypeScript/build/composition check passes | Remotion | `PARTIAL` | [`evidence/PR-10G-remotion-clean-install.json`](evidence/PR-10G-remotion-clean-install.json) — disposable TypeScript, bundle, and 13-composition checks pass; standard browser bootstrap and supported CI remain required |
-| `RUN-06` | Remotion undefined-variable regression and golden render pass | Remotion | `PARTIAL` | [`evidence/PR-200.md`](evidence/PR-200.md), [`evidence/PR-10G-remotion-defaults.md`](evidence/PR-10G-remotion-defaults.md) — regression and local stills pass; supported container/clean-browser proof remains required |
+| `RUN-05` | Remotion TypeScript/build/composition check passes | Remotion | `PASS` | [`evidence/PR-10G-remotion-clean-build-ci.json`](evidence/PR-10G-remotion-clean-build-ci.json), [`evidence/PR-10G-remotion-compositions-ci.txt`](evidence/PR-10G-remotion-compositions-ci.txt), supported run `33710765514` |
+| `RUN-06` | Remotion undefined-variable regression and golden render pass | Remotion | `PASS` | [`evidence/PR-200.md`](evidence/PR-200.md), [`evidence/PR-10G-container-render-ci.json`](evidence/PR-10G-container-render-ci.json) — regression and supported six-composition container still matrix pass |
 | `RUN-07` | HyperFrames lint/validate/inspect/render all pass | HyperFrames | `NOT_RUN` | — |
 | `RUN-08` | HyperFrames offline render passes | HyperFrames | `NOT_RUN` | — |
 | `RUN-09` | HyperFrames offsets/fades/ducking match canonical timeline | HyperFrames | `NOT_RUN` | — |
@@ -230,7 +230,7 @@ Measure on a documented reference environment with local/fake providers unless e
 | `PERF-03` | Create-request validation | p95 ≤ 500 ms excluding disk contention | `PASS` | [`PR-1007`](evidence/PR-1007.md) — fingerprint-cached catalog baseline p95 0.045s |
 | `PERF-04` | Duplicate `/run` idempotent response | p95 ≤ 500 ms | `PASS` | [`PR-1007`](evidence/PR-1007.md) — 11 duplicate responses p95 0.163s; no second run |
 | `PERF-05` | Backlot state refresh for active project | p95 ≤ 400 ms | `PASS` | [`PR-1007`](evidence/PR-1007.md) — 11-sample active-project baseline p95 0.007s |
-| `PERF-06` | Local render throughput | ≤ 2.0 wall seconds per output second (FFmpeg reference fixture) | `PASS` | [`PR-1007`](evidence/PR-1007.md) and [`evidence/PR-10G-slo-windows-after-fast.json`](evidence/PR-10G-slo-windows-after-fast.json) — post-tuning 11 renders p95 1.005x, ffprobe-validated; Ubuntu reference still required |
+| `PERF-06` | Local render throughput | ≤ 2.0 wall seconds per output second (FFmpeg reference fixture) | `PASS` | [`PR-1007`](evidence/PR-1007.md), [`evidence/PR-10G-slo-windows-after-fast.json`](evidence/PR-10G-slo-windows-after-fast.json), and [`evidence/PR-10G-slo-linux-ci.json`](evidence/PR-10G-slo-linux-ci.json) — Windows diagnostic p95 1.005x and supported Ubuntu reference p95 1.127x, both ffprobe-validated |
 | `PERF-07` | Restart-to-resume detection | p95 ≤ 500 ms | `PASS` | [`PR-1007`](evidence/PR-1007.md) — 11 durable restart/read cycles p95 0.115s |
 | `PERF-08` | Bounded concurrent runs | ≥ 4 isolated local/fake runs without contamination/OOM | `PASS` | [`evidence/PR-1009.md`](evidence/PR-1009.md) — 4/4 isolated runs, unique UUIDs, 0 contamination, bounded memory |
 | `PERF-09` | Temporary disk cleanup | 0 orphan files after the approved ten-run soak | `PASS` | [`evidence/PR-1009.md`](evidence/PR-1009.md) — 10 iterations, 0 added `.tmp`/`.part`/`.lock` files |
@@ -242,11 +242,11 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 
 | ID | Requirement | Method | Status | Evidence |
 |---|---|---|---|---|
-| `OPS-01` | Clean supported Python environment installs successfully | clean-install CI/manual | `PASS` | [`evidence/PR-1002.md`](evidence/PR-1002.md) — disposable install and smoke gate pass; clean Linux CI job remains the release-candidate proof |
-| `OPS-02` | Remotion dependencies install/build from lockfile | clean Node install/build | `PARTIAL` | [`evidence/PR-10G-remotion-clean-install.json`](evidence/PR-10G-remotion-clean-install.json) — disposable `npm ci`, TypeScript, bundle, and composition enumeration pass; standard browser ensure and Ubuntu CI artifact still required before `PR-10G` |
-| `OPS-03` | HyperFrames setup/doctor/offline render is documented and passes | clean environment | `PASS` | [`evidence/PR-703.md`](evidence/PR-703.md) — offline HyperFrames doctor/runtime and strict render evidence |
-| `OPS-04` | Schemas/manifests/styles/skills/UI/templates ship with package/image | installed-package inspection | `PASS` | [`evidence/PR-1001.md`](evidence/PR-1001.md) — wheel and installed-target package-data checks pass |
-| `OPS-05` | Container starts, reports health, and renders local smoke fixture | container test | `PARTIAL` | CI `container-build` now validates authenticated health plus an in-image `EndTag` still and retains `openmontage-container-render`; Docker execution is unavailable locally, so a passing CI run is required |
+| `OPS-01` | Clean supported Python environment installs successfully | clean-install CI/manual | `PASS` | [`evidence/PR-1002.md`](evidence/PR-1002.md) — disposable install and supported clean-install smoke pass in run `33710765514` |
+| `OPS-02` | Remotion dependencies install/build from lockfile | clean Node install/build | `PASS` | [`evidence/PR-10G-remotion-clean-build-ci.json`](evidence/PR-10G-remotion-clean-build-ci.json), [`evidence/PR-10G-remotion-compositions-ci.txt`](evidence/PR-10G-remotion-compositions-ci.txt), supported run `33710765514` |
+| `OPS-03` | HyperFrames setup/doctor/offline render is documented and passes | clean environment | `PARTIAL` | [`evidence/PR-703.md`](evidence/PR-703.md) and [`evidence/PR-10G-hyperframes-offline-qa.md`](evidence/PR-10G-hyperframes-offline-qa.md) — cached offline doctor/strict render passes; supported opt-in HyperFrames and frozen-RC evidence remain required |
+| `OPS-04` | Schemas/manifests/styles/skills/UI/templates ship with package/image | installed-package inspection | `PASS` | [`evidence/PR-1001.md`](evidence/PR-1001.md) — clean-checkout wheel and installed-target package-data checks pass in supported run `33710765514` |
+| `OPS-05` | Container starts, reports health, and renders local smoke fixture | container test | `PASS` | [`evidence/PR-10G-container-render-ci.json`](evidence/PR-10G-container-render-ci.json) — supported run `33710765514` validates authenticated health and six non-empty in-image Remotion stills |
 | `SEC-01` | Remote Backlot requires authentication | security integration test | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
 | `SEC-02` | User/project authorization prevents cross-project access | security test | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
 | `SEC-03` | Project/media path traversal is rejected | attack-case tests | `PASS` | [`PR-1004`](evidence/PR-1004.md) |

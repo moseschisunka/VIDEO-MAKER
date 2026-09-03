@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "install": "npm ci",
+  "browser": "ensure",
+  "typecheck": "PASS",
+  "bundle": "PASS",
+  "compositions": "PASS"
+}

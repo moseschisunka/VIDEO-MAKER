@@ -9,21 +9,21 @@ This is an audit record, not a production approval. The release lock remains
 
 | Area | Result | Evidence |
 |---|---|---|
-| Offline release-blocker contracts | PASS | `python -m pytest tests/contracts/ -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1044 passed, 5 skipped, 1 deselected, 1 warning in 332.57s** |
+| Offline release-blocker contracts | PASS (supported CI) | GitHub Actions run `33710765514`, `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1047 passed, 5 skipped, 1 deselected, 1 warning in 135.20s** |
 | Phase 10 targeted contracts | PASS | `python -m pytest tests/contracts/test_phase10_*.py -q` (all Phase 10 contract modules: clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **58 passed, 1 warning in 57.63s** |
-| Bounded load/soak | PASS | [`PR-1009.md`](PR-1009.md) and [`PR-1009-load-soak.json`](PR-1009-load-soak.json) |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
-| Offline operational drills | PASS (fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md) and [`PR-10G-operations-drill.json`](PR-10G-operations-drill.json) |
-| Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill.json`](PR-10G-operations-drill.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
+| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported run `33710765514` |
+| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported run `33710765514` |
+| Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
 | Current cached HyperFrames QA | PASS (local cached-runtime diagnostic; supported CI/RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — opt-in scaffold/lint/validate/inspect/render completes with cached HyperFrames 0.8.25; the QA harness now supports explicit offline mode |
-| Package data and clean Python smoke | PASS (local/disposable evidence) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md) |
-| Disposable clean Remotion install/build | PARTIAL (local pass; supported browser bootstrap pending) | [`PR-10G-remotion-clean-install.json`](PR-10G-remotion-clean-install.json) — lockfile install, TypeScript, bundle, and 13-composition enumeration pass; standard browser ensure is blocked by restricted local egress |
-| Remotion default-props smoke | PASS (local; container proof pending) | [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) and [`PR-10G-remotion-default-sweep.json`](PR-10G-remotion-default-sweep.json) — fixed four missing/empty-media default paths; all 13 compositions now render a non-empty local still |
+| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and run `33710765514` — clean checkout package-data contract and PR-1002 smoke pass |
+| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass |
+| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image |
 | Web security boundary | PARTIAL (policy/test pass; deployed edge pending) | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and PR-1004 security contracts — same-origin/no-cookie bearer posture is explicit; reverse-proxy CORS/CSRF/rate-limit enforcement still needs a deployment drill |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
-| Full repository regression suite | PASS (local) | `python -m pytest -q` → **1499 passed, 10 skipped, 1 warning, 1 subtests passed in 420.46s**; the executable end-to-end fixture also passes **38/38** via `python tests/qa/test_08_end_to_end.py` |
+| Full repository regression suite | PASS (local and supported offline CI) | Local `python -m pytest -q` → **1499 passed, 10 skipped, 1 warning, 1 subtests passed**; supported offline regression in run `33710765514` → **1503 passed, 6 skipped, 3 deselected, 1 warning, 1 subtests passed in 199.15s** |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
 
 ## Supported CI feedback (2026-09-03)
@@ -67,39 +67,34 @@ fault report omitted the corpus's canonical `decoded black` signal when only
 `blackdetect` found an interval. The Dockerfile now carries the complete
 headless-browser dependency set; wheel mappings now ship only tracked curated
 fixtures; and interval diagnostics now report decoded black/blank ranges. A
-fresh supported CI run is required to validate those corrections.
+fresh supported CI run was required to validate those corrections; its result
+is recorded below.
+
+That fresh supported run is `33710765514` (commit `f6d8612`). It passed the
+clean-install, release-blocker, offline-regression, container/browser, and
+Phase 10 SLO/load/operations jobs. The supported raw evidence is retained in
+[`PR-10G-slo-linux-ci.json`](PR-10G-slo-linux-ci.json),
+[`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json),
+[`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json),
+and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt).
+The immutable workflow record is [GitHub Actions run
+33710765514](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33710765514).
 
 ## Blocking proof
 
-1. `PR-1003` cannot be promoted from `IMPLEMENTED` to `VERIFIED` on this
-   workstation: neither the Docker CLI nor a Docker daemon is available. The
-   checked-in GitHub Actions `container-build` job is the authoritative proof
-   and must build, start, authenticate, health-check the pinned image, and
-   render the asset-free/default-preview `EndTag`, `ProductReveal`,
-   `SignalFromTomorrowWithMusic`, `TalkingHead`, `TitledVideo`, and
-   `LyricOverlay` compositions with the baked browser.
-2. `OPS-02` has a disposable local install/typecheck/bundle/enumeration pass,
-   but the standard Remotion browser bootstrap is blocked by this session's
-   restricted egress. CI now runs browser ensure, TypeScript, bundle, and
-   composition enumeration on Ubuntu and writes `remotion-clean-build-evidence.json`;
-   a passing CI run with that artifact attached is still required for
-   supported-environment proof.
-3. The documented Linux reference SLO run is not available in this local
-   Windows session. After the bounded FFmpeg default-preset tuning, the
-   current Windows diagnostic passes `PERF-06` at p95 **1.005×** (target
-   ≤2.0×). The Ubuntu reference runner must still be measured; a local pass
-   cannot substitute for the supported reference environment.
-4. `REC-03` and `OBS-03` still require an executed deployment/rollback drill
-   and alert-delivery drill. The bounded fake-provider, stuck-job,
-   corrupt-artifact, and secret-rotation procedures now pass locally, but they
-   do not substitute for those external drills.
-5. `SEC-06` has an explicit fail-closed policy and local contract, but no
-   supported deployment has yet demonstrated same-origin CORS, bearer-only
-   CSRF behavior, and distributed `429` request limiting at the trusted edge.
-6. `OBS-02` remains partial: the bounded runtime metrics snapshot resets on
-   restart and no external aggregation/scrape proof is attached. The durable
-   event stream supports reconstruction, but production alerting and SLO
-   denominators still require the approved monitoring sink.
+1. `REC-03` still requires an executed deployment/rollback drill on the
+   approved deployment target. The local/fake recovery drill and supported
+   container test do not prove rollback of a deployed service.
+2. `OBS-03` still requires external alert delivery. The fake sink proves rule
+   evaluation only; no paging/notification sink has been exercised.
+3. `SEC-06` still requires a supported deployment to demonstrate same-origin
+   CORS, bearer-only CSRF behavior, and distributed `429` request limiting at
+   the trusted edge.
+4. `OBS-02` still requires external metrics/log aggregation or scrape proof
+   and durable SLO denominators; the in-process snapshot resets on restart.
+5. HyperFrames' opt-in supported CI job was skipped in run `33710765514`; the
+   cached offline runtime evidence is not a substitute for the clean supported
+   HyperFrames certification and frozen-RC rerun.
 
 ## Decision
 

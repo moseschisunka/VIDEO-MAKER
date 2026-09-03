@@ -1,0 +1,52 @@
+{
+  "drills": {
+    "alerting": {
+      "delivered_count": 3,
+      "rule_ids": ["provider-circuit-open", "queue-start-latency", "unauthorized-access-burst"],
+      "severities": ["P0", "P1"],
+      "sink": "in_process_fake_no_network",
+      "status": "PASS"
+    },
+    "provider_outage": {
+      "event_count": 8,
+      "first_attempts": 2,
+      "first_error_kind": "rate_limit",
+      "first_status": "failed",
+      "provider_calls": 2,
+      "second_error_kind": "circuit_open",
+      "second_status": "blocked",
+      "status": "PASS"
+    },
+    "secret_rotation": {
+      "new_token_after_rotation": true,
+      "old_token_after_rotation": 401,
+      "old_token_before_rotation": true,
+      "response_secret_free": "PASS",
+      "status": "PASS"
+    },
+    "stuck_and_corrupt_job": {
+      "cancel_http_status": 200,
+      "cancel_status": "cancelled",
+      "claim_http_status": 200,
+      "corrupt_artifact": {
+        "candidate_preserved": true,
+        "candidate_size_bytes": 0,
+        "error_code": "provider_partial_output",
+        "final_promoted": false,
+        "result_status": "failed",
+        "status": "PASS"
+      },
+      "duplicate_claim_http_status": 409,
+      "reclaim_http_status": 200,
+      "reclaim_status": "running",
+      "restart_http_status": 200,
+      "restart_next_stage": "idea",
+      "restart_status": "queued",
+      "status": "PASS"
+    }
+  },
+  "mode": "offline_fake_no_network_no_spend",
+  "python": "3.11.16",
+  "schema_version": "1.0",
+  "status": "PASS"
+}

@@ -1,0 +1,95 @@
+{
+  "elapsed_seconds": 4.407959,
+  "gate": "PR-1009",
+  "network_calls": 0,
+  "offline_only": true,
+  "paid_provider_calls": 0,
+  "results": {
+    "PERF-08": {
+      "completed": 4,
+      "contamination": [],
+      "elapsed_seconds": 1.158626,
+      "peak_python_memory_bytes": 129732,
+      "project_count": 4,
+      "results": [
+        {
+          "marker": {"owner": "pr1009-agent-00", "project_id": "pr1009-load-00", "run_id": "68d98b12-726e-4432-b54f-b3c1ade48fc7"},
+          "owner": "pr1009-agent-00",
+          "project_id": "pr1009-load-00",
+          "run_id": "68d98b12-726e-4432-b54f-b3c1ade48fc7",
+          "run_root": "/tmp/openmontage-pr1009-iuwephs0/projects/pr1009-load-00/runs/68d98b12-726e-4432-b54f-b3c1ade48fc7",
+          "status": "running"
+        },
+        {
+          "marker": {"owner": "pr1009-agent-01", "project_id": "pr1009-load-01", "run_id": "65ec2549-148a-4428-9c92-d6f5867a2dc6"},
+          "owner": "pr1009-agent-01",
+          "project_id": "pr1009-load-01",
+          "run_id": "65ec2549-148a-4428-9c92-d6f5867a2dc6",
+          "run_root": "/tmp/openmontage-pr1009-iuwephs0/projects/pr1009-load-01/runs/65ec2549-148a-4428-9c92-d6f5867a2dc6",
+          "status": "running"
+        },
+        {
+          "marker": {"owner": "pr1009-agent-02", "project_id": "pr1009-load-02", "run_id": "0d021b86-4c17-4217-8bcd-06334d99c1c1"},
+          "owner": "pr1009-agent-02",
+          "project_id": "pr1009-load-02",
+          "run_id": "0d021b86-4c17-4217-8bcd-06334d99c1c1",
+          "run_root": "/tmp/openmontage-pr1009-iuwephs0/projects/pr1009-load-02/runs/0d021b86-4c17-4217-8bcd-06334d99c1c1",
+          "status": "running"
+        },
+        {
+          "marker": {"owner": "pr1009-agent-03", "project_id": "pr1009-load-03", "run_id": "3cc9d981-e22c-4ecb-bd9d-79bf3820bdec"},
+          "owner": "pr1009-agent-03",
+          "project_id": "pr1009-load-03",
+          "run_id": "3cc9d981-e22c-4ecb-bd9d-79bf3820bdec",
+          "run_root": "/tmp/openmontage-pr1009-iuwephs0/projects/pr1009-load-03/runs/3cc9d981-e22c-4ecb-bd9d-79bf3820bdec",
+          "status": "running"
+        }
+      ],
+      "status": "PASS",
+      "workers": 4
+    },
+    "PERF-09": {
+      "added_orphans": [],
+      "after_orphans": [],
+      "before_orphans": [],
+      "iterations": 10,
+      "status": "PASS"
+    },
+    "PERF-10": {
+      "baseline_subscribers": 0,
+      "burst": 200,
+      "dropped_burst_events": 13600,
+      "final_subscribers": 0,
+      "max_queue": 64,
+      "queue_limit": 64,
+      "status": "PASS",
+      "subscriptions": 100
+    },
+    "PROVIDER-THROTTLE": {
+      "call_times": [0.0, 0.25, 0.5, 0.75, 1.0, 1.25],
+      "calls": 6,
+      "minimum_spacing_seconds": 0.25,
+      "rate_per_second": 4.0,
+      "required_spacing_seconds": 0.25,
+      "status": "PASS"
+    },
+    "QUEUE": {
+      "conflicts": 7,
+      "contenders": 8,
+      "outcomes": [
+        {"agent": "pr1009-contender-00", "outcome": "claimed", "owner": "pr1009-contender-00"},
+        {"agent": "pr1009-contender-01", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"},
+        {"agent": "pr1009-contender-02", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"},
+        {"agent": "pr1009-contender-03", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"},
+        {"agent": "pr1009-contender-04", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"},
+        {"agent": "pr1009-contender-05", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"},
+        {"agent": "pr1009-contender-06", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"},
+        {"agent": "pr1009-contender-07", "error": "work order is leased by another live agent: 'pr1009-contender-00'", "outcome": "conflict"}
+      ],
+      "status": "PASS",
+      "winners": 1
+    }
+  },
+  "schema_version": "1.0",
+  "status": "PASS"
+}

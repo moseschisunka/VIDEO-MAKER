@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "browser": "baked",
+  "compositions": [
+    "EndTag",
+    "ProductReveal",
+    "SignalFromTomorrowWithMusic",
+    "TalkingHead",
+    "TitledVideo",
+    "LyricOverlay"
+  ],
+  "outputs": "non_empty"
+}

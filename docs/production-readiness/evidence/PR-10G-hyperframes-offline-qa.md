@@ -27,9 +27,12 @@ fixture completed scaffold → lint → validate → inspect → render; the ren
 produced a non-empty 5-second MP4 (150 frames) from the cached browser and
 vendored GSAP runtime.
 
-The standard online probe remains available for CI. A supported Ubuntu CI run,
-container execution, and a frozen release-candidate rerun remain required
-before `RUN-07`, `RUN-08`, or `PR-10G` can be marked complete.
+The standard online probe remains available for the opt-in CI job. The core
+supported run `33710765514` intentionally skipped that opt-in job, so the
+cached offline diagnostic above is not yet a clean supported-environment
+HyperFrames certification. A supported Ubuntu HyperFrames run and a frozen
+release-candidate rerun remain required before `RUN-07`, `RUN-08`, or `PR-10G`
+can be marked complete.
 
 ## Contract-hardening follow-up (2026-09-03)
 

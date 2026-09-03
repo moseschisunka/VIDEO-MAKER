@@ -1,0 +1,130 @@
+{
+  "elapsed_seconds": 19.858,
+  "measurement_scope": "offline_local_baseline",
+  "observed_environment": {
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+    "ffprobe": "ffprobe version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+    "node": "v22.23.2",
+    "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "python": "3.11.16"
+  },
+  "reference_environment": {
+    "ffmpeg": "apt-supported-pair",
+    "hardware": "2-vCPU / 7-GB CI runner minimum",
+    "id": "openmontage-ci-linux",
+    "measurement": {
+      "clock": "monotonic_wall_clock",
+      "isolation": "disposable-temporary-directory",
+      "network": "disabled-for-benchmark",
+      "paid_provider_calls": "forbidden",
+      "percentile": "p95",
+      "samples": 11,
+      "warmups": 2
+    },
+    "node": "22.13.1",
+    "os": "ubuntu-24.04",
+    "providers": "local-and-fake-only",
+    "python": "3.11"
+  },
+  "results": [
+    {
+      "avg": 0.012620135454542688,
+      "count": 11,
+      "gate": "PERF-01",
+      "indicator": "provider_menu_summary_duration_seconds",
+      "max": 0.019360284000015326,
+      "min": 0.011557416999977477,
+      "operator": "<=",
+      "p50": 0.011652015000009897,
+      "p95": 0.019360284000015326,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 2.0
+    },
+    {
+      "avg": 0.00010607145454018378,
+      "count": 11,
+      "gate": "PERF-02",
+      "indicator": "fast_preflight_duration_seconds",
+      "max": 0.00012598600000046645,
+      "min": 9.926600000653707e-05,
+      "operator": "<=",
+      "p50": 0.00010123999999223088,
+      "p95": 0.00012598600000046645,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 5.0
+    },
+    {
+      "avg": 0.05251145554545773,
+      "count": 11,
+      "gate": "PERF-03",
+      "indicator": "create_validation_duration_seconds",
+      "max": 0.05940865900001313,
+      "min": 0.05071764699999903,
+      "operator": "<=",
+      "p50": 0.05201273700001252,
+      "p95": 0.05940865900001313,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 0.5
+    },
+    {
+      "avg": 0.003073230727272341,
+      "count": 11,
+      "gate": "PERF-05",
+      "indicator": "backlot_state_refresh_duration_seconds",
+      "max": 0.003413241999993488,
+      "min": 0.002872217999993154,
+      "operator": "<=",
+      "p50": 0.0030564429999913045,
+      "p95": 0.003413241999993488,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 0.4
+    },
+    {
+      "avg": 0.14059254881818684,
+      "count": 11,
+      "gate": "PERF-04",
+      "indicator": "duplicate_run_response_duration_seconds",
+      "max": 0.15367100000000278,
+      "min": 0.13786557400001698,
+      "operator": "<=",
+      "p50": 0.13941876800001296,
+      "p95": 0.15367100000000278,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 0.5
+    },
+    {
+      "avg": 1.075698310909091,
+      "count": 11,
+      "gate": "PERF-06",
+      "indicator": "local_render_wall_seconds_per_output_second",
+      "max": 1.1266233190000037,
+      "min": 1.0554746619999946,
+      "operator": "<=",
+      "p50": 1.0612875559999964,
+      "p95": 1.1266233190000037,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 2.0
+    },
+    {
+      "avg": 0.0989053282727277,
+      "count": 11,
+      "gate": "PERF-07",
+      "indicator": "restart_resume_detection_duration_seconds",
+      "max": 0.26817019199998526,
+      "min": 0.07977931499999613,
+      "operator": "<=",
+      "p50": 0.08088377699999683,
+      "p95": 0.26817019199998526,
+      "percentile": "p95",
+      "status": "PASS",
+      "target": 0.5
+    }
+  ],
+  "schema_version": "1.0"
+}
