@@ -175,6 +175,26 @@ def _instrument_execute(fn: Callable) -> Callable:
 
     @functools.wraps(fn)
     def wrapper(self, inputs: Any, *args: Any, **kwargs: Any):
+        # Enforce declared top-level boolean types before instrumentation,
+        # provider discovery, filesystem mutation, or network work.  A schema
+        # saying ``type: boolean`` must not be defeated by Python truthiness
+        # (for example, ``"false"`` or ``1``).  Tool-specific contracts still
+        # validate nested objects and richer cross-field rules.
+        if isinstance(inputs, dict):
+            schema = getattr(self, "input_schema", {})
+            properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+            if isinstance(properties, dict):
+                for field_name, field_schema in properties.items():
+                    if (
+                        isinstance(field_schema, dict)
+                        and field_schema.get("type") == "boolean"
+                        and field_name in inputs
+                        and not isinstance(inputs[field_name], bool)
+                    ):
+                        return ToolResult(
+                            success=False,
+                            error=f"{field_name} must be boolean",
+                        )
         # Event layer is fully optional: if it can't import, run untouched.
         try:
             from lib.events import emit_event, infer_project_dir
