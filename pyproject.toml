@@ -24,6 +24,9 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "watchfiles>=0.21",
+    # Imported by the manifest-faithful narration path and the internal
+    # teaching/demo runner; keep the baseline install self-contained.
+    "edge-tts>=7.2.0",
 ]
 
 [project.optional-dependencies]

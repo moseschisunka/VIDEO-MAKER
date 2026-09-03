@@ -148,8 +148,6 @@ jobs:
       - name: Start the hardened image and wait for health
         run: |
           set -euo pipefail
-          cleanup() { docker rm -f openmontage-backlot-ci >/dev/null 2>&1 || true; }
-          trap cleanup EXIT
           docker run --detach --name openmontage-backlot-ci \
             --publish 127.0.0.1:4751:4750 \
             --env BACKLOT_AUTH_TOKEN=ci-health-token \
@@ -222,6 +220,10 @@ jobs:
           name: openmontage-container-render
           path: container-render-evidence.json
           retention-days: 14
+
+      - name: Remove CI container
+        if: ${{ always() }}
+        run: docker rm -f openmontage-backlot-ci >/dev/null 2>&1 || true
 
   phase10-operational-evidence:
     name: Phase 10 SLO and load evidence

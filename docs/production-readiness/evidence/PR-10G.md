@@ -26,6 +26,19 @@ This is an audit record, not a production approval. The release lock remains
 | Full repository regression suite | PASS (local) | `python -m pytest -q` → **1499 passed, 10 skipped, 1 warning, 1 subtests passed in 420.46s**; the executable end-to-end fixture also passes **38/38** via `python tests/qa/test_08_end_to_end.py` |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
 
+## Supported CI feedback (2026-09-03)
+
+The first run of the newly published checkpoint (`33708888800`) exposed
+workflow defects before the supported gates could be trusted: jobs invoked the
+system Python after installing into `.venv`, the container health step checked
+too early, and the container cleanup trap deleted the service before the
+in-image render step. Those issues were corrected in `ec51ea2`; its rerun
+(`33709283910`) then exposed the independent missing `edge-tts` runtime
+dependency during collection. `edge-tts>=7.2.0` is now declared in
+`pyproject.toml` and covered by the dependency contract. A fresh CI run with
+these corrections is required before any supported-environment row can be
+promoted to PASS.
+
 The full-suite run initially exposed a stale QA fixture that attempted to
 complete manifest-gated proposal/script/scene/asset/publish stages with only
 the deprecated `human_approved` boolean. The fixture now persists a pending

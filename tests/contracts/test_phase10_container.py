@@ -94,3 +94,15 @@ def test_ci_waits_for_docker_healthcheck_state_after_http_health() -> None:
     assert "healthy)" in workflow
     assert "unhealthy)" in workflow
     assert workflow.index(wait_marker) < workflow.rindex(final_check)
+
+
+def test_ci_keeps_container_alive_for_in_image_render_step_and_cleans_after() -> None:
+    """The start step must not remove the container before render verification."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "trap cleanup EXIT" not in workflow
+    assert "- name: Remove CI container" in workflow
+    assert "if: ${{ always() }}" in workflow
+    start = workflow.index("- name: Start the hardened image and wait for health")
+    verify = workflow.index("- name: Verify the baked Remotion browser with an in-image still")
+    cleanup = workflow.index("- name: Remove CI container")
+    assert start < verify < cleanup

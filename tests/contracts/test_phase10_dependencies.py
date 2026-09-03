@@ -55,6 +55,7 @@ def test_pyproject_is_the_only_python_dependency_source() -> None:
         "fastapi",
         "uvicorn",
         "watchfiles",
+        "edge-tts",
     }
     assert expected_runtime <= deps
 
