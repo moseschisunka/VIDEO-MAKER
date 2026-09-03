@@ -13,6 +13,7 @@ from lib.voice_contracts import (
     normalize_voice_identity,
     plan_narration_segments,
     require_voice_sample_approval,
+    strict_bool,
     validate_narration_manifest,
     validate_voice_propagation,
     verify_transcript,
@@ -63,6 +64,34 @@ def test_sample_gate_blocks_batch_until_explicit_approval():
     assert allowed["allowed"] is True
     # Samples themselves are allowed before approval; only batch narration is gated.
     assert require_voice_sample_approval({"sample_approval_required": True}, batch=False)["allowed"] is True
+
+
+def test_sample_gate_rejects_truthy_non_boolean_approval_flags():
+    with pytest.raises(VoiceContractError, match="sample_approval.approved must be boolean"):
+        require_voice_sample_approval(
+            {"sample_approval_required": True},
+            sample={"approved": "false"},
+            batch=True,
+        )
+    with pytest.raises(VoiceContractError, match="voice_selection.sample_approved must be boolean"):
+        require_voice_sample_approval(
+            {"sample_approval_required": True, "sample_approved": "false"},
+            sample={"status": "approved"},
+            batch=True,
+        )
+    with pytest.raises(VoiceContractError, match="voice_selection.sample_approval_required must be boolean"):
+        require_voice_sample_approval(
+            {"sample_approval_required": "true"},
+            sample={"approved": True},
+            batch=True,
+        )
+
+
+def test_strict_bool_does_not_coerce_untrusted_values():
+    assert strict_bool(None, "flag") is False
+    assert strict_bool(True, "flag") is True
+    with pytest.raises(VoiceContractError, match="flag must be boolean"):
+        strict_bool("false", "flag")
 
 
 def test_narration_segment_ids_and_timeline_are_stable():

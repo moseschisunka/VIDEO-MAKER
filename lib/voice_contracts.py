@@ -231,6 +231,15 @@ def assert_voice_propagation(
     return report
 
 
+def strict_bool(value: Any, field_name: str, *, default: bool = False) -> bool:
+    """Read a contract boolean without accepting truthy strings or integers."""
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise VoiceContractError(f"{field_name} must be boolean")
+    return value
+
+
 def normalize_narration_text(text: Any) -> str:
     if not isinstance(text, str):
         raise VoiceContractError("narration text must be a string")
@@ -372,19 +381,25 @@ def require_voice_sample_approval(
 ) -> dict[str, Any]:
     """Fail closed when a declared sample gate has not been approved."""
     selection = voice_selection if isinstance(voice_selection, Mapping) else {}
-    required = bool(
-        selection.get("sample_approval_required")
-        or selection.get("approval_required")
-        or selection.get("sample_required")
+    required = any(
+        strict_bool(selection.get(name), f"voice_selection.{name}")
+        for name in ("sample_approval_required", "approval_required", "sample_required")
     )
     if not required or not batch:
         return {"allowed": True, "required": required, "approved": True, "reason": "sample gate not required"}
     sample_payload = sample if isinstance(sample, Mapping) else {}
-    approved = bool(
-        sample_payload.get("approved")
-        or sample_payload.get("user_approved")
-        or sample_payload.get("status") in {"approved", "accepted"}
-        or selection.get("sample_approved") is True
+    approved = any(
+        strict_bool(sample_payload.get(name), f"sample_approval.{name}")
+        for name in ("approved", "user_approved")
+    )
+    status = sample_payload.get("status")
+    if status is not None and status not in {"approved", "accepted"}:
+        raise VoiceContractError(
+            "sample_approval.status must be 'approved' or 'accepted' when provided"
+        )
+    approved = approved or strict_bool(
+        selection.get("sample_approved"),
+        "voice_selection.sample_approved",
     )
     if not approved:
         raise VoiceSampleApprovalError(
@@ -607,6 +622,7 @@ __all__ = [
     "validate_voice_identity",
     "validate_voice_propagation",
     "assert_voice_propagation",
+    "strict_bool",
     "normalize_narration_text",
     "plan_narration_segments",
     "validate_narration_manifest",

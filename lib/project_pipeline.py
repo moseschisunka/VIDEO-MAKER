@@ -28,10 +28,12 @@ from lib.demo_runner import assert_internal_demo_project
 from lib.events import emit_event
 from lib.audio_assembly import assemble_audio_segments
 from lib.voice_contracts import (
+    VoiceContractError,
     VoiceSegmentCache,
     normalize_voice_identity,
     plan_narration_segments,
     require_voice_sample_approval,
+    strict_bool,
 )
 from lib.music_contracts import append_music_decision, normalize_music_source
 from lib.paths import PROJECTS_DIR, REPO_ROOT
@@ -1447,16 +1449,28 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
             "instructions": tts_instructions,
         },
     })
+    voice_sample_approval = config.get("voice_sample_approval")
+    if voice_sample_approval is not None and not isinstance(voice_sample_approval, dict):
+        raise VoiceContractError("voice_sample_approval must be an object")
+    voice_sample_approval = voice_sample_approval or {}
+    sample_required = strict_bool(
+        config.get("voice_sample_required"),
+        "voice_sample_required",
+    )
+    sample_approved = strict_bool(
+        voice_sample_approval.get("approved"),
+        "voice_sample_approval.approved",
+    )
     voice_selection = {
         **voice_identity.contract(),
         "rationale": "Locked at proposal so every narration segment and render carries the same provider identity.",
-        "sample_approval_required": bool(config.get("voice_sample_required", False)),
-        "sample_approved": bool(config.get("voice_sample_approval", {}).get("approved", False)) if isinstance(config.get("voice_sample_approval"), dict) else False,
-        "sample_status": "approved" if bool(config.get("voice_sample_approval", {}).get("approved", False)) else ("pending" if bool(config.get("voice_sample_required", False)) else "not_required"),
+        "sample_approval_required": sample_required,
+        "sample_approved": sample_approved,
+        "sample_status": "approved" if sample_approved else ("pending" if sample_required else "not_required"),
     }
     require_voice_sample_approval(
         voice_selection,
-        sample=config.get("voice_sample_approval") if isinstance(config.get("voice_sample_approval"), dict) else None,
+        sample=voice_sample_approval,
         batch=True,
     )
     # Persist the exact canonical voice contract before any narration or
