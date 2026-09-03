@@ -514,7 +514,10 @@ class CostTracker:
         """Fallback heuristic for motion ratio before scene vision enrichment."""
         source_type = video_analysis_brief.get("source", {}).get("type", "")
         replication = video_analysis_brief.get("replication_guidance", {})
-        motion_required = bool(replication.get("motion_required"))
+        raw_motion_required = replication.get("motion_required", False)
+        if not isinstance(raw_motion_required, bool):
+            raise ValueError("replication_guidance.motion_required must be boolean")
+        motion_required = raw_motion_required
         suggested_pipeline = replication.get("suggested_pipeline", "")
 
         base_by_pacing = {
