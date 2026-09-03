@@ -10,7 +10,7 @@ Do not mark a task complete because code exists. Link current test and review ev
 |---|---|
 | Program status | `IN_PROGRESS` |
 | Current phase | Phase 10 — Packaging, performance, security, and operations |
-| Next task | Publish and verify `PR-1016`/`PR-1017`/`PR-1018` in supported CI, then close the external `PR-10G` blockers (deployment rollback, trusted edge, monitoring/paging, and frozen release candidate) |
+| Next task | Publish and verify `PR-1016`/`PR-1017`/`PR-1018`/`PR-1019` in supported CI, then close the external `PR-10G` blockers (deployment rollback, trusted edge, monitoring/paging, and frozen release candidate) |
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None |
 | Production decision | Not eligible |
