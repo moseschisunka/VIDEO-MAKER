@@ -115,6 +115,16 @@ def test_music_decision_log_is_idempotent_and_auditable():
     }
 
 
+@pytest.mark.parametrize("value", ["false", "true", 0, 1, None])
+def test_music_decision_rejects_non_boolean_user_approval(value: object):
+    with pytest.raises(MusicContractError, match="user_approved must be boolean"):
+        append_music_decision(
+            {"version": "1.0", "project_id": "p", "decisions": []},
+            {"source_type": "none", "reason": "No music for this lesson."},
+            user_approved=value,  # type: ignore[arg-type]
+        )
+
+
 def test_music_asset_provenance_is_complete_and_rights_honest():
     provenance = normalize_music_provenance(
         {

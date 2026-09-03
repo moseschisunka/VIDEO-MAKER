@@ -1555,7 +1555,7 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
         decision_log,
         music_source,
         stage="proposal",
-        user_approved=bool(config.get("music_source_user_approved", False)),
+        user_approved=config.get("music_source_user_approved", False),
     )
     validate_artifact("decision_log", decision_log)
     _write_json(artifacts_dir / "decision_log.json", decision_log)

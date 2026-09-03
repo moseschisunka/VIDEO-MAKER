@@ -155,16 +155,17 @@ checkpoint satisfies the `PR-1015` integration prerequisite but is not a
 frozen release-candidate or production certification.
 
 The unpublished local follow-ups `PR-1016`, `PR-1017`, `PR-1018`, `PR-1019`,
-`PR-1020`, and `PR-1021` are intentionally not represented as supported-CI
+`PR-1020`, `PR-1021`, and `PR-1022` are intentionally not represented as supported-CI
 evidence. `PR-1016` adds the
 source-footage talking-head manifest executor lane; `PR-1017` rejects
 zero-duration or mismatched-stream media at ingestion; and `PR-1018` routes the
 canonical Backlot screenshot/simulation fixtures through UUID-bound immutable
 approval records and removes stale initializer arguments from the quarantined
 internal demo runner. `PR-1019` adds a scrape-compatible Prometheus endpoint,
-`PR-1020` rejects malformed voice-sample approvals, and `PR-1021` rejects
+`PR-1020` rejects malformed voice-sample approvals, `PR-1021` rejects
 malformed provider spend approvals at request, bridge, and dry-run plan
-boundaries. They have local regression evidence, but the supported workflow
+boundaries, and `PR-1022` rejects malformed proposal music approvals before
+they enter the decision log. They have local regression evidence, but the supported workflow
 must rerun from the published checkpoint before the corresponding tasks can
 become `VERIFIED`; because PR-1017 covers a Phase 6 acceptance boundary, the
 Phase 6 gate and `SEC-04` remain reopened/partial until that supported

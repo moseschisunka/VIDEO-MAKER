@@ -128,6 +128,8 @@ def append_music_decision(
     """
 
     normalized = normalize_music_source(music_source)
+    if not isinstance(user_approved, bool):
+        raise MusicContractError("music_source.user_approved must be boolean")
     result = dict(decision_log or {})
     decisions = list(result.get("decisions") or [])
     selected = normalized["source_type"]
@@ -178,7 +180,7 @@ def append_music_decision(
             or normalized.get("mood_direction")
             or f"Selected {selected} at proposal stage.",
             "user_visible": True,
-            "user_approved": bool(user_approved),
+            "user_approved": user_approved,
             "confidence": 1.0,
         }
     )
