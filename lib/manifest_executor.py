@@ -52,6 +52,39 @@ class ManifestExecutionError(ValueError):
 # schema happens to validate.
 CERTIFIED_EXECUTOR_PIPELINES = frozenset({"screen-demo", "talking-head"})
 
+# Certification is narrower than a pipeline identifier when the launch scope
+# deliberately covers only one production mode.  The approved talking-head
+# lane is source-footage-only; avatar/lip-sync generation remains a separate
+# Phase 11 certification concern.  Keep this constraint beside the executor
+# allow-list so Backlot and other callers cannot accidentally broaden it by
+# checking only the pipeline name.
+CERTIFIED_EXECUTOR_SOURCE_MODES = {
+    "talking-head": frozenset({"source_footage"}),
+}
+
+
+def is_certified_executor_order(order: Mapping[str, Any]) -> bool:
+    """Return whether a persisted work order is in the certified launch scope.
+
+    A valid manifest/work order is not automatically runnable.  This helper
+    applies the explicit pipeline allow-list and any narrower source-mode
+    boundary before Backlot hands the run to the agent control plane.
+    """
+
+    if not isinstance(order, Mapping):
+        return False
+    pipeline_type = str(order.get("pipeline_type") or "").strip().lower()
+    if pipeline_type not in CERTIFIED_EXECUTOR_PIPELINES:
+        return False
+    allowed_modes = CERTIFIED_EXECUTOR_SOURCE_MODES.get(pipeline_type)
+    if not allowed_modes:
+        return True
+    selections = order.get("selections")
+    if not isinstance(selections, Mapping):
+        return False
+    source_mode = str(selections.get("source_mode") or "").strip().lower()
+    return source_mode in allowed_modes
+
 
 @dataclass(frozen=True)
 class ManifestStageContext:
@@ -839,8 +872,10 @@ def submit_manifest_stage(
 
 __all__ = [
     "CERTIFIED_EXECUTOR_PIPELINES",
+    "CERTIFIED_EXECUTOR_SOURCE_MODES",
     "ManifestExecutionError",
     "ManifestStageContext",
+    "is_certified_executor_order",
     "load_manifest_stage_context",
     "submit_manifest_stage",
 ]

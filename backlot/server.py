@@ -34,8 +34,8 @@ from lib.demo_runner import RUNNER_KIND, is_internal_demo_project
 from lib.pipeline_release import pipeline_release_metadata, studio_release_status
 from lib.project_identity import validate_project_identity
 from lib.manifest_executor import (
-    CERTIFIED_EXECUTOR_PIPELINES,
     ManifestExecutionError,
+    is_certified_executor_order,
     load_manifest_stage_context,
     submit_manifest_stage,
 )
@@ -1510,12 +1510,20 @@ def create_app() -> FastAPI:
                 detail=str(exc),
             ) from exc
         pipeline_type = context.order.get("pipeline_type")
-        if pipeline_type not in CERTIFIED_EXECUTOR_PIPELINES:
+        if not is_certified_executor_order(context.order):
+            source_mode = (context.order.get("selections") or {}).get("source_mode")
+            scope_detail = (
+                " The certified talking-head executor is source-footage-only; "
+                f"received source_mode={source_mode!r}."
+                if str(pipeline_type).strip().lower() == "talking-head"
+                else ""
+            )
             raise HTTPException(
                 status_code=409,
                 detail=(
                     f"Manifest-faithful executor for pipeline {pipeline_type!r} is not certified yet. "
                     "The legacy Studio/demo runner is quarantined."
+                    + scope_detail
                 ),
             )
         # Remember whether this request already observed a live lease owned

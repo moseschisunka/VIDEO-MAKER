@@ -22,6 +22,7 @@ from backlot import server as server_mod
 from lib.manifest_executor import (
     CERTIFIED_EXECUTOR_PIPELINES,
     load_manifest_stage_context,
+    is_certified_executor_order,
     submit_manifest_stage,
 )
 from lib.pipeline_loader import load_pipeline_readonly
@@ -431,6 +432,25 @@ def _render_report(project: Path, review: dict) -> dict:
 
 
 @pytest.mark.release_blocker
+def test_talking_head_certification_is_source_footage_only() -> None:
+    assert is_certified_executor_order(
+        {
+            "pipeline_type": "talking-head",
+            "selections": {"source_mode": "source_footage"},
+        }
+    )
+    assert not is_certified_executor_order(
+        {
+            "pipeline_type": "talking-head",
+            "selections": {"source_mode": "avatar"},
+        }
+    )
+    assert not is_certified_executor_order(
+        {"pipeline_type": "talking-head", "selections": {}}
+    )
+
+
+@pytest.mark.release_blocker
 def test_talking_head_manifest_faithful_golden_path(tmp_path: Path) -> None:
     assert "talking-head" in CERTIFIED_EXECUTOR_PIPELINES
     project = _create_project(tmp_path)
@@ -576,3 +596,51 @@ def test_talking_head_run_returns_manifest_agent_handoff(client, monkeypatch: py
     assert payload["stage_skill"] == "pipelines/talking-head/idea-director"
     assert payload["work_order"]["claim"]["claimed_by"] == "talking-head-ui"
     assert spawned == []
+
+
+@pytest.mark.release_blocker
+def test_talking_head_run_rejects_non_source_footage_persisted_scope(client) -> None:
+    """A legacy/hand-edited order cannot broaden the certified launch lane."""
+
+    test_client, projects = client
+    project = projects / "talking-head-avatar-order"
+    project.mkdir(parents=True)
+    (project / "project.json").write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "project_id": project.name,
+                "title": "Uncertified avatar order",
+                "pipeline_type": "talking-head",
+                "run_id": "32345678-1234-4234-8234-123456789abc",
+                "style_playbook": "clean-professional",
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = load_pipeline_readonly("talking-head", defs_dir=PIPELINE_DIR)
+    order = build_work_order(
+        project_id=project.name,
+        title="Uncertified avatar order",
+        topic_prompt="An order outside the approved source-footage lane.",
+        target_duration_seconds=TARGET_DURATION,
+        pipeline_type="talking-head",
+        manifest=manifest,
+        manifest_path=PIPELINE_DIR / "talking-head.yaml",
+        selections={
+            "playbook": "clean-professional",
+            "voice": "en-US-ChristopherNeural",
+            "voice_provider": "edge_tts",
+            "render_runtime": "ffmpeg",
+            "output_profile": PROFILE,
+            "aspect_ratio": "9:16",
+            "source_mode": "avatar",
+        },
+        run_id="32345678-1234-4234-8234-123456789abc",
+    )
+    write_work_order(project, order)
+
+    response = test_client.post(f"/api/project/{project.name}/run?agent_id=scope-check")
+    assert response.status_code == 409, response.text
+    assert "source-footage-only" in response.json()["detail"]
+    assert "avatar" in response.json()["detail"]
