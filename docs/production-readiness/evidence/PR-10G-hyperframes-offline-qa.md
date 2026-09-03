@@ -77,7 +77,8 @@ HYPERFRAMES_QA=1 HYPERFRAMES_QA_RENDER=1
 2 passed, 1 skipped, 1512 deselected, 1 warning in 110.51s
 ```
 
-The evidence-retention rerun on commit `2bf54ae` is the authoritative record:
+The evidence-retention rerun on commit `2bf54ae` is an earlier authoritative
+record:
 
 ```text
 2 passed, 1 skipped, 1512 deselected, 1 warning in 88.59s
@@ -94,6 +95,22 @@ This closes the supported HyperFrames sub-check only. The frozen release
 candidate must still repeat the acceptance matrix, and `PR-10G` remains blocked
 by deployment rollback, external monitoring/alert delivery, and trusted-edge
 security proof.
+
+The latest supported workflow-dispatch certification is on commit `ac4fd9b`
+with the HyperFrames switch enabled:
+
+```text
+HYPERFRAMES_QA=1 HYPERFRAMES_QA_RENDER=1
+.venv/bin/python -m pytest tests -m hyperframes_qa -q
+2 passed, 1 skipped, 1514 deselected, 1 warning in 72.92s
+```
+
+It completed the real scaffold/lint/validate/inspect/render path and retained
+the raw output as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33724899296/artifacts/9881651965).
+The same supported run passed the release-blocker, clean-install, offline
+regression, container/browser, and Phase 10 SLO/load/operations jobs; its live
+provider job was intentionally skipped. This is the current supported
+checkpoint, not the frozen release-candidate certification.
 
 ## Runtime preflight timeout hardening (2026-09-03)
 

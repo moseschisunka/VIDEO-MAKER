@@ -17,7 +17,7 @@ This is an audit record, not a production approval. The release lock remains
 | Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported runs `33710765514` and latest checkpoint `33722648046` |
 | Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
-| HyperFrames CLI/browser QA | PASS (supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — run `33718631193` executes scaffold/lint/validate plus the real render (**2 passed, 1 skipped, 1 warning in 88.59s**); the raw log is retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33718631193/artifacts/9879467068) |
+| HyperFrames CLI/browser QA | PASS (latest supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — latest run `33724899296` on `ac4fd9b` executes scaffold/lint/validate/inspect plus the real render (**2 passed, 1 skipped, 1 warning in 72.92s**); raw log retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33724899296/artifacts/9881651965) |
 | Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
 | Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and runs `33710765514`/`33722648046` — clean checkout package-data contract and PR-1002 smoke pass |
 | Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in runs `33710765514` and `33722648046` |
@@ -100,6 +100,13 @@ container/browser rendering, and Phase 10 SLO/load/operations evidence. The
 two opt-in jobs (live-provider and HyperFrames) were intentionally skipped on
 the push workflow, so this run validates the checkpoint but is not the frozen
 release-candidate certification.
+
+The follow-up workflow-dispatch run `33724899296` on commit `ac4fd9b` enabled
+the HyperFrames opt-in. Its real render passed (**2 passed, 1 skipped, 1
+warning in 72.92s**), while the release-blocker, clean-install, offline
+regression, container/browser, and Phase 10 SLO/load/operations jobs also
+passed. The live-provider opt-in remained intentionally skipped; frozen-RC and
+external operational proof are still outstanding.
 
 ## Blocking proof
 

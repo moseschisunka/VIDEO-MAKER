@@ -14,7 +14,7 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None |
 | Production decision | Not eligible |
-| Last tracker update | `PR-10G` supported run `33722648046` (commit `3d368da`) passed clean install with zero high/critical npm advisories, release-blocker contracts, offline regression, the hardened container/browser matrix, and Ubuntu SLO/load/operations evidence; the earlier full HyperFrames render remains `33718631193`; remaining blockers are deployment rollback, external alert delivery/metrics aggregation, trusted-edge security enforcement, and frozen-RC evidence |
+| Last tracker update | `PR-10G` supported run `33724899296` (commit `ac4fd9b`, HyperFrames opt-in enabled) passed the real HyperFrames render, clean install with zero high/critical npm advisories, release-blocker contracts, offline regression, the hardened container/browser matrix, and Ubuntu SLO/load/operations evidence; live-provider opt-in was skipped; remaining blockers are deployment rollback, external alert delivery/metrics aggregation, trusted-edge security enforcement, and frozen-RC evidence |
 
 ## Status rules
 
@@ -193,7 +193,7 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 | `PR-1008` | Add backup/restore/migrations | `PR-2G`, `PR-1006` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1008.md`](evidence/PR-1008.md) — integrity-checked backup/restore, secret/path safeguards, and audited state migration drill |
 | `PR-1009` | Add bounded load/soak tests | `PR-1003`, `PR-1006`, `PR-1007` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1009.md`](evidence/PR-1009.md) — four-run isolation, queue contention, fake-provider throttling, ten-run cleanup, bounded SSE soak, and dynamic Remotion worker policy |
 | `PR-1010` | Write operator/incident runbooks | `PR-1003`–`PR-1009` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1010.md`](evidence/PR-1010.md) — deploy, rollback, provider outage, stuck/corrupt job, restore, secret rotation, and incident procedures |
-| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1010` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported run `33722648046` passes the current clean-install/security, offline-contract, container/browser, Ubuntu SLO/load, and fake-drill checkpoint; `33718631193` passes the full HyperFrames render; deployment rollback, external monitoring/alert delivery, trusted-edge enforcement, and frozen-RC evidence remain required |
+| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1010` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported run `33724899296` passes the current HyperFrames-enabled clean-install/security, offline-contract, container/browser, Ubuntu SLO/load, and fake-drill checkpoint; deployment rollback, external monitoring/alert delivery, trusted-edge enforcement, and frozen-RC evidence remain required |
 
 ## Phase 11 tracker
 
@@ -291,6 +291,7 @@ Append decisions; never rewrite history.
 | 2026-09-03 | `PR-10G`/PR-903 | Black-video corpus required `decoded black`, but interval-only detection reported only the filter name | QA/diagnostics | Emit canonical decoded black/blank interval evidence with precise time ranges | Media/QA | Resolved in `f6d8612`; supported offline regression run `33710765514` passed |
 | 2026-09-03 | `PR-10G`/CLI runtime | Windows npm/npx `.CMD` descendants could retain stdout/stderr pipes after a timeout, making provider/runtime probes block for more than one minute; the same shared boundary covered all `BaseTool.run_command()` consumers | Reliability/performance | Terminate process trees in a bounded process group and capture diagnostics through temporary files; retain timeout regression evidence | Media/operations | Resolved in `3f37200`/`671a8dc`; supported push run `33717170584` and full HyperFrames run `33718631193` are green validation records |
 | 2026-09-03 | `PR-10G`/HyperFrames CI | Opt-in workflow set `HYPERFRAMES_QA` but omitted `HYPERFRAMES_QA_RENDER`, so the green run exercised only partial QA and produced no raw artifact | CI/evidence contract | Pin Node 22, enable the real-render switch, tee the result, and upload the log; retain a static workflow contract | Media/operations | Resolved in `671a8dc`/`2bf54ae`; supported run `33718631193` passed the render path and uploaded artifact `9879467068` |
+| 2026-09-03 | `PR-10G`/HyperFrames certification | The latest opt-in workflow-dispatch run needed to repeat real render coverage on the current dependency/performance checkpoint | QA/evidence | Run HyperFrames with both QA switches and retain the raw log | Media/operations | Resolved — run `33724899296` on `ac4fd9b` passed **2 tests** with the real render and uploaded artifact `9881651965`; frozen-RC repetition remains pending |
 
 ## Phase gate summary
 
