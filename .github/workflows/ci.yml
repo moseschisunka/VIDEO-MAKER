@@ -93,6 +93,10 @@ jobs:
       - name: Install the locked Remotion dependency graph
         run: npm ci --prefix remotion-composer
 
+      - name: Audit the locked Remotion dependency graph
+        working-directory: remotion-composer
+        run: npm audit --audit-level=high
+
       - name: Install the pinned Remotion browser
         working-directory: remotion-composer
         run: npx --no-install remotion browser ensure
@@ -258,6 +262,10 @@ jobs:
 
       - name: Install the locked Remotion dependency graph
         run: npm ci --prefix remotion-composer
+
+      - name: Audit the locked Remotion dependency graph
+        working-directory: remotion-composer
+        run: npm audit --audit-level=high
 
       - name: Install the pinned Remotion browser
         working-directory: remotion-composer

@@ -94,6 +94,21 @@ def test_remotion_package_lock_matches_declared_dependencies() -> None:
     assert root["dependencies"] == package["dependencies"]
     assert root["devDependencies"] == package["devDependencies"]
 
+    expected_overrides = {
+        "nanoid": "3.3.18",
+        "browserslist": "4.28.8",
+        "fast-uri": "4.1.4",
+        "postcss": "8.5.26",
+    }
+    assert package.get("overrides", {}) == expected_overrides
+    for name, version in expected_overrides.items():
+        assert lock["packages"][f"node_modules/{name}"]["version"] == version
+
+
+def test_ci_audits_the_locked_remotion_dependency_graph() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert workflow.count("npm audit --audit-level=high") >= 2
+
 
 def test_legacy_setuptools_entry_point_uses_pyproject_metadata() -> None:
     result = subprocess.run(
