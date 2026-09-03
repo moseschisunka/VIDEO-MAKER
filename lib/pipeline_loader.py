@@ -528,9 +528,9 @@ def _compatible_playbook_ids(manifest: Mapping[str, Any]) -> list[str]:
             if isinstance(candidate, list):
                 values.extend(candidate)
     return list(dict.fromkeys(
-        str(value).strip().lower()
+        value.strip().lower()
         for value in values
-        if str(value).strip()
+        if isinstance(value, str) and value.strip()
     ))
 
 
