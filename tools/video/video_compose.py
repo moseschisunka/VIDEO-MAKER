@@ -73,8 +73,8 @@ class VideoCompose(BaseTool):
     execution_mode = ExecutionMode.SYNC
     determinism = Determinism.DETERMINISTIC
 
-    dependencies = ["cmd:ffmpeg"]
-    install_instructions = "Install FFmpeg: https://ffmpeg.org/download.html"
+    dependencies = ["cmd:ffmpeg", "cmd:ffprobe"]
+    install_instructions = "Install FFmpeg (including ffprobe): https://ffmpeg.org/download.html"
     agent_skills = ["remotion-best-practices", "remotion", "ffmpeg"]
 
     capabilities = [
@@ -452,10 +452,19 @@ class VideoCompose(BaseTool):
                 ],
                 stderr=subprocess.STDOUT,
                 text=True,
+                timeout=30,
             )
-            return "audio" in out
-        except Exception:
-            return False
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "ffprobe is required to determine whether a source has an audio stream"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"ffprobe timed out while inspecting source: {path}") from exc
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.output or "").strip()
+            suffix = f": {detail[-300:]}" if detail else ""
+            raise RuntimeError(f"ffprobe failed while inspecting source {path}{suffix}") from exc
+        return any(line.strip() == "audio" for line in out.splitlines())
 
     @staticmethod
     def _project_root_for_inputs(
@@ -696,6 +705,8 @@ class VideoCompose(BaseTool):
         subtitle_path = self._resolve_project_path(
             inputs.get("subtitle_path"), project_root=project_root
         )
+        if audio_path is not None and not Path(audio_path).is_file():
+            return ToolResult(success=False, error=f"Audio source not found: {audio_path}")
         codec = inputs.get("codec", "libx264")
         crf = inputs.get("crf", 23)
         # Interactive composition defaults to a bounded fast preset. The
@@ -731,9 +742,16 @@ class VideoCompose(BaseTool):
         except ValueError:
             target_w, target_h = 1920, 1080
 
-        cuts = [dict(cut) for cut in edit_decisions.get("cuts", [])]
-        if not cuts:
+        raw_cuts = edit_decisions.get("cuts", [])
+        if not isinstance(raw_cuts, list) or not raw_cuts:
             return ToolResult(success=False, error="No cuts in edit_decisions")
+        try:
+            cuts = [dict(cut) for cut in raw_cuts]
+        except (TypeError, ValueError) as exc:
+            return ToolResult(success=False, error=f"Invalid cut object in edit_decisions: {exc}")
+        timeline_error = self._validate_compose_cuts(cuts)
+        if timeline_error:
+            return ToolResult(success=False, error=timeline_error)
 
         # Artifact contracts store media paths relative to the project root.
         # Resolve them here as well as in the high-level render path so direct
@@ -1072,6 +1090,44 @@ class VideoCompose(BaseTool):
                     candidate_output_path.unlink()
                 except OSError:
                     pass
+
+    @staticmethod
+    def _validate_compose_cuts(cuts: list[dict[str, Any]]) -> str | None:
+        """Validate and normalize source intervals before invoking FFmpeg."""
+
+        for index, cut in enumerate(cuts):
+            if not isinstance(cut, dict):
+                return f"Cut {index} must be an object"
+            source = cut.get("source")
+            if not isinstance(source, (str, Path)) or not str(source).strip():
+                return f"Cut {index} source is required"
+            values: dict[str, float] = {}
+            for field_name, default in (
+                ("in_seconds", None),
+                ("out_seconds", None),
+                ("speed", 1.0),
+            ):
+                value = cut.get(field_name, default)
+                if isinstance(value, bool):
+                    return f"Cut {index} {field_name} must be numeric"
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    return f"Cut {index} {field_name} must be numeric"
+                if not math.isfinite(number):
+                    return f"Cut {index} {field_name} must be finite"
+                values[field_name] = number
+            start = values["in_seconds"]
+            end = values["out_seconds"]
+            speed = values["speed"]
+            if start < 0:
+                return f"Cut {index} in_seconds cannot be negative"
+            if end <= start:
+                return f"Cut {index} must have out_seconds greater than in_seconds"
+            if speed <= 0:
+                return f"Cut {index} speed must be greater than zero"
+            cut.update(values)
+        return None
 
     _REMOTION_SCENE_TYPES = {
         "text_card", "stat_card", "callout", "comparison", "progress", "chart",
