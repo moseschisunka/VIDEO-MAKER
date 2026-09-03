@@ -9,20 +9,20 @@ This is an audit record, not a production approval. The release lock remains
 
 | Area | Result | Evidence |
 |---|---|---|
-| Offline release-blocker contracts | PASS (supported CI) | GitHub Actions run `33710765514`, `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1047 passed, 5 skipped, 1 deselected, 1 warning in 135.20s** |
+| Offline release-blocker contracts | PASS (supported CI) | GitHub Actions runs `33710765514` and latest checkpoint `33722648046`, `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1047 passed, 5 skipped, 1 deselected, 1 warning in 135.20s** on the prior evidence run |
 | Phase 10 targeted contracts | PASS | `python -m pytest tests/contracts/test_phase10_*.py -q` (all Phase 10 contract modules: clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **58 passed, 1 warning in 57.63s** |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
-| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported run `33710765514` |
-| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported run `33710765514` |
+| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported runs `33710765514` and latest checkpoint `33722648046` |
+| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported runs `33710765514` and latest checkpoint `33722648046` |
 | Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
 | HyperFrames CLI/browser QA | PASS (supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — run `33718631193` executes scaffold/lint/validate plus the real render (**2 passed, 1 skipped, 1 warning in 88.59s**); the raw log is retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33718631193/artifacts/9879467068) |
 | Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
-| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and run `33710765514` — clean checkout package-data contract and PR-1002 smoke pass |
-| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass |
-| Remotion dependency vulnerability audit | PASS (local fixed lock; supported CI gate added) | `npm audit --audit-level=high` reports **0 vulnerabilities** after locking `browserslist` 4.28.8, `fast-uri` 4.1.4, and `postcss` 8.5.26; clean-install CI now fails on any future high/critical advisory |
-| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image |
+| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and runs `33710765514`/`33722648046` — clean checkout package-data contract and PR-1002 smoke pass |
+| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in runs `33710765514` and `33722648046` |
+| Remotion dependency vulnerability audit | PASS (supported CI) | `npm audit --audit-level=high` reports **0 vulnerabilities** in the current lock (browserslist 4.28.8, fast-uri 4.1.4, postcss 8.5.26); clean-install run `33722648046` passed the audit gate, which fails on any future high/critical advisory |
+| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; latest container job in run `33722648046` also passed |
 | Web security boundary | PARTIAL (policy/test pass; deployed edge pending) | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and PR-1004 security contracts — same-origin/no-cookie bearer posture is explicit; reverse-proxy CORS/CSRF/rate-limit enforcement still needs a deployment drill |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
 | Full repository regression suite | PASS (local and supported offline CI) | Local `python -m pytest -q` → **1499 passed, 10 skipped, 1 warning, 1 subtests passed**; supported offline regression in run `33710765514` → **1503 passed, 6 skipped, 3 deselected, 1 warning, 1 subtests passed in 199.15s** |
@@ -91,6 +91,15 @@ render path with **2 passed**; the evidence-retention rerun on `2bf54ae`
 (`33718631193`) also completed **2 passed, 1 skipped**, uploaded the raw log,
 and passed every other supported job. The earlier `33715260110` result remains
 partial historical evidence because it omitted the render opt-in.
+
+The current dependency/performance checkpoint is commit `3d368da` and
+supported push run `33722648046`. All seven non-opt-in jobs completed
+successfully: clean install (including `npm audit --audit-level=high`, which
+reported **0 vulnerabilities**), release-blocker contracts, offline regression,
+container/browser rendering, and Phase 10 SLO/load/operations evidence. The
+push workflow intentionally skipped live-provider and HyperFrames opt-ins, so
+this run validates the checkpoint but is not the frozen release-candidate
+certification.
 
 ## Blocking proof
 
