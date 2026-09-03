@@ -185,29 +185,95 @@ const closeWizardBtn = document.getElementById("closeWizardBtn");
 const cancelWizardBtn = document.getElementById("cancelWizardBtn");
 const createProjectForm = document.getElementById("createProjectForm");
 const submitCreateBtn = document.getElementById("submitCreateBtn");
+const wizardOptionsStatus = document.getElementById("wizardOptionsStatus");
+const retryWizardOptionsBtn = document.getElementById("retryWizardOptionsBtn");
 
 let selectedPipeline = "screen-demo";
 let selectedPlaybook = "premium-minimalist";
+let wizardOptionsState = "idle";
+let wizardOptionsRequest = null;
+
+function setWizardOptionsStatus(message, state) {
+  wizardOptionsStatus.textContent = message || "";
+  wizardOptionsStatus.hidden = !message;
+  wizardOptionsStatus.dataset.state = state;
+  retryWizardOptionsBtn.hidden = state !== "error";
+  submitCreateBtn.disabled = state !== "ready";
+}
+
+function normalizeWizardSelections() {
+  const launchPipeline = availablePipelines.find((pipeline) => (
+    pipeline && pipeline.creation_enabled === true
+  ));
+  if (!availablePipelines.some((pipeline) => (
+    pipeline && pipeline.id === selectedPipeline && pipeline.creation_enabled === true
+  ))) {
+    selectedPipeline = launchPipeline?.id || "";
+  }
+  if (!availablePlaybooks.some((playbook) => playbook && playbook.id === selectedPlaybook)) {
+    selectedPlaybook = availablePlaybooks[0]?.id || "";
+  }
+}
+
+async function loadWizardOptions() {
+  if (wizardOptionsState === "ready") return true;
+  if (wizardOptionsRequest) return wizardOptionsRequest;
+
+  wizardOptionsState = "loading";
+  setWizardOptionsStatus("Loading the current production catalogs…", "loading");
+  document.getElementById("pipelineSelectionGrid").innerHTML = '<div class="loading-spinner">Loading pipelines...</div>';
+  document.getElementById("playbookSelectionGrid").innerHTML = '<div class="loading-spinner">Loading playbooks...</div>';
+
+  wizardOptionsRequest = Promise.all([
+    getJSON("/api/pipelines"),
+    getJSON("/api/playbooks"),
+    getJSON("/api/voices")
+  ]).then(([pipelines, playbooks, voices]) => {
+    const validPipelines = Array.isArray(pipelines)
+      ? pipelines.filter((pipeline) => pipeline && typeof pipeline === "object" && typeof pipeline.id === "string")
+      : [];
+    const validPlaybooks = Array.isArray(playbooks)
+      ? playbooks.filter((playbook) => playbook && typeof playbook === "object" && typeof playbook.id === "string")
+      : [];
+    const validVoices = Array.isArray(voices)
+      ? voices.filter((voice) => voice && typeof voice === "object" && typeof voice.id === "string")
+      : [];
+    if (!validPipelines.some((pipeline) => pipeline.creation_enabled === true)) {
+      throw new Error("No launch-enabled production pipeline is available");
+    }
+    if (validPlaybooks.length === 0) {
+      throw new Error("No visual style playbook is available");
+    }
+    if (validVoices.length === 0) {
+      throw new Error("No narration voice is available");
+    }
+    availablePipelines = validPipelines;
+    availablePlaybooks = validPlaybooks;
+    availableVoices = validVoices;
+    normalizeWizardSelections();
+    wizardOptionsState = "ready";
+    setWizardOptionsStatus("", "ready");
+    return true;
+  }).catch((error) => {
+    availablePipelines = [];
+    availablePlaybooks = [];
+    availableVoices = [];
+    wizardOptionsState = "error";
+    setWizardOptionsStatus("Current production options could not be loaded. Retry before creating a video.", "error");
+    console.warn("Failed to load current production options:", error);
+    return false;
+  }).finally(() => {
+    wizardOptionsRequest = null;
+  });
+  return wizardOptionsRequest;
+}
 
 async function openWizard() {
   wizardModal.style.display = "flex";
   wizardModal.setAttribute("aria-hidden", "false");
   document.getElementById("projectTitle").focus();
 
-  // Load pipelines, playbooks, voices if not loaded
-  if (availablePipelines.length === 0) {
-    try {
-      document.getElementById('pipelineSelectionGrid').innerHTML = '<div class="loading-spinner">Loading pipelines...</div>';
-      document.getElementById('playbookSelectionGrid').innerHTML = '<div class="loading-spinner">Loading playbooks...</div>';
-      [availablePipelines, availablePlaybooks, availableVoices] = await Promise.all([
-        getJSON("/api/pipelines"),
-        getJSON("/api/playbooks"),
-        getJSON("/api/voices")
-      ]);
-    } catch (e) {
-      console.warn("Failed to load options:", e);
-    }
-  }
+  await loadWizardOptions();
 
   renderPipelineOptions();
   renderPlaybookOptions();
@@ -229,12 +295,11 @@ document.addEventListener("keydown", (event) => {
 function renderPipelineOptions() {
   const container = document.getElementById("pipelineSelectionGrid");
   container.innerHTML = "";
-  const pipelines = availablePipelines.length ? availablePipelines : [
-    { id: "screen-demo", name: "Screen Demo", description: "Product walkthrough with zooms and cursor focus", release_lane: "launch", release_label: "Launch candidate — not production-certified", creation_enabled: true },
-    { id: "talking-head", name: "Talking Head", description: "User-supplied source footage with captions and audio cleanup", release_lane: "launch", release_label: "Launch candidate — not production-certified", creation_enabled: true },
-    { id: "cinematic", name: "Cinematic Montage", description: "Atmospheric camera movement, grading & score", release_lane: "beta", release_label: "Beta — not production-certified", creation_enabled: false },
-    { id: "animated-explainer", name: "Animated Explainer", description: "Generated visuals, charts & narration", release_lane: "experimental", release_label: "Experimental — internal preview only", creation_enabled: false },
-  ];
+  const pipelines = availablePipelines;
+  if (pipelines.length === 0) {
+    container.append(el("div", { class: "field-hint" }, "No production pipelines are available."));
+    return;
+  }
 
   for (const pipe of pipelines) {
     const lane = pipe.release_lane || "experimental";
@@ -276,12 +341,11 @@ function renderPipelineOptions() {
 function renderPlaybookOptions() {
   const container = document.getElementById("playbookSelectionGrid");
   container.innerHTML = "";
-  const playbooks = availablePlaybooks.length ? availablePlaybooks : [
-    { id: "premium-minimalist", name: "Premium Minimalist", mood: "Editorial, High Trust", color_palette: { primary: ["#111827"], accent: ["#2563EB"] } },
-    { id: "anime-ghibli", name: "Anime Ghibli", mood: "Hand-painted, Warm Aesthetic", color_palette: { primary: ["#3D4A3E"], accent: ["#D97706"] } },
-    { id: "flat-motion-graphics", name: "Flat Motion Graphics", mood: "Bold Geometry, Vibrant", color_palette: { primary: ["#0F172A"], accent: ["#00E5FF"] } },
-    { id: "minimalist-diagram", name: "Minimalist Diagram", mood: "Technical & Schematic", color_palette: { primary: ["#000000"], accent: ["#10B981"] } },
-  ];
+  const playbooks = availablePlaybooks;
+  if (playbooks.length === 0) {
+    container.append(el("div", { class: "field-hint" }, "No visual style playbooks are available."));
+    return;
+  }
 
   for (const pb of playbooks) {
     const swatches = el("div", { class: "playbook-swatches" });
@@ -324,13 +388,12 @@ function renderPlaybookOptions() {
 function renderVoiceOptions() {
   const select = document.getElementById("voiceSelect");
   select.innerHTML = "";
-  const voices = availableVoices.length ? availableVoices : [
-    { id: "en-US-ChristopherNeural", name: "Christopher (US Male - Authoritative & Warm)" },
-    { id: "en-US-AriaNeural", name: "Aria (US Female - Clear & Dynamic)" },
-    { id: "en-US-GuyNeural", name: "Guy (US Male - Casual & Friendly)" },
-    { id: "en-US-JennyNeural", name: "Jenny (US Female - Natural Explainer)" },
-    { id: "en-GB-RyanNeural", name: "Ryan (UK Male - Polished British)" },
-  ];
+  const voices = availableVoices;
+  select.disabled = voices.length === 0;
+  if (voices.length === 0) {
+    select.append(el("option", { value: "" }, "No narration voices are available"));
+    return;
+  }
 
   for (const v of voices) {
     const opt = el("option", { value: v.id }, v.name);
@@ -361,6 +424,11 @@ async function handleCreateProject(e) {
   if (!topic) {
     alert("Please describe the video topic and key takeaways.");
     document.getElementById("projectTopic")?.focus();
+    return;
+  }
+
+  if (wizardOptionsState !== "ready") {
+    alert("Current production options are not ready. Retry loading them before creating a video.");
     return;
   }
 
@@ -407,6 +475,12 @@ createVideoBtn.addEventListener("click", openWizard);
 if (emptyCreateBtn) emptyCreateBtn.addEventListener("click", openWizard);
 closeWizardBtn.addEventListener("click", closeWizard);
 cancelWizardBtn.addEventListener("click", closeWizard);
+retryWizardOptionsBtn.addEventListener("click", async () => {
+  await loadWizardOptions();
+  renderPipelineOptions();
+  renderPlaybookOptions();
+  renderVoiceOptions();
+});
 createProjectForm.addEventListener("submit", handleCreateProject);
 submitCreateBtn.addEventListener("click", (e) => {
   if (createProjectForm.checkValidity && !createProjectForm.checkValidity()) {

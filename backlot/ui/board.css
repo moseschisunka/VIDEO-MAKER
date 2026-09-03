@@ -1862,6 +1862,16 @@ body:not(.first) .approval-review, body:not(.first) .packaging-review { animatio
   line-height: 1.45;
 }
 
+.wizard-options-status[data-state="error"] {
+  color: #fbbf24;
+}
+
+#retryWizardOptionsBtn {
+  margin-top: 9px;
+  padding: 7px 11px;
+  font-size: 0.75rem;
+}
+
 .form-textarea { resize: vertical; margin-top: 8px; }
 
 .form-row {

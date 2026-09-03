@@ -97,3 +97,27 @@ def test_creation_wizard_controls_are_accessible_and_keyboard_selectable() -> No
     assert 'event.key === "Escape"' in library_js
     assert 'event.key === "Enter" || event.key === " "' in library_js
     assert '.selector-card:focus-visible, .playbook-card:focus-visible' in board_css
+
+
+@pytest.mark.release_blocker
+def test_creation_wizard_uses_authoritative_catalogs_and_fails_closed() -> None:
+    html = (REPO_ROOT / "backlot" / "ui" / "index.html").read_text(encoding="utf-8")
+    library_js = (REPO_ROOT / "backlot" / "ui" / "library.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="wizardOptionsStatus"' in html
+    assert 'id="retryWizardOptionsBtn"' in html
+    assert 'let wizardOptionsState = "idle"' in library_js
+    assert 'if (wizardOptionsState !== "ready")' in library_js
+    assert 'Current production options could not be loaded. Retry before creating a video.' in library_js
+    assert 'const pipelines = availablePipelines;' in library_js
+    assert 'const playbooks = availablePlaybooks;' in library_js
+    assert 'const voices = availableVoices;' in library_js
+    assert 'const validPipelines = Array.isArray(pipelines)' in library_js
+    assert 'const validVoices = Array.isArray(voices)' in library_js
+    assert 'normalizeWizardSelections();' in library_js
+    assert 'pipeline && pipeline.id === selectedPipeline && pipeline.creation_enabled === true' in library_js
+    assert 'availablePipelines.length ? availablePipelines :' not in library_js
+    assert 'availablePlaybooks.length ? availablePlaybooks :' not in library_js
+    assert 'availableVoices.length ? availableVoices :' not in library_js
