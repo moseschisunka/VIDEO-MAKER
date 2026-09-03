@@ -130,7 +130,7 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 | `PR-608` | Add contact-sheet/sample approval | `PR-601`–`PR-607` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-608.md`](evidence/PR-608.md) |
 | `PR-609` | Add asset cache/partial resume | `PR-302`, `PR-600`–`PR-607` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-609.md`](evidence/PR-609.md) |
 | `PR-610` | Add multi-source/corruption tests | `PR-601`–`PR-609` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-610.md`](evidence/PR-610.md) |
-| `PR-6G` | Phase 6 gate | `PR-600`–`PR-610` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-6G.md`](evidence/PR-6G.md) |
+| `PR-6G` | Phase 6 gate | `PR-600`–`PR-610`, `PR-1017` | `IN_PROGRESS` | OpenMontage execution agent | [`evidence/PR-6G.md`](evidence/PR-6G.md) — historical mixed-media evidence remains retained; PR-1017 reopens strict-ingestion acceptance until supported CI verification |
 
 ## Phase 7 tracker
 
@@ -317,7 +317,7 @@ Append decisions; never rewrite history.
 | Phase 3 | `COMPLETE` | [`evidence/PR-3G.md`](evidence/PR-3G.md) | — |
 | Phase 4 | `COMPLETE` | [`evidence/PR-4G.md`](evidence/PR-4G.md) | — |
 | Phase 5 | `COMPLETE` | [`evidence/PR-5G.md`](evidence/PR-5G.md) | — |
-| Phase 6 | `COMPLETE` | [`evidence/PR-6G.md`](evidence/PR-6G.md) | — |
+| Phase 6 | `IN_PROGRESS` | [`evidence/PR-6G.md`](evidence/PR-6G.md), [`evidence/PR-1017.md`](evidence/PR-1017.md) | PR-1017 strict-ingestion fix is locally green; supported CI verification pending |
 | Phase 7 | `COMPLETE` | [`evidence/PR-7G.md`](evidence/PR-7G.md) | — |
 | Phase 8 | `COMPLETE` | [`evidence/PR-8G.md`](evidence/PR-8G.md) | — |
 | Phase 9 | `COMPLETE` | [`evidence/PR-9G.md`](evidence/PR-9G.md) | Automated/local gate passed; human AV review remains Phase 11 |

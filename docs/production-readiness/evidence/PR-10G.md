@@ -159,7 +159,9 @@ represented as supported-CI evidence. `PR-1016` adds the source-footage
 talking-head manifest executor lane; `PR-1017` rejects zero-duration or
 mismatched-stream media at ingestion. Both have local regression evidence, but
 the supported workflow must rerun from the published checkpoint before the
-corresponding tasks can become `VERIFIED`.
+corresponding tasks can become `VERIFIED`; because PR-1017 covers a Phase 6
+acceptance boundary, the Phase 6 gate and `SEC-04` remain reopened/partial until
+that supported verification is attached.
 
 ## Blocking proof
 

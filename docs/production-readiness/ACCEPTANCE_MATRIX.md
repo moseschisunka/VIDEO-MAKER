@@ -251,7 +251,7 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 | `SEC-01` | Remote Backlot requires authentication | security integration test | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
 | `SEC-02` | User/project authorization prevents cross-project access | security test | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
 | `SEC-03` | Project/media path traversal is rejected | attack-case tests | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
-| `SEC-04` | Upload/media validation rejects unsafe or unsupported input | upload tests | `PASS` | [`evidence/PR-601.md`](evidence/PR-601.md), [`evidence/PR-6G.md`](evidence/PR-6G.md) — consent, symlink/path, magic/decode, MIME, size, partial-download, and provenance safeguards pass |
+| `SEC-04` | Upload/media validation rejects unsafe or unsupported input | upload tests | `PARTIAL` | [`evidence/PR-601.md`](evidence/PR-601.md), [`evidence/PR-6G.md`](evidence/PR-6G.md), and [`evidence/PR-1017.md`](evidence/PR-1017.md) — historical safeguards pass; PR-1017 adds fail-closed duration/declared-stream checks locally, with supported CI verification pending |
 | `SEC-05` | Secrets and signed URLs are redacted from logs/events/errors | log scanning test | `PASS` | [`PR-1005`](evidence/PR-1005.md) |
 | `SEC-06` | CORS/CSRF/rate-limit behavior is explicitly configured | config/test review | `PARTIAL` | [`config/security_policy.yaml`](../../config/security_policy.yaml) and `test_web_boundary_security_policy_is_explicit_and_fail_closed` define same-origin/no-cookie-bearer behavior and edge `429` rate limiting; deployed reverse-proxy enforcement still required |
 | `SEC-07` | User-media retention/deletion and provider disclosure are documented | policy review | `PASS` | [`PR-1005`](evidence/PR-1005.md) |
