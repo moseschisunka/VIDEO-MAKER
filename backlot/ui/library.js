@@ -55,6 +55,46 @@ function updateMetrics(projects) {
   }
 }
 
+function projectStageCount(project) {
+  const stages = Array.isArray(project.stage_states)
+    ? project.stage_states.filter((stage) => stage && stage.name)
+    : [];
+  return Math.max(1, stages.length || 1);
+}
+
+function projectProgress(project) {
+  const totalStages = projectStageCount(project);
+  const rawCompleted = Number(project.completed_count);
+  const completedStages = Number.isFinite(rawCompleted)
+    ? Math.max(0, Math.min(totalStages, rawCompleted))
+    : 0;
+  // Legacy projects can have a render but no checkpoint rail. Treat that
+  // observed output as complete for the card, while never inventing progress
+  // for a queued or handoff-only work order.
+  const effectiveCompleted = project.render_count > 0 && completedStages === 0
+    ? totalStages
+    : completedStages;
+  return {
+    totalStages,
+    completedStages: effectiveCompleted,
+    percent: Math.min(100, Math.round((effectiveCompleted / totalStages) * 100)),
+  };
+}
+
+function projectPlaceholderLabel(project) {
+  const status = String(project.work_order_status || "").trim().toLowerCase();
+  if (status === "queued") return "QUEUED · AGENT HANDOFF";
+  if (["preflighting", "running", "revising"].includes(status)) {
+    return "IN PROGRESS · AGENT";
+  }
+  if (status === "awaiting_approval") return "AWAITING APPROVAL";
+  if (status === "blocked") return "BLOCKED";
+  if (status === "failed") return "RUN FAILED";
+  if (status === "cancelled") return "CANCELLED";
+  if (status === "completed") return "AWAITING OUTPUT";
+  return "AWAITING RENDER";
+}
+
 // ---- Project Card Component ---------------------------------------
 function renderProjectCard(p) {
   const poster = el("div", { class: "lib-poster" });
@@ -68,7 +108,7 @@ function renderProjectCard(p) {
     poster.append(
       el("div", { class: "lp-placeholder" },
         el("div", { class: "placeholder-icon" }, "🎬"),
-        el("span", { class: "lp-txt" }, "AWAITING RENDER")
+        el("span", { class: "lp-txt" }, projectPlaceholderLabel(p))
       )
     );
   }
@@ -86,9 +126,8 @@ function renderProjectCard(p) {
   }
 
   // Stage Progress Bar
-  const totalStages = 6;
-  const completedStages = p.completed_count || (p.render_count > 0 ? 6 : 1);
-  const progressPercent = Math.min(100, Math.round((completedStages / totalStages) * 100));
+  const progress = projectProgress(p);
+  const progressPercent = progress.percent;
 
   const progressRail = el("div", { class: "card-progress-rail" },
     el("div", { 

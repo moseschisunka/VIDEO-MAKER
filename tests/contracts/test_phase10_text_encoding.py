@@ -120,6 +120,13 @@ def test_creation_wizard_uses_authoritative_catalogs_and_fails_closed() -> None:
     assert 'const validVoices = Array.isArray(voices)' in library_js
     assert 'normalizeWizardSelections();' in library_js
     assert 'compatiblePlaybooksForSelectedPipeline' in library_js
+    assert 'function projectStageCount(project)' in library_js
+    assert 'function projectPlaceholderLabel(project)' in library_js
+    assert 'QUEUED · AGENT HANDOFF' in library_js
+    assert 'IN PROGRESS · AGENT' in library_js
+    assert 'AWAITING APPROVAL' in library_js
+    assert 'const progress = projectProgress(p);' in library_js
+    assert 'const totalStages = 6;' not in library_js
     pipeline_loader = (REPO_ROOT / "lib" / "pipeline_loader.py").read_text(encoding="utf-8")
     assert '"compatible_playbooks": _compatible_playbook_ids(manifest)' in pipeline_loader
     assert 'pipeline && pipeline.id === selectedPipeline && pipeline.creation_enabled === true' in library_js
