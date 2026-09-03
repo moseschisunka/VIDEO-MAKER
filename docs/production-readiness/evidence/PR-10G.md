@@ -12,6 +12,7 @@ This is an audit record, not a production approval. The release lock remains
 | Offline release-blocker contracts | PASS (supported CI) | Latest supported run `33730564062` on `2a2af84` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1057 passed, 5 skipped, 1 deselected, 1 warning in 141.43s**; earlier runs remain historical evidence |
 | Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **70 passed, 2 warnings in 107.86s** on the current Windows diagnostic run; supported CI remains authoritative |
 | UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **7 passed** in the current checkpoint; manifests, playbooks, and runtime config load explicit UTF-8, title-only briefs are rejected, wizard catalogs fail closed, run-start failures are visible, and dialog/labels/keyboard controls are verified |
+| Library work-order state and progress precision | PASS (local source/test and read-only browser; supported rerun pending) | [`PR-1013.md`](PR-1013.md) — commit `ab01bcb` removes the hard-coded six-stage denominator, reports a queued handoff as `QUEUED · AGENT HANDOFF` at `0% Completed`, and derives rendered progress from actual checkpoint rails; focused catalog/state contracts → **10 passed, 1 warning** |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
 | Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and latest supported run `33730564062` |
@@ -133,6 +134,12 @@ limits, and surfaces a failed automatic run instead of claiming success. The
 live-provider and HyperFrames opt-ins were intentionally skipped; this is a
 supported checkpoint, not frozen release-candidate or production evidence.
 The Phase 10 raw evidence artifact is [openmontage-phase10-evidence](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33730564062/artifacts/9883844320).
+
+The local follow-up checkpoint `ab01bcb` also corrected a library precision
+fault: queued work-order handoffs no longer appear to be rendering, and card
+progress now uses each project's actual checkpoint rail. A read-only browser
+rerun and the focused **10-test** contract set pass; the next supported run
+must include this checkpoint before the Phase 10 rerun can rely on it.
 
 ## Blocking proof
 
