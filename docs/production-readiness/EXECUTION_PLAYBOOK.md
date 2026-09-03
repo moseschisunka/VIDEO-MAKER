@@ -741,6 +741,11 @@ Dependencies: stable contracts from Phases 1-3; final certification after `PR-9G
 | `PR-1008` | Add backup/restore and state migration | run/checkpoint storage, runbook | backup restore and schema-version migration drill succeeds |
 | `PR-1009` | Add bounded load and soak tests | test harness | concurrency, memory/disk cleanup, job queue, provider throttling, UI event stability |
 | `PR-1010` | Write operator and incident runbooks | `docs/operations/` | deploy, rollback, provider outage, stuck job, corrupt artifact, secret rotation, restore |
+| `PR-1011` | Preserve authored text and wizard interaction integrity | Backlot UI/loaders | UTF-8, input, keyboard, dialog, catalog, and run-start contracts remain truthful |
+| `PR-1012` | Align creation catalogs with manifest contracts and surface launch failures | catalog/API/UI | incompatible options fail closed and non-OK `/run` responses remain visible |
+| `PR-1013` | Make library state/progress truthful for work-order handoffs | Backlot library | manifest-aware stage progress and honest queued/running/approval labels |
+| `PR-1014` | Derive library completion metrics from truthful project state | Backlot library | aggregate metrics and filters share one completion predicate |
+| `PR-1015` | Preserve project-relative caption evidence through final review | video compose/final review | source-footage render with project-relative subtitles passes burn-in and final-review verification from a repository-root caller |
 | `PR-10G` | Phase 10 operational gate | clean install, security, load, restore evidence | supported environment is reproducible and operable |
 
 ### Implementation instructions

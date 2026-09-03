@@ -1269,6 +1269,7 @@ class VideoCompose(BaseTool):
             edit_decisions=edit_decisions,
             proposal_packet=inputs.get("proposal_packet"),
             asset_manifest=inputs.get("asset_manifest"),
+            project_root=project_root,
             narration_transcript_path=inputs.get("narration_transcript_path"),
             script_text=inputs.get("script_text"),
         )
@@ -2009,6 +2010,7 @@ class VideoCompose(BaseTool):
                 edit_decisions,
                 inputs.get("proposal_packet"),
                 asset_manifest=resolved_asset_manifest,
+                project_root=project_root,
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
@@ -2160,6 +2162,7 @@ class VideoCompose(BaseTool):
                 edit_decisions,
                 inputs.get("proposal_packet"),
                 asset_manifest=asset_manifest,
+                project_root=self._project_root_for_inputs(inputs, output_path),
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
@@ -2260,6 +2263,7 @@ class VideoCompose(BaseTool):
                 edit_decisions,
                 inputs.get("proposal_packet"),
                 asset_manifest=asset_manifest,
+                project_root=self._project_root_for_inputs(inputs, output_path),
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
@@ -3209,6 +3213,7 @@ class VideoCompose(BaseTool):
         asset_manifest: dict[str, Any] | None = None,
         narration_transcript_path: str | Path | None = None,
         script_text: str | None = None,
+        project_root: Path | str | None = None,
     ) -> dict[str, Any]:
         """Run post-render self-review and produce a final_review artifact.
 
@@ -3223,9 +3228,21 @@ class VideoCompose(BaseTool):
         `edit_decisions.metadata.proposal_render_runtime` (which the edit
         director can set explicitly to opt into swap detection).
 
+        ``project_root`` anchors relative artifact references during review.
+        Backlot normally calls the renderer from the repository root, while
+        subtitle/media paths are stored relative to the project workspace.
+
         Returns a dict conforming to final_review.schema.json.
         """
         log = logging.getLogger("video_compose.final_review")
+        resolved_project_root: Path | None = None
+        if project_root is not None:
+            try:
+                candidate_root = Path(project_root).expanduser().resolve()
+                if candidate_root.is_dir():
+                    resolved_project_root = candidate_root
+            except (OSError, TypeError, ValueError):
+                resolved_project_root = None
         issues: list[str] = []
 
         # A final review is an evidence record, not an optimistic status bit.
@@ -3819,7 +3836,11 @@ class VideoCompose(BaseTool):
                             and not subtitle_check["subtitles_present"]):
                         # Check if subtitle_path was used (burned in)
                         sub_source = ed_subs.get("source")
-                        if sub_source and Path(sub_source).exists():
+                        resolved_sub_source = self._resolve_project_path(
+                            sub_source,
+                            project_root=resolved_project_root,
+                        )
+                        if resolved_sub_source and Path(resolved_sub_source).is_file():
                             # Burned-in subtitles are not detectable as streams
                             subtitle_check["subtitles_present"] = True
                             subtitle_check["coverage_ratio"] = 1.0
