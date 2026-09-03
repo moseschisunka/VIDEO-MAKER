@@ -33,7 +33,7 @@ function updateReleaseBanner() {
 function updateMetrics(projects) {
   const total = projects.length;
   const live = projects.filter((p) => p.live || (p.active_stage && p.active_stage !== "publish")).length;
-  const completed = projects.filter((p) => p.render_count > 0 || (p.completed_count >= 5)).length;
+  const completed = projects.filter(projectIsComplete).length;
   const awaiting = projects.filter((p) => p.awaiting_human).length;
 
   document.getElementById("statTotalProjects").textContent = total;
@@ -79,6 +79,12 @@ function projectProgress(project) {
     completedStages: effectiveCompleted,
     percent: Math.min(100, Math.round((effectiveCompleted / totalStages) * 100)),
   };
+}
+
+function projectIsComplete(project) {
+  const progress = projectProgress(project);
+  return Number(project.render_count) > 0
+    || progress.completedStages >= progress.totalStages;
 }
 
 function projectPlaceholderLabel(project) {
@@ -173,7 +179,7 @@ function filterProjects() {
   if (currentFilter === "live") {
     filtered = filtered.filter((p) => p.live || (p.active_stage && p.active_stage !== "publish"));
   } else if (currentFilter === "completed") {
-    filtered = filtered.filter((p) => p.render_count > 0 || p.completed_count >= 5);
+    filtered = filtered.filter(projectIsComplete);
   } else if (currentFilter === "awaiting") {
     filtered = filtered.filter((p) => p.awaiting_human);
   }
