@@ -53,3 +53,15 @@ requirements above are unchanged.
 
 The same offline QA command was rerun after this hardening with the current
 tree: **2 passed in 29.98s**.
+
+Latest local rerun (2026-09-03) used the same explicit cached-runtime flags and
+completed the full scaffold → lint → validate → inspect → render path again:
+
+```text
+python -c "import os,pytest; os.environ['HYPERFRAMES_QA']='1'; os.environ['HYPERFRAMES_QA_RENDER']='1'; os.environ['HYPERFRAMES_QA_OFFLINE']='1'; raise SystemExit(pytest.main(['tests/qa/test_09_hyperframes_compose.py','-q']))"
+2 passed in 62.51s
+```
+
+This confirms the current Windows cache remains executable, but it does not
+change the gate classification: the supported Ubuntu opt-in run and the
+frozen-release-candidate rerun are still outstanding.
