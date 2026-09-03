@@ -93,13 +93,13 @@ and passed every other supported job. The earlier `33715260110` result remains
 partial historical evidence because it omitted the render opt-in.
 
 The current dependency/performance checkpoint is commit `3d368da` and
-supported push run `33722648046`. All seven non-opt-in jobs completed
+supported push run `33722648046`. All five required non-opt-in jobs completed
 successfully: clean install (including `npm audit --audit-level=high`, which
 reported **0 vulnerabilities**), release-blocker contracts, offline regression,
 container/browser rendering, and Phase 10 SLO/load/operations evidence. The
-push workflow intentionally skipped live-provider and HyperFrames opt-ins, so
-this run validates the checkpoint but is not the frozen release-candidate
-certification.
+two opt-in jobs (live-provider and HyperFrames) were intentionally skipped on
+the push workflow, so this run validates the checkpoint but is not the frozen
+release-candidate certification.
 
 ## Blocking proof
 
