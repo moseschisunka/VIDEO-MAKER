@@ -17,7 +17,8 @@ This is an audit record, not a production approval. The release lock remains
 | Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported run `33710765514` |
 | Alert rules and fake-sink drill | PASS (external delivery pending) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and [`config/alerts.yaml`](../../../config/alerts.yaml) |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
-| Current cached HyperFrames QA | PASS (local cached-runtime diagnostic; supported CI/RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — opt-in scaffold/lint/validate/inspect/render completes with cached HyperFrames 0.8.25; the QA harness now supports explicit offline mode |
+| HyperFrames CLI/browser QA | PASS (supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — run `33718631193` executes scaffold/lint/validate plus the real render (**2 passed, 1 skipped, 1 warning in 88.59s**); the raw log is retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33718631193/artifacts/9879467068) |
+| Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
 | Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and run `33710765514` — clean checkout package-data contract and PR-1002 smoke pass |
 | Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass |
 | Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image |
@@ -80,6 +81,16 @@ and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt)
 The immutable workflow record is [GitHub Actions run
 33710765514](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33710765514).
 
+The shared runtime-hardening checkpoint is commit `671a8dc`, followed by the
+CI evidence-retention patch `2bf54ae`. Supported push run `33717170584` passed
+clean install, release blockers, offline regression, container/browser
+rendering, and Phase 10 SLO/load/operations. The explicitly dispatched
+HyperFrames certification on `671a8dc` (run `33718138362`) completed the real
+render path with **2 passed**; the evidence-retention rerun on `2bf54ae`
+(`33718631193`) also completed **2 passed, 1 skipped**, uploaded the raw log,
+and passed every other supported job. The earlier `33715260110` result remains
+partial historical evidence because it omitted the render opt-in.
+
 ## Blocking proof
 
 1. `REC-03` still requires an executed deployment/rollback drill on the
@@ -92,9 +103,9 @@ The immutable workflow record is [GitHub Actions run
    the trusted edge.
 4. `OBS-02` still requires external metrics/log aggregation or scrape proof
    and durable SLO denominators; the in-process snapshot resets on restart.
-5. HyperFrames' opt-in supported CI job was skipped in run `33710765514`; the
-   cached offline runtime evidence is not a substitute for the clean supported
-   HyperFrames certification and frozen-RC rerun.
+5. HyperFrames' clean supported certification now passes, but the frozen
+   release-candidate rerun must still repeat the complete matrix before
+   `PR-10G` can close.
 
 ## Decision
 

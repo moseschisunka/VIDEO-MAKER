@@ -1,6 +1,6 @@
-# PR-10G — Current cached HyperFrames QA
+# PR-10G — HyperFrames QA evidence
 
-Status: **PASS (local cached-runtime diagnostic; supported CI/RC proof still required)**
+Status: **PASS (local cached-runtime diagnostic and supported Ubuntu certification; frozen-RC proof still required)**
 
 The opt-in HyperFrames QA harness now accepts `HYPERFRAMES_QA_OFFLINE=1` so a
 release check can use the installed package cache without silently querying the
@@ -28,10 +28,9 @@ produced a non-empty 5-second MP4 (150 frames) from the cached browser and
 vendored GSAP runtime.
 
 The standard online probe remains available for the opt-in CI job. The core
-supported run `33710765514` intentionally skipped that opt-in job, so the
-cached offline diagnostic above is not yet a clean supported-environment
-HyperFrames certification. A supported Ubuntu HyperFrames run and a frozen
-release-candidate rerun remain required before `RUN-07`, `RUN-08`, or `PR-10G`
+supported run `33710765514` intentionally skipped that opt-in job, but the
+dedicated supported Ubuntu certification is now recorded below. A frozen
+release-candidate rerun remains required before `RUN-07`, `RUN-08`, or `PR-10G`
 can be marked complete.
 
 ## Contract-hardening follow-up (2026-09-03)
@@ -62,9 +61,39 @@ python -c "import os,pytest; os.environ['HYPERFRAMES_QA']='1'; os.environ['HYPER
 2 passed in 62.51s
 ```
 
-This confirms the current Windows cache remains executable, but it does not
-change the gate classification: the supported Ubuntu opt-in run and the
-frozen-release-candidate rerun are still outstanding.
+This confirms the current Windows cache remains executable. The supported
+Ubuntu opt-in run is recorded below; the frozen-release-candidate rerun is
+still outstanding.
+
+## Supported clean-runtime certification (2026-09-03)
+
+The opt-in CI workflow now pins Node 22 for this job, enables both QA switches,
+and retains the exact pytest output as a downloadable artifact. The supported
+run on commit `671a8dc` completed the real render path:
+
+```text
+HYPERFRAMES_QA=1 HYPERFRAMES_QA_RENDER=1
+.venv/bin/python -m pytest tests -m hyperframes_qa -q
+2 passed, 1 skipped, 1512 deselected, 1 warning in 110.51s
+```
+
+The evidence-retention rerun on commit `2bf54ae` is the authoritative record:
+
+```text
+2 passed, 1 skipped, 1512 deselected, 1 warning in 88.59s
+```
+
+It passed the scaffold/lint/validate test and the full HyperFrames MP4 render,
+and uploaded the raw log as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33718631193/artifacts/9879467068).
+The immutable [workflow run](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33718631193)
+also passed release-blocker contracts, clean install, offline regression,
+container/browser rendering, and Phase 10 SLO/load/operations. The single
+skipped item is retained in the raw log for follow-up; no failure was hidden.
+
+This closes the supported HyperFrames sub-check only. The frozen release
+candidate must still repeat the acceptance matrix, and `PR-10G` remains blocked
+by deployment rollback, external monitoring/alert delivery, and trusted-edge
+security proof.
 
 ## Runtime preflight timeout hardening (2026-09-03)
 
@@ -72,9 +101,11 @@ The Windows runtime probe previously used `subprocess.run()` with an npm
 `.CMD` wrapper. When the npm registry was unreachable, the wrapper's Node
 child could retain inherited stdout/stderr pipe handles after the nominal
 five-second timeout, causing `VideoCompose.get_info()` to block for more than
-one minute. The HyperFrames adapter now runs CLI probes in a bounded process
-group, terminates the complete wrapper tree, and captures output through
-temporary files so cleanup never drains descendant-owned pipes indefinitely.
+one minute. The shared `BaseTool` CLI boundary now runs commands in a bounded
+process group, terminates the complete wrapper tree, and captures output
+through temporary files so cleanup never drains descendant-owned pipes
+indefinitely. HyperFrames inherits this boundary, as do Remotion, FFmpeg,
+analysis, and other CLI-backed tools.
 
 Verification:
 
@@ -85,10 +116,12 @@ python -u -c "import time; from tools.video.video_compose import VideoCompose; s
 Result: **5.447 seconds**, with a structured HyperFrames-unavailable status
 (`ffmpeg` and Remotion remained available). The focused adapter suite is now
 **47 passed**, including a regression test that asserts timeout cleanup does
-not use pipe-backed output or an unbounded `communicate()` call. Phase 7/8
-contracts remain **24 passed**, and the explicit cached-runtime QA remains
-**2 passed in 56.15s**.
+not use pipe-backed output or an unbounded `communicate()` call. The base-tool
+timeout regression also confirms callers still receive `TimeoutExpired` in
+under four seconds. Phase 7/8 contracts remain **24 passed**, the combined
+base/adapter unit suites are **50 passed**, and the explicit cached-runtime QA
+remains **2 passed in 56.15s**.
 
 This is a reliability improvement to the diagnostic and render subprocess
-boundary; it is not the supported Ubuntu HyperFrames certification or the
-frozen-RC evidence required to close `PR-10G`.
+boundary. The supported Ubuntu HyperFrames certification is recorded above;
+the frozen-RC evidence required to close `PR-10G` remains outstanding.
