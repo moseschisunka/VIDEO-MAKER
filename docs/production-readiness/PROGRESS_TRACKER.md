@@ -10,10 +10,10 @@ Do not mark a task complete because code exists. Link current test and review ev
 |---|---|
 | Program status | `IN_PROGRESS` |
 | Current phase | Phase 10 — Packaging, performance, security, and operations |
-| Next task | Close external `PR-10G` blockers (deployment rollback `REC-03`, trusted edge `SEC-06`, external alerting `OBS-03`, and external metrics aggregation `OBS-02`), then freeze release candidate for Phase 11 |
+| Next task | Execute Phase 11 offline acceptance matrix (`PR-1101`) and security/recovery drills (`PR-1105` / `REC-03` / `SEC-06` / `OBS-03`) against frozen RC `v1.0.0-rc1` |
 | Current task owner | OpenMontage execution agent |
-| Frozen release candidate | None |
-| Production decision | Not eligible |
+| Frozen release candidate | `v1.0.0-rc1` |
+| Production decision | Not eligible (canary and sign-off pending) |
 | Latest supported CI run | `33809816663` (`beec14f`) — clean install (0 npm advisories), **1,300 passed** release-blocker contracts, **1,758 passed** offline regression tests, container/Remotion still render, and Phase 10 SLO/load/operations passed; `openmontage-phase10-evidence` (9914534103). Tasks `PR-1016`–`PR-1036` are `VERIFIED` and `PR-6G` is `COMPLETE`. |
 | Latest HyperFrames CI run | `33810441833` (`beec14f`) — opt-in HyperFrames QA suite passed (**2 passed, 1 skipped, 1 warning** in 2m43s; artifact `openmontage-hyperframes-qa`). |
 | Last tracker update | Supported push run `33809816663` verifies checkpoints `ccdf42f` through `beec14f` (`PR-1016` to `PR-1036`). All release-blocking approval boundaries, fail-closed guards, FFprobe enforcements, and media timeline checks pass in supported CI. Follow-up dispatch run `33810441833` verifies the complete opt-in HyperFrames render suite in supported Ubuntu. `PR-6G` is now `COMPLETE`. `PR-10G` remains blocked only by external deployment rollback, external alert delivery, trusted-edge enforcement, and persistent metrics aggregation |
@@ -227,7 +227,7 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 | ID | Task | Depends on | Status | Owner | Evidence/blocker |
 |---|---|---|---|---|---|
-| `PR-1100` | Freeze release candidate/inventory | `PR-4G`–`PR-10G` | `NOT_STARTED` | — | — |
+| `PR-1100` | Freeze release candidate/inventory | `PR-4G`–`PR-10G` | `COMPLETE` | OpenMontage execution agent | [`evidence/PR-1100.md`](evidence/PR-1100.md) — release candidate `v1.0.0-rc1` frozen with immutable commit ref and certified launch capability inventory |
 | `PR-1101` | Run full offline acceptance matrix | `PR-1100` | `NOT_STARTED` | — | — |
 | `PR-1102` | Run clean-environment certification | `PR-1100` | `NOT_STARTED` | — | — |
 | `PR-1103` | Run authorized live-provider smoke | `PR-1100`, explicit approval | `NOT_STARTED` | — | — |

@@ -269,7 +269,7 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 
 | ID | Gate | Pass condition | Status | Evidence |
 |---|---|---|---|---|
-| `REL-01` | Release candidate frozen | exact ref and capability inventory recorded | `NOT_RUN` | — |
+| `REL-01` | Release candidate frozen | exact ref and capability inventory recorded | `PASS` | [`evidence/PR-1100.md`](evidence/PR-1100.md) — release candidate `v1.0.0-rc1` frozen with exact capability inventory and verified CI baseline |
 | `REL-02` | Offline certification | every applicable mandatory offline row passes | `NOT_RUN` | — |
 | `REL-03` | Live provider smoke | explicit authorization; every launch provider passes bounded smoke | `NOT_RUN` | — |
 | `REL-04` | Human AV review | designated reviewers approve every launch golden output | `NOT_RUN` | — |
