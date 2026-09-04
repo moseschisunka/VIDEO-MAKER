@@ -14,9 +14,9 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None — `v1.0.0-rc1` was tagged before `PR-10G` became eligible and is not a certified candidate |
 | Production decision | Not eligible |
-| Latest supported CI run | `33830316403` (`eeadb57`) — **1,305 passed** release-blocker contracts, **1,764 passed** offline regression tests, clean install, hardened container/Remotion render, and Phase 10 SLO/load/operations all passed. Live-provider and HyperFrames opt-ins were skipped; external operational proof remains required. |
+| Latest supported CI run | `33846441981` (`ae5889e`) — **1,305 passed** release-blocker contracts, **1,764 passed** offline regression tests, clean install with bounded npm audit retry, hardened container/Remotion render, and Phase 10 SLO/load/operations all passed. Live-provider and HyperFrames opt-ins were skipped; external operational proof remains required. |
 | Latest HyperFrames CI run | `33810441833` (`beec14f`) — opt-in HyperFrames QA suite passed (**2 passed, 1 skipped, 1 warning** in 2m43s; artifact `openmontage-hyperframes-qa`). |
-| Last tracker update | Manual Phase 10/11 closure was invalidated. Corrective commit `eeadb57` restores the production lock, fixes remote-authentication override behavior, removes a redundant FFmpeg profile encode, and passes supported workflow `33830316403`. `PR-10G` remains blocked only on environment-owned rollback, trusted-edge, external paging, and durable metrics proof. |
+| Last tracker update | Corrected current-head CI run `33846441981` on commit `ae5889e` passed all mandatory jobs (release blockers, offline regression, clean install with bounded npm audit retry wrapper, container/Remotion render, Phase 10 SLO/load/operations). Transient npm 503 handling and dependency audit contract are verified. `PR-10G` remains blocked on environment-owned rollback `REC-03`, trusted edge `SEC-06`, external paging `OBS-03`, and durable metrics `OBS-02`. |
 
 ## Status rules
 
@@ -221,7 +221,7 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 | `PR-1034` | Enforce schema booleans at the shared tool boundary | `PR-1033` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1034.md`](evidence/PR-1034.md) — top-level schema booleans at tool boundary verified in supported run `33809816663` |
 | `PR-1035` | Preserve structured character review reports | `PR-1034` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1035.md`](evidence/PR-1035.md) — character reviewer revise report contract verified in supported run `33809816663` |
 | `PR-1036` | Enforce strict manifest approval persistence | `PR-1035` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1036.md`](evidence/PR-1036.md) — strict manifest/checkpoint approval persistence verified in supported run `33809816663` |
-| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1036` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported CI verifies the implemented code baseline, but deployment rollback, external monitoring/alert delivery, trusted-edge enforcement, persistent metrics aggregation, and corrected current-head CI remain required |
+| `PR-10G` | Phase 10 gate | `PR-9G`, `PR-1000`–`PR-1036` | `BLOCKED` | OpenMontage execution agent | [`evidence/PR-10G.md`](evidence/PR-10G.md) — supported CI run `33846441981` (`ae5889e`) verifies the implemented code baseline, but deployment rollback `REC-03`, external monitoring/alert delivery `OBS-03`, trusted-edge enforcement `SEC-06`, and persistent metrics aggregation `OBS-02` remain required |
 
 ## Phase 11 tracker
 
