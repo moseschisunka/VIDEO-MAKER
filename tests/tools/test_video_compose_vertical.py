@@ -42,6 +42,15 @@ def _dims(path: Path) -> tuple[int, int]:
     return int(w), int(h)
 
 
+def _fps(path: Path) -> float:
+    raw = subprocess.check_output(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=avg_frame_rate", "-of", "default=nw=1:nk=1", str(path)]
+    ).decode().strip()
+    numerator, denominator = raw.split("/", 1)
+    return float(numerator) / float(denominator)
+
+
 def _edit_decisions(src: Path, metadata: dict | None = None) -> dict:
     ed = {
         "version": "1.0",
@@ -76,6 +85,19 @@ def test_compose_vertical_profile(tmp_path):
     )
     assert r.success, r.error
     assert _dims(out) == (1080, 1920)
+
+
+def test_compose_profile_frame_rate_is_applied_during_segment_normalization(tmp_path):
+    src = tmp_path / "in.mp4"
+    _make_clip(src)
+    out = tmp_path / "out.mp4"
+    r = VideoCompose().execute(
+        {"operation": "compose", "edit_decisions": _edit_decisions(src),
+         "profile": "cinematic", "output_path": str(out)}
+    )
+    assert r.success, r.error
+    assert _dims(out) == (2560, 1080)
+    assert _fps(out) == pytest.approx(24.0, abs=0.1)
 
 
 def test_compose_target_override_cover(tmp_path):

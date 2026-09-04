@@ -107,6 +107,20 @@ def test_remote_binding_fails_closed_without_auth_configuration(monkeypatch, no_
 
 
 @pytest.mark.release_blocker
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "[::]", "backlot.internal"])
+def test_remote_binding_cannot_disable_authentication(monkeypatch, no_watch, host):
+    monkeypatch.setenv("BACKLOT_HOST", host)
+    monkeypatch.setenv("BACKLOT_AUTH_REQUIRED", "false")
+    monkeypatch.delenv("BACKLOT_AUTH_TOKEN", raising=False)
+
+    with _client(monkeypatch) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"]
+
+
+@pytest.mark.release_blocker
 def test_remote_binding_requires_exact_bearer_token(monkeypatch, no_watch):
     monkeypatch.setenv("BACKLOT_HOST", "0.0.0.0")
     monkeypatch.delenv("BACKLOT_AUTH_REQUIRED", raising=False)
@@ -161,6 +175,17 @@ def test_explicit_auth_requirement_can_protect_loopback(monkeypatch, no_watch):
         assert client.get(
             "/api/health", headers={"Authorization": "Bearer local-token"}
         ).status_code == 200
+
+
+def test_explicit_false_preserves_loopback_development_mode(monkeypatch, no_watch):
+    monkeypatch.setenv("BACKLOT_HOST", "localhost")
+    monkeypatch.setenv("BACKLOT_AUTH_REQUIRED", "false")
+    monkeypatch.delenv("BACKLOT_AUTH_TOKEN", raising=False)
+
+    with _client(monkeypatch) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
 
 
 @pytest.mark.release_blocker

@@ -167,20 +167,21 @@ _IGNORE_PARTS = {"node_modules", ".git", "__pycache__", ".cache"}
 SSE_HEARTBEAT_SECONDS = 15
 
 # Backlot is intentionally usable without credentials when it is bound only
-# to loopback for local development.  Any non-loopback binding fails closed
-# unless an explicit bearer token is configured.  ``BACKLOT_AUTH_REQUIRED``
-# can force either mode for deployments behind a local reverse proxy.
+# to loopback for local development. Any non-loopback binding always fails
+# closed unless a bearer token is configured. ``BACKLOT_AUTH_REQUIRED`` may
+# force authentication on loopback, but it must never disable authentication
+# for a remotely reachable binding.
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _PROJECT_SCOPE_WILDCARD = "*"
 
 
 def _auth_required() -> bool:
-    explicit = _os.getenv("BACKLOT_AUTH_REQUIRED")
-    if explicit is not None:
-        return explicit.strip().lower() in _TRUE_VALUES
     host = _os.getenv("BACKLOT_HOST", "127.0.0.1").strip().lower()
-    return host not in _LOOPBACK_HOSTS
+    if host not in _LOOPBACK_HOSTS:
+        return True
+    explicit = _os.getenv("BACKLOT_AUTH_REQUIRED")
+    return explicit is not None and explicit.strip().lower() in _TRUE_VALUES
 
 
 def _configured_auth_token() -> str:

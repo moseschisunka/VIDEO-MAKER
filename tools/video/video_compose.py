@@ -721,6 +721,7 @@ class VideoCompose(BaseTool):
         # fit="pad" letterboxes (no content loss, the historical default);
         # fit="cover" scales-to-fill and centre-crops (better for vertical social).
         resolution = "1920x1080"
+        target_fps = 30
         fit_mode = "pad"
         compose_target = (edit_decisions.get("metadata") or {}).get("compose_target")
         if isinstance(compose_target, dict):
@@ -735,6 +736,7 @@ class VideoCompose(BaseTool):
                 from lib.media_profiles import get_profile
                 p = get_profile(profile_name)
                 resolution = f"{p.width}x{p.height}"
+                target_fps = int(p.fps)
             except (ImportError, ValueError):
                 pass
         try:
@@ -887,7 +889,7 @@ class VideoCompose(BaseTool):
                             f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease",
                             f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:color=black",
                         ]
-                    vf_parts: list[str] = [*geom, "setsar=1", "fps=30"]
+                    vf_parts: list[str] = [*geom, "setsar=1", f"fps={target_fps}"]
                     af_parts: list[str] = []
                     if speed != 1.0:
                         vf_parts.append(f"setpts={1.0/speed}*PTS")
@@ -902,7 +904,7 @@ class VideoCompose(BaseTool):
                         "-crf", str(crf),
                         "-preset", preset,
                         "-pix_fmt", "yuv420p",
-                        "-r", "30",
+                        "-r", str(target_fps),
                     ])
 
                     # Audio handling: some source clips have no audio stream
@@ -938,7 +940,7 @@ class VideoCompose(BaseTool):
                             "-crf", str(crf),
                             "-preset", preset,
                             "-pix_fmt", "yuv420p",
-                            "-r", "30",
+                            "-r", str(target_fps),
                             "-c:a", "aac",
                             "-b:a", "192k",
                             "-ar", "48000",
@@ -989,25 +991,18 @@ class VideoCompose(BaseTool):
             if audio_path and Path(audio_path).exists():
                 cmd.extend(["-i", audio_path])
 
-            # Determine if profile requires re-encoding (resize/fps change)
-            # This must be checked BEFORE choosing copy vs encode, because
-            # -s and -r are incompatible with -c:v copy.
-            profile_flags: list[str] = []
-            if profile_name:
-                try:
-                    from lib.media_profiles import get_profile
-                    p = get_profile(profile_name)
-                    profile_flags = ["-s", f"{p.width}x{p.height}", "-r", str(p.fps)]
-                except (ImportError, ValueError):
-                    pass
-
-            needs_reencode = bool(vfilters) or bool(profile_flags)
+            # Every segment is already normalized to the selected profile's
+            # dimensions, frame rate, codec, pixel format, and sample aspect
+            # ratio. Re-encoding the concatenated output merely because a
+            # profile was supplied doubles render work without changing the
+            # contract. Only filters such as burned captions require a second
+            # video encode; audio replacement can safely copy the video stream.
+            needs_reencode = bool(vfilters)
 
             if needs_reencode:
                 if vfilters:
                     cmd.extend(["-vf", ",".join(vfilters)])
                 cmd.extend(["-c:v", codec, "-crf", str(crf), "-preset", preset])
-                cmd.extend(profile_flags)
             else:
                 cmd.extend(["-c:v", "copy"])
 
