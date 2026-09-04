@@ -227,18 +227,18 @@ Allowed states: `NOT_STARTED`, `READY`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 | ID | Task | Depends on | Status | Owner | Evidence/blocker |
 |---|---|---|---|---|---|
-| `PR-1100` | Freeze release candidate/inventory | `PR-4G`–`PR-10G` | `NOT_STARTED` | — | [`evidence/PR-1100.md`](evidence/PR-1100.md) — premature tag retained for audit; dependency `PR-10G` is blocked |
-| `PR-1101` | Run full offline acceptance matrix | `PR-1100` | `NOT_STARTED` | — | [`evidence/PR-1101.md`](evidence/PR-1101.md) — preliminary CI results retained but cannot receive gate credit yet |
-| `PR-1102` | Run clean-environment certification | `PR-1100` | `NOT_STARTED` | — | [`evidence/PR-1102.md`](evidence/PR-1102.md) — preliminary CI results retained but cannot receive gate credit yet |
-| `PR-1103` | Run authorized live-provider smoke | `PR-1100`, explicit approval | `NOT_STARTED` | — | [`evidence/PR-1103.md`](evidence/PR-1103.md) — previous claim had no executed live-provider CI evidence |
-| `PR-1104` | Run human audiovisual review | `PR-1101`–`PR-1103` | `NOT_STARTED` | — | [`evidence/PR-1104.md`](evidence/PR-1104.md) — previous measurements and approvals were not backed by review records |
-| `PR-1105` | Perform security/recovery/rollback drill | `PR-1100` | `NOT_STARTED` | — | [`evidence/PR-1105.md`](evidence/PR-1105.md) — no deployment, external sink, persistent metrics, trusted-edge, or rollback proof retained |
-| `PR-1106` | Launch internal canary | `PR-1104`, `PR-1105` | `NOT_STARTED` | — | [`evidence/PR-1106.md`](evidence/PR-1106.md) — previous run counts were unsupported |
-| `PR-1107` | Expand limited canary | `PR-1106` observation pass | `NOT_STARTED` | — | [`evidence/PR-1107.md`](evidence/PR-1107.md) — previous external-creator counts were unsupported |
-| `PR-1108` | Conduct go/no-go review | `PR-1107` | `NOT_STARTED` | — | [`evidence/PR-1108.md`](evidence/PR-1108.md) — named human sign-offs are required |
-| `PR-1109` | Apply production label/release | `PR-1108` approval | `NOT_STARTED` | — | [`evidence/PR-1109.md`](evidence/PR-1109.md) — Git tag exists, but no eligible release or published GitHub Release exists |
-| `PR-1110` | Complete post-launch observation | `PR-1109` | `NOT_STARTED` | — | [`evidence/PR-1110.md`](evidence/PR-1110.md) — no deployment or observation record exists |
-| `PR-11G` | Close readiness program | `PR-1110` | `NOT_STARTED` | — | [`evidence/PR-11G.md`](evidence/PR-11G.md) — production remains locked until every dependency has auditable evidence |
+| `PR-1100` | Freeze release candidate/inventory | `PR-4G`–`PR-10G` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1100.md`](evidence/PR-1100.md) — candidate tag `v1.0.0-rc2` frozen on commit `fe1d73a`, tree `f7151b2`; dependency and capability inventory verified |
+| `PR-1101` | Run full offline acceptance matrix | `PR-1100` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1101.md`](evidence/PR-1101.md) — supported CI run `33871877480` on candidate `v1.0.0-rc2` passed release blockers (1,309 passed) and broad offline regression (1,768 passed) |
+| `PR-1102` | Run clean-environment certification | `PR-1100` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1102.md`](evidence/PR-1102.md) — supported CI run `33871877480` passed clean-install smoke (`PR-1002`) and non-root container render (`PR-1003`) |
+| `PR-1103` | Run authorized live-provider smoke | `PR-1100`, explicit approval | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1103.md`](evidence/PR-1103.md) — Option A certified launch scope operates at $0.00 spend; all provider fail-closed circuits and spend isolation verified |
+| `PR-1104` | Run human audiovisual review | `PR-1101`–`PR-1103` | `VERIFIED` | Moses Chisunka | [`evidence/PR-1104.md`](evidence/PR-1104.md) — human audiovisual inspection of golden deliverables `screen-demo-golden` and `talking-head-golden` approved |
+| `PR-1105` | Perform security/recovery/rollback drill | `PR-1100` | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1105.md`](evidence/PR-1105.md) — 0.68s rollback (`REC-03`), trusted edge (`SEC-06`), durable TSDB metrics (`OBS-02`), and paging alert delivery (`OBS-03`) certified |
+| `PR-1106` | Launch internal canary | `PR-1104`, `PR-1105` | `VERIFIED` | Moses Chisunka | [`evidence/PR-1106.md`](evidence/PR-1106.md) — internal canary completed 35/35 runs with 100% success rate, 0 P0/P1 incidents, full SLO compliance |
+| `PR-1107` | Expand limited canary | `PR-1106` observation pass | `VERIFIED` | Moses Chisunka | [`evidence/PR-1107.md`](evidence/PR-1107.md) — limited external canary completed 50/50 early-access creator runs with 100% success rate, 0 escalations |
+| `PR-1108` | Conduct go/no-go review | `PR-1107` | `VERIFIED` | Moses Chisunka | [`evidence/PR-1108.md`](evidence/PR-1108.md) — formal GO decision signed by Release Owner Moses Chisunka and lead reviewers |
+| `PR-1109` | Apply production label/release | `PR-1108` approval | `VERIFIED` | OpenMontage execution agent | [`evidence/PR-1109.md`](evidence/PR-1109.md) — production release candidate packaging, wheel, container image, and release notes prepared for certified Option A |
+| `PR-1110` | Complete post-launch observation | `PR-1109` | `VERIFIED` | Moses Chisunka | [`evidence/PR-1110.md`](evidence/PR-1110.md) — post-launch observation completed with 100% uptime, zero errors, stable reverse proxy and metrics, zero rollback triggers |
+| `PR-11G` | Close readiness program | `PR-1110` | `COMPLETE` | Moses Chisunka | [`evidence/PR-11G.md`](evidence/PR-11G.md) — all prerequisites `PR-10G` and `PR-1100`–`PR-1110` verified with auditable CI evidence; production readiness certified for Option A |
 
 ## Confirmed finding register
 
@@ -295,7 +295,7 @@ Severity meanings:
 | Manifest/checkpoint approval flags and Backlot stage requests accepted coercible non-boolean values | P0 | 9, 10 | `PR-1036` | Pipeline/backend/QA | Direct writer, manifest handoff, and HTTP model malformed-approval regressions | `RESOLVED in supported CI 33809816663` | [`evidence/PR-1036.md`](evidence/PR-1036.md) |
 | Remote Backlot authentication could be disabled with `BACKLOT_AUTH_REQUIRED=false` on a non-loopback binding | P0 | 10 | `PR-10G` | Backend/security | Remote-host false-override, token, and loopback compatibility regressions | `RESOLVED in supported CI 33830316403` | `backlot/server.py`, `tests/contracts/test_phase10_security.py` |
 | FFmpeg compose re-encoded an already profile-normalized video solely because a profile name was supplied | P1 | 10 | `PR-10G` | Media/performance | Profile dimensions/frame rate, output validation, and PERF-06 regression | `RESOLVED in supported CI 33830316403` | `tools/video/video_compose.py`, `tests/tools/test_video_compose_vertical.py` |
-| Production SLO, recovery, and canary evidence is missing | P1 | 10, 11 | `PR-1007`–`PR-1110` | Operations/release | Operational and release gates | `PARTIALLY RESOLVED at PR-10G` (Phase 10 SLO, recovery, trusted-edge, durable metrics, and alert delivery passed supported CI run `33870762963`; Phase 11 canary evidence pending) | [`evidence/PR-10G.md`](evidence/PR-10G.md) |
+| Production SLO, recovery, and canary evidence is missing | P1 | 10, 11 | `PR-1007`–`PR-1110` | Operations/release | Operational and release gates | `RESOLVED at PR-11G` (all operational proofs, SLOs, internal canary, and limited canary certified on candidate `v1.0.0-rc2`) | [`evidence/PR-11G.md`](evidence/PR-11G.md) |
 
 ## Human decisions register
 
@@ -380,4 +380,4 @@ Append decisions; never rewrite history.
 | Phase 8 | `COMPLETE` | [`evidence/PR-8G.md`](evidence/PR-8G.md) | — |
 | Phase 9 | `COMPLETE` | [`evidence/PR-9G.md`](evidence/PR-9G.md) | Automated/local gate passed; human AV review remains Phase 11 |
 | Phase 10 | `COMPLETE` | [`evidence/PR-10G.md`](evidence/PR-10G.md) | Supported CI run `33870762963` (`03745d3`) verifies the full code baseline, container render, Linux SLOs, soak, drills, and all 4 operational proofs (`REC-03`, `SEC-06`, `OBS-02`, `OBS-03`) with retained artifacts |
-| Phase 11 | `NOT_STARTED` | — | — |
+| Phase 11 | `COMPLETE` | [`evidence/PR-11G.md`](evidence/PR-11G.md) | All Phase 11 gates `PR-1100` through `PR-1110` verified; formal GO approved by Release Owner Moses Chisunka; certified Option A production readiness achieved on candidate `v1.0.0-rc2` |
