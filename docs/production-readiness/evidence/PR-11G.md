@@ -12,8 +12,9 @@ environment.
 
 ## Current blockers
 
-- `PR-10G` is blocked by deployed rollback, trusted-edge, external paging,
-  durable metrics, and corrected current-head CI requirements.
+- `PR-10G` is blocked by environment-owned operational proofs: deployed rollback (`REC-03`),
+  trusted edge (`SEC-06`), external paging (`OBS-03`), and durable metrics (`OBS-02`). Supported CI
+  on current head is fully verified (run `33846441981` on `ae5889e`).
 - `PR-1100` was attempted before its dependency passed.
 - Live-provider, human audiovisual, security/recovery, internal canary,
   external canary, named GO approval, production release, and post-launch
