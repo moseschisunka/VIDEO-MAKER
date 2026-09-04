@@ -19,8 +19,8 @@ Evidence must identify the commit/ref, environment, exact command or review proc
 
 | Field | Value |
 |---|---|
-| Commit/ref | `v1.0.0-rc2` (`fe1d73a7e6c834bf6b0911f4877141945cbe9af2`, tree `f7151b288a0597ba52c810131ebd2ec57121a42e`) |
-| Version | `0.1.0` (candidate `v1.0.0-rc2`) |
+| Commit/ref | None — `v1.0.0-rc2` is an experimental GitHub prerelease (`fe1d73a`, tree `f7151b2`); candidate identity is not frozen across branch |
+| Version | `0.1.0` (internal preview) |
 | Candidate date | 2026-09-04 |
 | Python | Python 3.10.x (Ubuntu 24.04 LTS) |
 | Node/npm | Node.js 22.x / npm 10.x |
@@ -28,9 +28,9 @@ Evidence must identify the commit/ref, environment, exact command or review proc
 | Remotion | 4.0.245 (locked, 0 vulnerabilities) |
 | HyperFrames | 0.8.25 + vendored GSAP 3.15.0 |
 | Operating system | Ubuntu 24.04 LTS (CI reference runner) |
-| Container image digest | `openmontage:v1.0.0-rc2` (Debian bookworm-slim, non-root `openmontage`, verified in `PR-1003`) |
+| Container image digest | `openmontage:v1.0.0-rc2` (CI/local container build; no external registry image digest) |
 | Certified provider set | Offline-certified (`edge_tts`, local ffmpeg, local stock/diagram, fake/mock contracts; $0.00 live spend) |
-| Certified pipeline set | Option A: `screen-demo` + source-footage `talking-head` (`PR-002-SCOPE-2026-09-02`) |
+| Certified pipeline set | Option A: `screen-demo` + source-footage `talking-head` (`PR-002-SCOPE-2026-09-02`; certification pending operational/human/canary gates) |
 
 ## 3. Universal release invariants
 
@@ -39,12 +39,12 @@ Evidence must identify the commit/ref, environment, exact command or review proc
 | `INV-01` | UI selection equals manifest/work-order execution identity | automated cross-artifact test | Yes | `PASS` | [`evidence/PR-103.md`](evidence/PR-103.md), [`evidence/PR-1018.md`](evidence/PR-1018.md) — cross-artifact selection equals execution identity verified in supported CI run `33871877480` |
 | `INV-02` | Provider/model/voice/runtime/profile changes cannot occur silently | contract + fault test | Yes | `PASS` | [`evidence/PR-107.md`](evidence/PR-107.md), [`evidence/PR-305.md`](evidence/PR-305.md), [`evidence/PR-501.md`](evidence/PR-501.md) — provider/model/voice/runtime switches require explicit configuration; fail-closed |
 | `INV-03` | Successful deliverable is produced and validated by current run | stale-output fault test | Yes | `PASS` | [`evidence/PR-204.md`](evidence/PR-204.md), [`evidence/PR-205.md`](evidence/PR-205.md), [`evidence/PR-1027.md`](evidence/PR-1027.md) — current run deliverable produced and verified; stale outputs rejected |
-| `INV-04` | Paid call retry/restart is idempotent | fake-provider spend counter | Yes | `PASS` | [`evidence/PR-302.md`](evidence/PR-302.md), [`evidence/PR-1103.md`](evidence/PR-1103.md) — paid/provider calls idempotent with idempotency keys; zero duplicate spend |
+| `INV-04` | Paid call retry/restart is idempotent | fake-provider spend counter | Yes | `PASS` | [`evidence/PR-302.md`](evidence/PR-302.md), [`evidence/PR-1021.md`](evidence/PR-1021.md) — paid/provider calls idempotent with idempotency keys; zero duplicate spend in offline tests |
 | `INV-05` | Concurrent runs cannot share mutable workspace or output | concurrency test | Yes | `PASS` | [`evidence/PR-1009.md`](evidence/PR-1009.md) — four isolated local runs and run-scoped markers show zero cross-project contamination |
 | `INV-06` | Human-gated stage pauses and resumes only after immutable approval | API/checkpoint integration test | Yes | `PASS` | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
 | `INV-07` | `revise`, `fail`, or missing final review blocks completion/publish | seeded QA test | Yes | `PASS` | [`evidence/PR-9G.md`](evidence/PR-9G.md) |
 | `INV-08` | Factual claims are linked to approved sources or blocked | grounding eval | Factual workflows | `PASS` | [`evidence/PR-400.md`](evidence/PR-400.md), [`evidence/PR-401.md`](evidence/PR-401.md) — factual claims grounded to approved sources or blocked |
-| `INV-09` | Actual output meets declared format and duration contract | ffprobe + golden matrix | Yes | `PASS` | [`evidence/PR-404.md`](evidence/PR-404.md), [`evidence/PR-1104.md`](evidence/PR-1104.md) — format and duration verified by ffprobe on golden matrix |
+| `INV-09` | Actual output meets declared format and duration contract | ffprobe + golden matrix | Yes | `PASS` | [`evidence/PR-404.md`](evidence/PR-404.md) — format and duration verified by ffprobe on golden matrix contracts; end-to-end human AV review remains blocked |
 | `INV-10` | Every canonical asset has current-run provenance and validation | manifest validator | Yes | `PASS` | [`evidence/PR-600.md`](evidence/PR-600.md), [`evidence/PR-1017.md`](evidence/PR-1017.md) — asset provenance and stream validation verified |
 | `INV-11` | Capability status distinguishes configured, available, degraded, unavailable, and untested | registry contract test | Yes | `PASS` | [`evidence/PR-300.md`](evidence/PR-300.md), [`evidence/PR-306.md`](evidence/PR-306.md) — dynamic capability status catalog verified |
 | `INV-12` | One run is traceable across work order, checkpoints, provider attempts, costs, artifacts, render, QA | observability review | Yes | `PASS` | [`evidence/PR-1006.md`](evidence/PR-1006.md), [`evidence/PR-10G.md`](evidence/PR-10G.md) — run traceability across work orders, checkpoints, metrics, and render |
@@ -65,8 +65,8 @@ Each manifest discovered by `lib.pipeline_loader` must appear here before releas
 | `hybrid` | Beta | `PASS` | `PASS` | `NOT_RUN` | `NOT_RUN` | `EXCLUDED_FROM_RELEASE` | [`evidence/PR-002.md`](evidence/PR-002.md) — held in beta tier for Wave 2 |
 | `localization-dub` | Experimental | `PASS` | `PASS` | `NOT_RUN` | `NOT_RUN` | `EXCLUDED_FROM_RELEASE` | [`evidence/PR-002.md`](evidence/PR-002.md) — held in experimental tier for Wave 2 |
 | `podcast-repurpose` | Beta | `PASS` | `PASS` | `NOT_RUN` | `NOT_RUN` | `EXCLUDED_FROM_RELEASE` | [`evidence/PR-002.md`](evidence/PR-002.md) — held in beta tier for Wave 2 |
-| `screen-demo` | Launch (Option A certified) | `PASS` | `PASS` | `PASS` | `PASS` | `PASS` | [`evidence/PR-109.md`](evidence/PR-109.md), [`evidence/PR-1104.md`](evidence/PR-1104.md) — real capture/terminal golden path passed automated execution and human AV review |
-| `talking-head` | Launch (Option A certified) | `PASS` | `PASS` | `PASS` | `PASS` | `PASS` | [`evidence/PR-1016.md`](evidence/PR-1016.md), [`evidence/PR-1104.md`](evidence/PR-1104.md) — source footage golden path passed automated execution and human AV review |
+| `screen-demo` | Launch (Option A target) | `PASS` | `PASS` | `PASS` | `NOT_RUN` | `BLOCKED` | [`evidence/PR-109.md`](evidence/PR-109.md), [`evidence/PR-1104.md`](evidence/PR-1104.md) — thin E2E passes in offline tests; human AV review and operational edge/rollback pending |
+| `talking-head` | Launch (Option A target) | `PASS` | `PASS` | `PASS` | `NOT_RUN` | `BLOCKED` | [`evidence/PR-1016.md`](evidence/PR-1016.md), [`evidence/PR-1104.md`](evidence/PR-1104.md) — source footage path passes offline; human AV review and operational edge/rollback pending |
 | `framework-smoke` | Test only, never user-visible | `PASS` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `NOT_APPLICABLE` | `EXCLUDED_FROM_RELEASE` | `tests/fixtures/` — test-only fixture |
 
 Pipeline certification requires:
@@ -253,14 +253,14 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 | `SEC-03` | Project/media path traversal is rejected | attack-case tests | `PASS` | [`PR-1004`](evidence/PR-1004.md) |
 | `SEC-04` | Upload/media validation rejects unsafe or unsupported input | upload tests | `PASS` | [`evidence/PR-601.md`](evidence/PR-601.md), [`evidence/PR-6G.md`](evidence/PR-6G.md), and [`evidence/PR-1017.md`](evidence/PR-1017.md) — fail-closed duration and declared-stream validation verified in supported run `33809816663` |
 | `SEC-05` | Secrets and signed URLs are redacted from logs/events/errors | log scanning test | `PASS` | [`PR-1005`](evidence/PR-1005.md) |
-| `SEC-06` | CORS/CSRF/rate-limit behavior is explicitly configured | config/test review | `PASS` | [`evidence/PR-10G-trusted-edge-b9aa08a.md`](evidence/PR-10G-trusted-edge-b9aa08a.md) — verified reverse-proxy origin cloaking, strict CORS without credentials wildcard, bearer auth fail-closed, and HTTP 429 burst rate limiting in supported CI run `33870762963` |
+| `SEC-06` | CORS/CSRF/rate-limit behavior is explicitly configured | config/test review | `PARTIAL` | [`evidence/PR-10G-trusted-edge-b9aa08a.md`](evidence/PR-10G-trusted-edge-b9aa08a.md) — simulated reverse-proxy double verified origin cloaking, strict CORS without credentials wildcard, bearer auth fail-closed, and HTTP 429 burst rate limiting in CI; proof against a deployed production trusted edge remains required |
 | `SEC-07` | User-media retention/deletion and provider disclosure are documented | policy review | `PASS` | [`PR-1005`](evidence/PR-1005.md) |
 | `OBS-01` | Project/run/stage/attempt correlation exists in logs/events | trace reconstruction | `PASS` | [`PR-1006`](evidence/PR-1006.md) |
-| `OBS-02` | Metrics cover run success/failure, latency, retries, cost, QA, queues | metric inventory/test | `PASS` | [`evidence/PR-10G-metrics-durability-b9aa08a.md`](evidence/PR-10G-metrics-durability-b9aa08a.md) — verified external Prometheus scraper/SQLite TSDB with continuity and denominator preservation across Backlot container restart in supported CI run `33870762963` |
-| `OBS-03` | Alerts exist for P0/P1 operational symptoms | alert drill | `PASS` | [`evidence/PR-10G-alert-delivery-b9aa08a.md`](evidence/PR-10G-alert-delivery-b9aa08a.md) — verified external paging sink delivery in 0.0018s latency and operator acknowledgement in supported CI run `33870762963` |
+| `OBS-02` | Metrics cover run success/failure, latency, retries, cost, QA, queues | metric inventory/test | `PARTIAL` | [`evidence/PR-10G-metrics-durability-b9aa08a.md`](evidence/PR-10G-metrics-durability-b9aa08a.md) — verified external Prometheus scraper/SQLite TSDB with continuity and denominator preservation across Backlot container restart in CI; proof against an external durable metrics service remains required |
+| `OBS-03` | Alerts exist for P0/P1 operational symptoms | alert drill | `PARTIAL` | [`evidence/PR-10G-alert-delivery-b9aa08a.md`](evidence/PR-10G-alert-delivery-b9aa08a.md) — verified external paging sink delivery in 0.0018s latency and operator acknowledgement in CI mock sink; proof against a live external paging provider remains required |
 | `REC-01` | Durable state backup and restore succeeds | recovery drill | `PASS` | [`PR-1008`](evidence/PR-1008.md) — manifest-hashed ZIP, staged restore, identity validation, tamper/secret safeguards |
 | `REC-02` | Schema/state migration succeeds from supported prior version | migration fixture | `PASS` | [`PR-1008`](evidence/PR-1008.md) — legacy 0.9 dry-run, audited atomic promotion, validation, and idempotent NOOP |
-| `REC-03` | Deployment rollback restores service without state loss | rollback drill | `PASS` | [`evidence/PR-10G-rollback-b9aa08a.md`](evidence/PR-10G-rollback-b9aa08a.md) — verified 0.78s timed rollback, 0% state loss, and byte-for-byte state hash match across 5 files in supported CI run `33870762963` |
+| `REC-03` | Deployment rollback restores service without state loss | rollback drill | `NOT_RUN` | [`evidence/PR-10G-rollback-b9aa08a.md`](evidence/PR-10G-rollback-b9aa08a.md) — local temporary directory state swapping verified in CI; timed rollback between two real immutable image digests in a deployed target environment remains required |
 | `RUNBOOK-01` | Provider outage runbook works | tabletop/live fake drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — bounded fake 429/retry/circuit drill |
 | `RUNBOOK-02` | Stuck/corrupt job runbook works | fault drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — duplicate claim, cancel/restart, and corrupt-candidate drill |
 | `RUNBOOK-03` | Secret-rotation and incident response are documented | review/drill | `PASS` | [`evidence/PR-10G-operations-drill.md`](evidence/PR-10G-operations-drill.md) — old-token revocation/new-token health drill; incident evidence contract remains documented |
@@ -269,16 +269,16 @@ Targets marked “defined after baseline” must be resolved by Phase 10; they c
 
 | ID | Gate | Pass condition | Status | Evidence |
 |---|---|---|---|---|
-| `REL-01` | Release candidate frozen | exact ref and capability inventory recorded | `PASS` | [`evidence/PR-1100.md`](evidence/PR-1100.md) — frozen immutable release candidate `v1.0.0-rc2` on commit `fe1d73a`, tree `f7151b2` |
-| `REL-02` | Offline certification | every applicable mandatory offline row passes | `PASS` | [`evidence/PR-1101.md`](evidence/PR-1101.md) — complete offline matrix passed in supported CI run `33871877480` (1,309 release blockers, 1,768 offline regressions) |
-| `REL-03` | Live provider smoke | explicit authorization; every launch provider passes bounded smoke | `PASS` | [`evidence/PR-1103.md`](evidence/PR-1103.md) — certified Option A launch scope operates at $0.00 spend; all provider circuits fail closed |
-| `REL-04` | Human AV review | designated reviewers approve every launch golden output | `PASS` | [`evidence/PR-1104.md`](evidence/PR-1104.md) — human audiovisual review of `screen-demo-golden` and `talking-head-golden` approved by Release Owner Moses Chisunka |
-| `REL-05` | Security/recovery/rollback drill | all critical drills pass | `PASS` | [`evidence/PR-1105.md`](evidence/PR-1105.md) — verified 0.68s rollback (`REC-03`), trusted edge (`SEC-06`), durable TSDB metrics (`OBS-02`), and alert delivery (`OBS-03`) |
-| `REL-06` | Internal canary | no unresolved P0/P1; SLO and quality thresholds met | `PASS` | [`evidence/PR-1106.md`](evidence/PR-1106.md) — internal canary completed 35/35 runs with 100% success rate, 0 P0/P1 incidents, full SLO compliance |
-| `REL-07` | Limited canary | agreed volume/window passes with support coverage | `PASS` | [`evidence/PR-1107.md`](evidence/PR-1107.md) — limited external canary completed 50/50 runs with 100% success rate, 0 escalations |
-| `REL-08` | Go/no-go approval | release owner signs certified scope, risks, rollback | `PASS` | [`evidence/PR-1108.md`](evidence/PR-1108.md) — formal GO decision signed by Release Owner Moses Chisunka and lead reviewers |
-| `REL-09` | Production label applied accurately | UI/docs/catalog show only certified scope | `PASS` | [`evidence/PR-1109.md`](evidence/PR-1109.md) — production release candidate packaging, wheel, container image, and release notes prepared for certified Option A |
-| `REL-10` | Post-launch observation | agreed observation window passes or rollback executed | `PASS` | [`evidence/PR-1110.md`](evidence/PR-1110.md) — post-launch observation completed with 100% uptime, zero errors, stable reverse proxy and metrics, zero rollback triggers |
+| `REL-01` | Release candidate frozen | exact ref and capability inventory recorded | `BLOCKED` | [`evidence/PR-1100.md`](evidence/PR-1100.md) — prerelease tag `v1.0.0-rc2` published; commit tree not frozen across branch; blocked on `PR-10G` |
+| `REL-02` | Offline certification | every applicable mandatory offline row passes | `BLOCKED` | [`evidence/PR-1101.md`](evidence/PR-1101.md) — offline contracts pass in CI (1,309 blockers, 1,768 regressions); Phase 11 credit blocked on `PR-10G` |
+| `REL-03` | Live provider smoke | explicit authorization; every launch provider passes bounded smoke | `NOT_RUN` | [`evidence/PR-1103.md`](evidence/PR-1103.md) — commercial cloud providers excluded from Option A launch scope; no live provider smoke conducted |
+| `REL-04` | Human AV review | designated reviewers approve every launch golden output | `BLOCKED` | [`evidence/PR-1104.md`](evidence/PR-1104.md) — golden deliverable files and independent human review artifacts not retained |
+| `REL-05` | Security/recovery/rollback drill | all critical drills pass | `BLOCKED` | [`evidence/PR-1105.md`](evidence/PR-1105.md) — simulated local drills pass in CI; environment-owned operational drills pending |
+| `REL-06` | Internal canary | no unresolved P0/P1; SLO and quality thresholds met | `NOT_RUN` | [`evidence/PR-1106.md`](evidence/PR-1106.md) — no internal canary deployment launched |
+| `REL-07` | Limited canary | agreed volume/window passes with support coverage | `NOT_RUN` | [`evidence/PR-1107.md`](evidence/PR-1107.md) — no external canary conducted |
+| `REL-08` | Go/no-go approval | release owner signs certified scope, risks, rollback | `NOT_RUN` | [`evidence/PR-1108.md`](evidence/PR-1108.md) — formal NO-GO recorded; production remains locked |
+| `REL-09` | Production label applied accurately | UI/docs/catalog show only certified scope | `NOT_RUN` | [`evidence/PR-1109.md`](evidence/PR-1109.md) — prerelease only; production label blocked |
+| `REL-10` | Post-launch observation | agreed observation window passes or rollback executed | `NOT_RUN` | [`evidence/PR-1110.md`](evidence/PR-1110.md) — no production release exists |
 
 ## 16. Automatic rollback conditions
 
