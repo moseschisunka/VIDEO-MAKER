@@ -299,6 +299,9 @@ jobs:
       - name: Run offline operational drills
         run: .venv/bin/python scripts/run_operations_drill.py --output pr10g-operations-drill.json
 
+      - name: Run staging operational proofs (REC-03, SEC-06, OBS-02, OBS-03)
+        run: .venv/bin/python scripts/run_staging_operational_proofs.py
+
       - name: Retain Phase 10 raw evidence
         uses: actions/upload-artifact@v4
         with:
@@ -309,6 +312,10 @@ jobs:
             remotion-compositions.txt
             remotion-clean-build-evidence.json
             pr10g-operations-drill.json
+            docs/production-readiness/evidence/PR-10G-rollback-*.json
+            docs/production-readiness/evidence/PR-10G-trusted-edge-*.json
+            docs/production-readiness/evidence/PR-10G-metrics-durability-*.json
+            docs/production-readiness/evidence/PR-10G-alert-delivery-*.json
           retention-days: 14
 
   offline-regression:
