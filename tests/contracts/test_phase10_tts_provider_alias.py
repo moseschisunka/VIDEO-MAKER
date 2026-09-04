@@ -6,6 +6,7 @@ import asyncio
 
 from lib import project_pipeline
 from lib.voice_contracts import canonical_voice_provider
+from tools.audio.edge_tts import EdgeTTS
 
 
 def test_voice_provider_aliases_are_canonical_without_fallback() -> None:
@@ -14,6 +15,13 @@ def test_voice_provider_aliases_are_canonical_without_fallback() -> None:
     assert canonical_voice_provider("microsoft_edge") == "edge_tts"
     assert canonical_voice_provider("open-ai") == "openai"
     assert canonical_voice_provider("piper_tts") == "piper_tts"
+
+
+def test_edge_tts_is_explicitly_network_dependent() -> None:
+    tool = EdgeTTS()
+
+    assert tool.supports["offline"] is False
+    assert tool.resource_profile.network_required is True
 
 
 def test_legacy_edge_tts_identifier_reaches_narration_boundary(monkeypatch, tmp_path) -> None:
