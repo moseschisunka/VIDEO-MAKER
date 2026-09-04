@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import collections
 import json
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -237,6 +238,14 @@ class StagingEdgeProxy:
         self.actual_port = self.server.server_port
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
+
+        for _ in range(50):
+            try:
+                with socket.create_connection((self.host, self.actual_port), timeout=0.1):
+                    break
+            except OSError:
+                time.sleep(0.02)
+
         return self.actual_port
 
     def stop(self) -> None:

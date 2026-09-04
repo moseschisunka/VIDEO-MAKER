@@ -46,9 +46,6 @@ def test_staging_metrics_sink_records_and_detects_durability(tmp_path: Path):
     assert parsed[0]["metric_name"] == "openmontage_auth_failures_total"
 
     # Insert manual sample before restart
-    with sink.lock, sink._init_db() or sink.db_path.exists() and sink.db_path.open():
-        pass
-
     import sqlite3
     with sqlite3.connect(str(db_file)) as conn:
         conn.execute(
