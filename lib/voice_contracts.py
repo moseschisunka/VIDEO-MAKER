@@ -54,6 +54,18 @@ def _normalise_provider(value: Any) -> str:
     return {"edge": "edge_tts", "microsoft_edge": "edge_tts", "open-ai": "openai"}.get(provider, provider)
 
 
+def canonical_voice_provider(value: Any) -> str:
+    """Return the canonical provider identifier used in persisted contracts.
+
+    Provider selection crosses the Backlot request boundary, manifest artifacts,
+    and the legacy internal runner. Keeping alias handling here prevents one
+    layer from persisting ``edge_tts`` while another only understands ``edge``.
+    This function deliberately performs no fallback or provider discovery.
+    """
+
+    return _normalise_provider(value)
+
+
 def _alias(mapping: Mapping[str, Any], *names: str) -> Any:
     for name in names:
         if name in mapping and mapping[name] not in (None, ""):
@@ -617,6 +629,7 @@ __all__ = [
     "VoiceIdentity",
     "NarrationSegment",
     "VoiceSegmentCache",
+    "canonical_voice_provider",
     "normalize_voice_identity",
     "voice_identity_key",
     "validate_voice_identity",

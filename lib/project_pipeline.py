@@ -30,6 +30,7 @@ from lib.audio_assembly import assemble_audio_segments
 from lib.voice_contracts import (
     VoiceContractError,
     VoiceSegmentCache,
+    canonical_voice_provider,
     normalize_voice_identity,
     plan_narration_segments,
     require_voice_sample_approval,
@@ -1240,9 +1241,14 @@ async def _generate_narration(
     natural speech needs more room.  The remaining space is a short breath so
     the next slide arrives as a human transition rather than an abrupt cut.
     """
-    provider = str(tts_provider or "openai").strip().lower()
-    if provider not in {"openai", "edge"}:
-        raise ValueError(f"Unsupported narration provider: {provider}. Use openai or edge explicitly.")
+    try:
+        provider = canonical_voice_provider(tts_provider or "openai")
+    except VoiceContractError as exc:
+        raise ValueError(f"Invalid narration provider: {exc}") from exc
+    if provider not in {"openai", "edge_tts"}:
+        raise ValueError(
+            f"Unsupported narration provider: {provider}. Use openai or edge_tts explicitly."
+        )
     openai_tool = OpenAITTS() if provider == "openai" else None
     if openai_tool is not None and not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError(
@@ -1420,11 +1426,14 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
     playbook = str(config.get("playbook") or "premium-minimalist")
     visual_variant = str(config.get("visual_variant") or "balanced-grid")
     legacy_voice = str(config.get("voice") or "en-US-ChristopherNeural")
-    tts_provider = str(
-        config.get("tts_provider")
-        or os.environ.get("OPENMONTAGE_TTS_PROVIDER")
-        or "openai"
-    ).strip().lower()
+    try:
+        tts_provider = canonical_voice_provider(
+            config.get("tts_provider")
+            or os.environ.get("OPENMONTAGE_TTS_PROVIDER")
+            or "openai"
+        )
+    except VoiceContractError as exc:
+        raise ValueError(f"Invalid configured narration provider: {exc}") from exc
     tts_model = str(
         config.get("tts_model")
         or os.environ.get("OPENAI_TTS_MODEL")
@@ -1432,7 +1441,11 @@ def run_project(project_id: str, *, allow_internal_demo: bool = False) -> Path:
     )
     tts_voice = str(
         config.get("tts_voice")
-        or (legacy_voice if tts_provider == "edge" else os.environ.get("OPENAI_TTS_VOICE") or OPENAI_TTS_VOICE)
+        or (
+            legacy_voice
+            if tts_provider == "edge_tts"
+            else os.environ.get("OPENAI_TTS_VOICE") or OPENAI_TTS_VOICE
+        )
     )
     tts_speed = float(config.get("tts_speed") or os.environ.get("OPENAI_TTS_SPEED") or OPENAI_TTS_SPEED)
     tts_instructions = str(config.get("tts_instructions") or OPENAI_TTS_INSTRUCTIONS)
