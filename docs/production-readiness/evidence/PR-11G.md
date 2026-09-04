@@ -3,7 +3,7 @@
 - Status: **FAIL / NOT ELIGIBLE / PRODUCTION LOCKED**
 - Release candidate ref: `None` (`v1.0.0-rc2` is an experimental prerelease)
 - Tagged commit: `fe1d73a7e6c834bf6b0911f4877141945cbe9af2`
-- Branch HEAD: `d8da62d`
+- Branch HEAD at the 2026-09-04 audit snapshot: `d8da62d` (not the current checkout; subsequent commits exist)
 - Audit evaluation date: 2026-09-04
 - Certified scope: Option A (`screen-demo` + source-footage `talking-head`) — **NOT CERTIFIED FOR PRODUCTION**
 

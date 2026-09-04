@@ -29,7 +29,7 @@ Evidence must identify the commit/ref, environment, exact command or review proc
 | HyperFrames | 0.8.25 + vendored GSAP 3.15.0 |
 | Operating system | Ubuntu 24.04 LTS (CI reference runner) |
 | Container image digest | `openmontage:v1.0.0-rc2` (CI/local container build; no external registry image digest) |
-| Certified provider set | Offline-certified (`edge_tts`, local ffmpeg, local stock/diagram, fake/mock contracts; $0.00 live spend) |
+| Certified provider set | Offline-certified (`local ffmpeg`, local stock/diagram, fake/mock contracts; $0.00 live spend); `edge_tts` is network-dependent and excluded from offline certification |
 | Certified pipeline set | Option A: `screen-demo` + source-footage `talking-head` (`PR-002-SCOPE-2026-09-02`; certification pending operational/human/canary gates) |
 
 ## 3. Universal release invariants

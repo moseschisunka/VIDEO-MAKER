@@ -15,6 +15,7 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Frozen release candidate | None — `v1.0.0-rc2` is an experimental prerelease; candidate identity is not frozen across branch |
 | Production decision | Not eligible / Production locked |
 | Latest supported CI run | `33871877480` (`fe1d73a`) / `33870762963` (`03745d3`) — **1,309 passed** release-blocker contracts, **1,768 passed** offline regression tests, clean install, container/Remotion render, and Phase 10 SLO/load/staging harness all passed. Real environment-owned operational proofs remain required. |
+| Latest local code checkpoint | `03789db` — canonical TTS provider aliases across the internal runner; **1,311 passed** local release-blocker contracts. Supported CI publication and rerun are pending. |
 | Latest HyperFrames CI run | `33810441833` (`beec14f`) — opt-in HyperFrames QA suite passed (**2 passed, 1 skipped, 1 warning** in 2m43s; artifact `openmontage-hyperframes-qa`). |
 | Last tracker update | Corrective audit: Downgraded simulated staging proofs from production credit to simulated integration evidence. `PR-10G` is reopened as `BLOCKED`. Phase 11 gates `PR-1100`–`PR-1110` are reset to `NOT_RUN`/`BLOCKED` and `PR-11G` is marked `FAIL / PRODUCTION LOCKED`. Production declaration is not justified. |
 
