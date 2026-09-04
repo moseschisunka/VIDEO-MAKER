@@ -207,13 +207,13 @@ The repository-owned checks are completely verified in supported CI on current H
 but Phase 10 remains blocked on four environment-owned proofs:
 
 1. `REC-03`: deploy two immutable image digests and retain a timed rollback and
-   post-rollback state-integrity record.
+   post-rollback state-integrity record (tracked in [`PR-10G-rollback-b9aa08a.md`](PR-10G-rollback-b9aa08a.md)).
 2. `OBS-03`: deliver a synthetic P0/P1 alert through the approved external sink
-   and retain the redacted receipt.
+   and retain the redacted receipt (tracked in [`PR-10G-alert-delivery-b9aa08a.md`](PR-10G-alert-delivery-b9aa08a.md)).
 3. `SEC-06`: exercise the deployed trusted edge and retain CORS, bearer, and
-   rate-limit (`429`) results.
+   rate-limit (`429`) results (tracked in [`PR-10G-trusted-edge-b9aa08a.md`](PR-10G-trusted-edge-b9aa08a.md)).
 4. `OBS-02`: retain proof that the external metrics store survives an
-   application restart and preserves the SLO denominator.
+   application restart and preserves the SLO denominator (tracked in [`PR-10G-metrics-durability-b9aa08a.md`](PR-10G-metrics-durability-b9aa08a.md)).
 
 HyperFrames and Remotion evidence do not substitute for these operational
 requirements. The corrected code checkpoint passes supported workflow
