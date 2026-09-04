@@ -26,6 +26,7 @@ evidence from the actual deployment environment and remain outstanding.
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
 | Corrective FFmpeg compose rerun | PASS (local Windows diagnostic) | Profile dimensions and frame rate are now applied during segment normalization, avoiding an unnecessary second full-video encode; `test_perf_06_local_render_and_perf_07_restart_resume` plus adjacent profile/probe tests pass (**20 passed**) |
 | Corrective full release-blocker matrix | PASS (local Windows) | `python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1,305 passed, 5 skipped, 1 deselected, 1 warning** in 591.97s; supported CI remains required |
+| Corrective supported checkpoint | PASS (supported Ubuntu CI) | Workflow [`33830316403`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33830316403) on `eeadb57`: **1,305 passed** release blockers in 178.82s; **1,764 passed** offline regression tests in 199.05s; clean install, container/Remotion render, and Phase 10 SLO/load/operations all passed |
 | HyperFrames CLI/browser QA | PASS (latest supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — supported run `33810441833` on `beec14f` executes scaffold/lint/validate/inspect plus the real render in 2m43s; raw log retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33810441833/artifacts/openmontage-hyperframes-qa) |
 | Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
 | Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and latest supported run `33809816663` — clean checkout package-data contract and PR-1002 smoke pass |
@@ -188,8 +189,9 @@ environment-owned proofs:
    application restart and preserves the SLO denominator.
 
 HyperFrames and Remotion evidence do not substitute for these operational
-requirements. `PR-10G` must stay blocked until all four are attached and a
-corrected current-head CI run passes.
+requirements. The corrected code checkpoint passes supported workflow
+`33830316403`; `PR-10G` must stay blocked until all four external proofs are
+attached.
 
 ## Decision
 
