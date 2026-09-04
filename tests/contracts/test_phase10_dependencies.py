@@ -107,7 +107,10 @@ def test_remotion_package_lock_matches_declared_dependencies() -> None:
 
 def test_ci_audits_the_locked_remotion_dependency_graph() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert workflow.count("npm audit --audit-level=high") >= 2
+    retry_script = (REPO_ROOT / "tools" / "ci" / "npm_audit_with_retry.sh").read_text(encoding="utf-8")
+    assert workflow.count("bash ../tools/ci/npm_audit_with_retry.sh") >= 2
+    assert "npm audit --audit-level=high" in retry_script
+    assert 'exit "${status}"' in retry_script
 
 
 def test_legacy_setuptools_entry_point_uses_pyproject_metadata() -> None:
