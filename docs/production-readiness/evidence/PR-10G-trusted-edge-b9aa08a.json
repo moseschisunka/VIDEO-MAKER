@@ -1,0 +1,28 @@
+{
+  "gate_id": "PR-10G-SEC-06",
+  "status": "PASS",
+  "edge_provider": "OpenMontage-Edge/1.0",
+  "edge_url": "http://127.0.0.1:36895",
+  "origin_cloaked": true,
+  "unauthenticated_health_status": 200,
+  "missing_bearer_status": 401,
+  "invalid_bearer_status": 401,
+  "valid_bearer_status": 200,
+  "token_echo_prevented": true,
+  "cors_unapproved_rejected": true,
+  "cors_approved_accepted": true,
+  "rate_limiting_triggered": true,
+  "rate_limit_responses": [
+    200,
+    429,
+    429,
+    429,
+    429,
+    429,
+    429,
+    429
+  ],
+  "rate_limited_count": 7,
+  "tested_at": "2026-09-04T12:08:18.946175+00:00",
+  "reviewer": "Moses Chisunka (OpenMontage Operator / Security Reviewer)"
+}

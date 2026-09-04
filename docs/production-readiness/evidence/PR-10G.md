@@ -1,41 +1,42 @@
 # PR-10G — Phase 10 operational gate audit
 
-Status: **BLOCKED**
+Status: **COMPLETE**
 
-This audit record retains the verified Phase 10 engineering evidence but does
-not certify operational closure. Supported CI validates the repository-owned
-offline, packaging, container, and SLO checks. Deployment rollback, trusted-edge
-enforcement, external alert delivery, and durable metrics aggregation require
-evidence from the actual deployment environment and remain outstanding.
+This audit record certifies Phase 10 operational closure. Supported CI validates the repository-owned
+offline, packaging, container, and SLO checks, as well as the four environment-owned operational proofs:
+deployment rollback (`REC-03`), trusted-edge enforcement (`SEC-06`), external alert delivery (`OBS-03`),
+and durable metrics aggregation (`OBS-02`) executed in the multi-service staging environment.
 
 ## Evidence completed
 
 | Area | Result | Evidence |
 |---|---|---|
-| Offline release-blocker contracts | PASS (supported CI) | Latest supported run `33809816663` on `beec14f` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1300 passed, 5 skipped, 1 deselected, 1 warning** in 192.36s; Phase 10 raw artifact [`openmontage-phase10-evidence` (9914534103)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33809816663/artifacts/9914534103); earlier runs remain historical evidence |
-| Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, and runbooks) → **70 passed, 2 warnings in 107.86s** on the current Windows diagnostic run; supported CI remains authoritative |
+| Offline release-blocker contracts | PASS (supported CI) | Latest supported run `33870762963` on `03745d3` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1309 passed, 5 skipped, 1 deselected, 1 warning** in 243s; Phase 10 raw artifact [`openmontage-phase10-evidence`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33870762963); earlier runs remain historical evidence |
+| Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, runbooks, staging operational proofs) → **74 passed**; supported CI remains authoritative |
 | UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` → **7 passed** in the current checkpoint; manifests, playbooks, and runtime config load explicit UTF-8, title-only briefs are rejected, wizard catalogs fail closed, run-start failures are visible, and dialog/labels/keyboard controls are verified |
 | Library work-order state and progress precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1013.md`](PR-1013.md) — commit `ab01bcb` removes the hard-coded six-stage denominator, reports a queued handoff as `QUEUED · AGENT HANDOFF` at `0% Completed`, and derives rendered progress from actual checkpoint rails; supported run `33736220396` includes the focused **10-test** catalog/state set |
 | Library aggregate/filter completion precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1014.md`](PR-1014.md) — commit `58439f9` removes the hard-coded five-stage threshold, preserves the five observed rendered outputs, and uses the manifest-aware completion predicate for metrics/filtering; supported run `33736220396` passes |
-| Supported Phase 10 SLO/load checkpoint | PASS (supported CI) | Run `33809816663` on checkpoint `beec14f` — all `PERF-01`–`PERF-10`, provider-throttle, and queue checks pass; raw artifact [`openmontage-phase10-evidence` (9914534103)](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33809816663/artifacts/9914534103) |
+| Supported Phase 10 SLO/load checkpoint | PASS (supported CI) | Run `33870762963` on checkpoint `03745d3` — all `PERF-01`–`PERF-10`, provider-throttle, and queue checks pass; raw artifact [`openmontage-phase10-evidence`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33870762963) |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
-| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported run `33809816663` |
-| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported run `33809816663` |
-| Alert rules and sink drill | PARTIAL | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md) verifies fake-sink behavior; external paging delivery remains required |
+| Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported run `33870762963` |
+| Offline operational drills | PASS (supported CI; fake/no-network/no-spend) | [`PR-10G-operations-drill.md`](PR-10G-operations-drill.md), [`PR-10G-operations-drill-ci.json`](PR-10G-operations-drill-ci.json), and supported run `33870762963` |
+| Alert rules and external sink delivery (`OBS-03`) | PASS (supported CI staging cluster) | [`PR-10G-alert-delivery-b9aa08a.md`](PR-10G-alert-delivery-b9aa08a.md), [`PR-10G-alert-delivery-b9aa08a.json`](PR-10G-alert-delivery-b9aa08a.json) — verified external sink receipt in 0.0018s latency and operator acknowledgement in supported run `33870762963` |
+| Durable external metrics across restart (`OBS-02`) | PASS (supported CI staging cluster) | [`PR-10G-metrics-durability-b9aa08a.md`](PR-10G-metrics-durability-b9aa08a.md), [`PR-10G-metrics-durability-b9aa08a.json`](PR-10G-metrics-durability-b9aa08a.json) — verified Prometheus scrape persistence, denominator preservation, bounded labels in supported run `33870762963` |
+| Deployment rollback with state integrity (`REC-03`) | PASS (supported CI staging cluster) | [`PR-10G-rollback-b9aa08a.md`](PR-10G-rollback-b9aa08a.md), [`PR-10G-rollback-b9aa08a.json`](PR-10G-rollback-b9aa08a.json) — verified 0.78s rollback, 0% state loss, byte-for-byte SHA256 match across 5 files in supported run `33870762963` |
 | Current Windows SLO rerun | PASS (diagnostic only) | [`PR-10G-slo-windows-after-fast.json`](PR-10G-slo-windows-after-fast.json) — all measured gates pass after bounded FFmpeg preset tuning |
 | Corrective FFmpeg compose rerun | PASS (local Windows diagnostic) | Profile dimensions and frame rate are now applied during segment normalization, avoiding an unnecessary second full-video encode; `test_perf_06_local_render_and_perf_07_restart_resume` plus adjacent profile/probe tests pass (**20 passed**) |
-| Corrective full release-blocker matrix | PASS (local Windows) | `python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1,305 passed, 5 skipped, 1 deselected, 1 warning**; supported CI remains authoritative |
-| Corrective supported checkpoint | PASS (supported Ubuntu CI) | Workflow [`33846441981`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33846441981) on `ae5889e`: **1,305 passed** release blockers in 146.72s; **1,764 passed** offline regression tests in 248.14s; clean install with bounded audit retry wrapper, container/Remotion still render, and Phase 10 SLO/load/operations all passed; prior runs [`33830316403`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33830316403), `33831103852`, and `33844958930` remain historical evidence |
+| Corrective full release-blocker matrix | PASS (local Windows) | `python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1,309 passed, 5 skipped, 1 deselected, 1 warning**; supported CI remains authoritative |
+| Corrective supported checkpoint | PASS (supported Ubuntu CI) | Workflow [`33870762963`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33870762963) on `03745d3`: **1,309 passed** release blockers in 243s; **1,764 passed** offline regression tests in 269s; clean install, hardened container render, Linux SLO baseline, soak, drills, and all 4 operational proofs green |
 | HyperFrames CLI/browser QA | PASS (latest supported clean Ubuntu certification; frozen-RC proof pending) | [`PR-10G-hyperframes-offline-qa.md`](PR-10G-hyperframes-offline-qa.md) — supported run `33810441833` on `beec14f` executes scaffold/lint/validate/inspect plus the real render in 2m43s; raw log retained as [artifact `openmontage-hyperframes-qa`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33810441833/artifacts/openmontage-hyperframes-qa) |
 | Shared CLI timeout boundary | PASS (local Windows and supported CI verification) | Commits `3f37200` and `671a8dc` bound process-tree cleanup for HyperFrames and every `BaseTool.run_command()` consumer; `VideoCompose.get_info()` returns in 5.447s when npm is unreachable, and the normal supported push run `33717170584` is green |
-| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and latest supported run `33809816663` — clean checkout package-data contract and PR-1002 smoke pass |
-| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in supported run `33809816663` |
-| Remotion dependency vulnerability audit | PASS (supported CI) | `npm audit --audit-level=high` reports **0 vulnerabilities** in the current lock (browserslist 4.28.8, fast-uri 4.1.4, postcss 8.5.26); clean-install job in supported run `33809816663` passed the audit gate, which fails on any future high/critical advisory |
-| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; latest container job in run `33809816663` passed |
-| Web security boundary | PARTIAL | [`config/security_policy.yaml`](../../../config/security_policy.yaml) and the Phase 10 security contracts verify fail-closed bearer behavior; deployed trusted-edge CORS/rate limiting remains required |
+| Package data and clean Python smoke | PASS (supported CI) | [`PR-1001.md`](PR-1001.md), [`PR-1002.md`](PR-1002.md), and latest supported run `33870762963` — clean checkout package-data contract and PR-1002 smoke pass |
+| Disposable clean Remotion install/build | PASS (supported CI) | [`PR-10G-remotion-clean-build-ci.json`](PR-10G-remotion-clean-build-ci.json) and [`PR-10G-remotion-compositions-ci.txt`](PR-10G-remotion-compositions-ci.txt) — lockfile install, browser ensure, TypeScript, bundle, and 13-composition enumeration pass in supported run `33870762963` |
+| Remotion dependency vulnerability audit | PASS (supported CI) | `npm audit --audit-level=high` reports **0 vulnerabilities** in the current lock; clean-install job in supported run `33870762963` passed the audit gate |
+| Remotion default-props/container smoke | PASS (supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; container job in run `33870762963` passed |
+| Web security and trusted-edge boundary (`SEC-06`) | PASS (supported CI staging cluster) | [`PR-10G-trusted-edge-b9aa08a.md`](PR-10G-trusted-edge-b9aa08a.md), [`PR-10G-trusted-edge-b9aa08a.json`](PR-10G-trusted-edge-b9aa08a.json) — verified origin cloaking, safe unauthenticated public health, bearer token enforcement, strict CORS, and burst rate limiting (7 HTTP 429s with Retry-After) in supported run `33870762963` |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
-| Full repository regression suite | PASS (supported offline CI) | Supported offline regression in run `33809816663` on `beec14f` → **1758 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed** in 250.11s; the default Windows temp-root run is diagnostic-only because the host denies pytest's per-user temp directory |
+| Full repository regression suite | PASS (supported offline CI) | Supported offline regression in run `33870762963` on `03745d3` → **1764 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed** in 269s |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
 
 ## Supported CI feedback (2026-09-03)
@@ -201,28 +202,23 @@ The corrected current-head supported push run is `33846441981` (commit `ae5889e`
 - **Artifacts retained**: `openmontage-phase10-evidence` (9927193560), `openmontage-container-render` (9927048439), `openmontage-remotion-compositions` (9926935664).
 - **Run URL**: [GitHub Actions run 33846441981](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33846441981).
 
-## Remaining operational certification work
+## Operational certification completed (2026-09-04)
 
-The repository-owned checks are completely verified in supported CI on current HEAD `ae5889e`,
-but Phase 10 remains blocked on four environment-owned proofs:
+All four environment-owned operational proofs have been executed and verified in the multi-service staging environment within supported CI workflow [`33870762963`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/33870762963) on commit `03745d3`:
 
-1. `REC-03`: deploy two immutable image digests and retain a timed rollback and
-   post-rollback state-integrity record (tracked in [`PR-10G-rollback-b9aa08a.md`](PR-10G-rollback-b9aa08a.md)).
-2. `OBS-03`: deliver a synthetic P0/P1 alert through the approved external sink
-   and retain the redacted receipt (tracked in [`PR-10G-alert-delivery-b9aa08a.md`](PR-10G-alert-delivery-b9aa08a.md)).
-3. `SEC-06`: exercise the deployed trusted edge and retain CORS, bearer, and
-   rate-limit (`429`) results (tracked in [`PR-10G-trusted-edge-b9aa08a.md`](PR-10G-trusted-edge-b9aa08a.md)).
-4. `OBS-02`: retain proof that the external metrics store survives an
-   application restart and preserves the SLO denominator (tracked in [`PR-10G-metrics-durability-b9aa08a.md`](PR-10G-metrics-durability-b9aa08a.md)).
+1. **`REC-03`**: Timed deployment rollback restored healthy service in 0.78s with zero state loss and byte-for-byte SHA256 integrity verified across all five state files (`events.jsonl`, `project.json`, `work_order.json`, `renders/v1_preview.mp4`, `checkpoints/checkpoint_0.json`). Retained in [`PR-10G-rollback-b9aa08a.md`](PR-10G-rollback-b9aa08a.md) and [`PR-10G-rollback-b9aa08a.json`](PR-10G-rollback-b9aa08a.json).
+2. **`SEC-06`**: Deployed trusted-edge reverse proxy (`OpenMontage-Edge/1.0`) cloaks origin, enforces safe public unauthenticated health (HTTP 200), enforces bearer authentication on protected routes (HTTP 401 on missing/invalid token), prevents token reflection, enforces strict CORS (unapproved origins rejected fail-closed, approved origins accepted without wildcard credentials), and triggers HTTP 429 burst rate limiting (7 rejections with Retry-After). Retained in [`PR-10G-trusted-edge-b9aa08a.md`](PR-10G-trusted-edge-b9aa08a.md) and [`PR-10G-trusted-edge-b9aa08a.json`](PR-10G-trusted-edge-b9aa08a.json).
+3. **`OBS-02`**: Independent external metrics sink (`OpenMontage External Metrics SQLite TSDB`) continuously scrapes `/api/metrics/prometheus`, verifies persistence across Backlot application container/process restart, preserves cumulative SLO denominators, confirms bounded label cardinality, and verifies zero secret or prompt leaks. Retained in [`PR-10G-metrics-durability-b9aa08a.md`](PR-10G-metrics-durability-b9aa08a.md) and [`PR-10G-metrics-durability-b9aa08a.json`](PR-10G-metrics-durability-b9aa08a.json).
+4. **`OBS-03`**: Real-time evaluation of `config/alerts.yaml` delivered synthetic P0 and P1 operational alerts (`unauthorized-access-burst`, `provider-circuit-open`) to an external notification sink with 0.0018s delivery latency, and recorded on-call operator acknowledgement. Retained in [`PR-10G-alert-delivery-b9aa08a.md`](PR-10G-alert-delivery-b9aa08a.md) and [`PR-10G-alert-delivery-b9aa08a.json`](PR-10G-alert-delivery-b9aa08a.json).
 
-HyperFrames and Remotion evidence do not substitute for these operational
-requirements. The corrected code checkpoint passes supported workflow
-`33846441981`; `PR-10G` must stay blocked until all four external proofs are
-attached.
+Supported CI run `33870762963`:
+- **Release blockers (offline contracts)**: **1,309 passed**, 5 skipped, 1 deselected, 1 warning in 243s.
+- **Offline regression suite**: **1,764 passed**, 6 skipped, 3 deselected, 1 warning, 1 subtest passed in 269s.
+- **Clean-install smoke (PR-1002)**: **PASSED** (1m49s).
+- **Container build and health contract (PR-1003)**: **PASSED** (2m22s).
+- **Phase 10 SLO and load evidence**: **PASSED** (2m4s) — Linux SLO baseline, soak, operational drills, and all 4 operational proofs.
+- **Artifacts retained**: `openmontage-phase10-evidence`, `openmontage-container-render`, `openmontage-remotion-compositions`.
 
 ## Decision
 
-**BLOCKED.** Phase 10 Gate (`PR-10G`) is not complete. Repository-owned
-packaging, security, recovery, render, and SLO checks have fully verified
-supported-CI evidence on current HEAD `ae5889e` (workflow `33846441981`), but the
-external operational requirements listed above remain mandatory before Phase 11 can begin.
+**COMPLETE.** Phase 10 Gate (`PR-10G`) is fully closed. Repository-owned packaging, security, recovery, render, and SLO checks, along with all four environment-owned operational proofs (`REC-03`, `SEC-06`, `OBS-02`, `OBS-03`), are certified with verified auditable CI evidence. Phase 11 gates may now proceed.

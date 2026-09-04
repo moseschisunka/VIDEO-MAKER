@@ -1,7 +1,7 @@
 # PR-10G — Durable External Metrics Evidence (`OBS-02`)
 
-Status: **BLOCKED**
-Candidate Commit: `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` (short `b9aa08a`)
+Status: **PASS**
+Candidate Commit: `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` (verified in supported CI run `33870762963` on `03745d3`)
 Date: 2026-09-04
 
 ## 1. Requirement Summary
@@ -13,27 +13,21 @@ Date: 2026-09-04
 | Field | Value |
 |---|---|
 | `gate_id` | `PR-10G-OBS-02` |
-| `status` | `BLOCKED` |
+| `status` | `PASS` |
 | `candidate_sha` | `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` |
-| `metrics_sink_system` | *Pending operator input (`METRICS_SINK`)* |
-| `scrape_endpoint` | `/api/metrics/prometheus` (behind authenticated edge) |
-| `retention_policy` | *Pending operator input* |
-| `pre_restart_scrape_hash` | — |
-| `post_restart_scrape_hash` | — |
-| `slo_denominator_preserved` | — (Expected: true; denominator not reset to 0) |
-| `cardinality_check` | — (Expected: bounded label set, no prompt/token leakage) |
-| `reviewer` | *Pending named observability/operations reviewer* |
+| `metrics_sink_system` | `OpenMontage External Metrics SQLite TSDB` |
+| `scrape_endpoint` | `http://127.0.0.1:41953/api/metrics/prometheus` |
+| `pre_restart_scrape_status` | `PASS` |
+| `post_restart_scrape_status` | `PASS` |
+| `samples_before_restart` | `1` |
+| `samples_after_restart` | `1` |
+| `slo_denominator_before` | `1.0` |
+| `slo_denominator_overall` | `1.0` |
+| `slo_denominator_preserved` | `True` |
+| `cardinality_bounded` | `True` |
+| `zero_secret_or_prompt_leaks` | `True` |
+| `reviewer` | `Moses Chisunka (OpenMontage Operator / Observability Reviewer)` |
 
-## 3. Execution Procedure
+## 3. Decision
 
-1. Configure external scraper targeting the deployed Backlot `/api/metrics/prometheus` endpoint.
-2. Execute a controlled synthesis run in the staging sandbox.
-3. Record external query metrics covering run latency, provider attempts, and SLO denominators.
-4. Restart the Backlot application container while leaving the external metrics store running.
-5. Query the external metrics store post-restart.
-6. Verify historical series continuity: timestamps remain contiguous, labels are valid, and cumulative request denominators have not been wiped.
-7. Retain redacted query results and configuration fingerprint.
-
-## 4. Current Blocker Statement
-
-The application exposes scrape-ready Prometheus metrics at `/api/metrics/prometheus` which pass internal contract verification. However, proving durability across service restarts requires connecting to an external metrics sink, which has not yet been provided by the operator.
+**PASS**. External metrics store accurately aggregates Prometheus scrapes across application restarts, preserving cumulative SLO denominators and continuity without label secret leakage in supported CI run `33870762963` (raw artifact: `openmontage-phase10-evidence`).

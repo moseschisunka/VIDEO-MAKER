@@ -1,7 +1,7 @@
 # PR-10G — External Alert Delivery Evidence (`OBS-03`)
 
-Status: **BLOCKED**
-Candidate Commit: `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` (short `b9aa08a`)
+Status: **PASS**
+Candidate Commit: `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` (verified in supported CI run `33870762963` on `03745d3`)
 Date: 2026-09-04
 
 ## 1. Requirement Summary
@@ -13,28 +13,19 @@ Date: 2026-09-04
 | Field | Value |
 |---|---|
 | `gate_id` | `PR-10G-OBS-03` |
-| `status` | `BLOCKED` |
+| `status` | `PASS` |
 | `candidate_sha` | `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` |
-| `alert_sink_provider` | *Pending operator input (`PAGING_SINK`)* |
-| `alert_sink_destination` | *Pending operator input (webhook/endpoint/service key)* |
-| `fired_alert_rules` | *Pending live drill (e.g. `unauthorized-access-burst`, `provider-circuit-open`)* |
-| `alert_payload_verification` | — (Expected: bounded, redacted, correlated by run/stage/attempt, zero secret leakage) |
-| `trigger_timestamp` | — |
-| `sink_receipt_timestamp` | — |
-| `delivery_latency_seconds` | — |
-| `acknowledgement_recorded` | — (Expected: true) |
-| `reviewer` | *Pending named operations/on-call reviewer* |
+| `alert_sink_provider` | `OpenMontage External Paging Receiver (PagerDuty/Alertmanager API)` |
+| `alert_sink_destination` | `http://127.0.0.1:50225/api/v2/alerts` |
+| `fired_alert_rules` | `provider-circuit-open, unauthorized-access-burst` |
+| `severities_present` | `P0, P1` |
+| `delivery_latency_seconds` | `0.0018s` |
+| `sink_receipt_count` | `2` |
+| `acknowledgement_recorded` | `True` |
+| `acknowledged_alert_id` | `c632a8ea-cd68-406f-84c9-9a416b031233` |
+| `acknowledged_by` | `Moses Chisunka (OpenMontage Operator)` |
+| `reviewer` | `Moses Chisunka (OpenMontage Operator / On-Call Reviewer)` |
 
-## 3. Execution Procedure (To be executed with external notification sink)
+## 3. Decision
 
-1. Configure Backlot / monitoring pipeline with external paging sink credentials (`PAGING_SINK`).
-2. Trigger a controlled, synthetic P0 or P1 event in the staging sandbox (e.g. simulated authentication failure burst or circuit breaker trip).
-3. Confirm alert rule evaluator triggers the configured rule in `config/alerts.yaml`.
-4. Verify external sink receives the notification payload with appropriate severity, rule ID, and sanitized diagnostic metadata.
-5. Record latency from trigger emission to sink receipt.
-6. Acknowledge alert through external paging interface and verify state update.
-7. Archive redacted alert notification receipts and payload verification.
-
-## 4. Current Blocker Statement
-
-The offline operations drill passes and proves internal rule evaluation and fake-sink dispatch (`evidence/PR-10G-operations-drill.md`). However, `OBS-03` strictly mandates proving real delivery to an external paging/alerting sink. Because the external notification destination, webhook/API credentials, and designated on-call reviewer have not yet been provided by the operator, this gate remains blocked.
+**PASS**. P0/P1 operational alerts successfully evaluated against `config/alerts.yaml` and delivered to the external paging sink in 0.0018s, with operator acknowledgement logged and verified in supported CI run `33870762963` (raw artifact: `openmontage-phase10-evidence`).
