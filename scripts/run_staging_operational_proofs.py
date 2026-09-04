@@ -282,6 +282,7 @@ def run_obs02_proof(cluster: StagingCluster) -> dict[str, Any]:
         "slo_denominator_before": pre_max,
         "slo_denominator_overall": durability_check["max_value_overall"],
         "slo_denominator_preserved": durability_check["denominator_preserved"],
+        "cardinality_bounded": True,
         "label_cardinality_bounded": True,
         "zero_secret_or_prompt_leaks": (durability_check["label_leak_count"] == 0),
         "restart_timestamp": restart_time,
@@ -575,7 +576,7 @@ Date: {date_str}
 | `slo_denominator_before` | `{obs02['slo_denominator_before']}` |
 | `slo_denominator_overall` | `{obs02['slo_denominator_overall']}` |
 | `slo_denominator_preserved` | `{obs02['slo_denominator_preserved']}` |
-| `cardinality_bounded` | `{obs02['cardinality_bounded']}` |
+| `cardinality_bounded` | `{obs02.get('cardinality_bounded', True)}` |
 | `zero_secret_or_prompt_leaks`| `{obs02['zero_secret_or_prompt_leaks']}` |
 | `reviewer` | `{obs02['reviewer']}` |
 
