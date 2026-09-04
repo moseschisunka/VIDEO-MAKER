@@ -62,7 +62,7 @@ def test_staging_metrics_sink_records_and_detects_durability(tmp_path: Path):
     assert durability["status"] == "PASS"
     assert durability["samples_before_restart"] == 1
     assert durability["samples_after_restart"] == 1
-    assert durability["slo_denominator_preserved"] is True
+    assert durability.get("slo_denominator_preserved", durability.get("denominator_preserved")) is True
     assert durability["max_value_overall"] == 5.0
 
 

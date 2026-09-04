@@ -220,5 +220,6 @@ class StagingMetricsSink:
             "max_value_before": max_before,
             "max_value_overall": max_overall,
             "denominator_preserved": (max_overall >= max_before),
+            "slo_denominator_preserved": (max_overall >= max_before),
             "label_leak_count": len(leaks),
         }
