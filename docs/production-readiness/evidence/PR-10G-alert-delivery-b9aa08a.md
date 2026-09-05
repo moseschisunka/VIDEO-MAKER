@@ -24,7 +24,7 @@ Date: 2026-09-04
 | `severities_present` | `P0, P1` |
 | `delivery_latency_seconds` | `0.0018s` |
 | `sink_receipt_count` | `2` |
-| `acknowledgement_recorded` | `True` |
+| `acknowledgement_recorded` | `True` for automated simulation-agent only; human acknowledgement pending |
 | `acknowledged_alert_id` | `c632a8ea-cd68-406f-84c9-9a416b031233` |
 
 ## 3. Required Real Deployment Evidence for Gate Closure

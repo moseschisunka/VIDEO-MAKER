@@ -20,7 +20,7 @@ Date: 2026-09-04
 | `candidate_sha` | `b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e` |
 | `simulated_edge_provider` | `OpenMontage-Edge/1.0` (localhost test double) |
 | `simulated_edge_url` | `http://127.0.0.1:36895` |
-| `origin_cloaked` | `True` |
+| `origin_cloaked` | `Not established for a deployed origin` (local proxy simulation only) |
 | `unauthenticated_health_result` | `HTTP 200` (safe public health, token not leaked) |
 | `missing_bearer_result` | `HTTP 401` (WWW-Authenticate: Bearer) |
 | `invalid_bearer_result` | `HTTP 401` (WWW-Authenticate: Bearer) |
