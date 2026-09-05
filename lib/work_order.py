@@ -668,9 +668,16 @@ def release_work_order(
     project_dir: Path | str,
     agent_id: str,
     *,
+    reset_stage: bool = False,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Release an agent lease while retaining the resumable stage pointer."""
+    """Release an agent lease while retaining the resumable stage pointer.
+
+    ``reset_stage`` is used when a launcher claimed a run but failed before
+    the external worker started. It returns an untouched ``running`` stage to
+    ``ready`` without changing the manifest-derived pointer; ordinary agent
+    releases retain their historical stage status.
+    """
     project_path = Path(project_dir)
     if not project_path.is_dir():
         raise WorkOrderValidationError(f"project directory does not exist: {project_path}")
@@ -688,6 +695,12 @@ def release_work_order(
         for field in ("claimed_by", "lease_expires_at", "last_heartbeat_at"):
             claim[field] = None
         next_stage = next_stage_from_work_order(order)
+        if reset_stage and next_stage:
+            next_record = next(
+                item for item in order["stages"] if item.get("name") == next_stage
+            )
+            if next_record.get("status") == "running":
+                next_record["status"] = "ready"
         order["current_stage"] = next_stage
         order["next_stage"] = next_stage
         if order["status"] not in {"awaiting_approval", "completed", "cancelled"}:

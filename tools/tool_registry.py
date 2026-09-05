@@ -13,6 +13,7 @@ from types import ModuleType
 from typing import Any, Optional
 
 from tools.base_tool import BaseTool, ToolStatus, ToolTier, ToolStability
+from lib.paths import runtime_root
 
 
 # Unicode punctuation that breaks on Windows cp1252 stdout. Map each to an
@@ -86,9 +87,8 @@ class ToolRegistry:
     @staticmethod
     def _load_dotenv() -> None:
         """Load .env file into os.environ if present, so tools can find API keys."""
-        from pathlib import Path
         import os
-        env_path = Path(__file__).resolve().parent.parent / ".env"
+        env_path = runtime_root() / ".env"
         if not env_path.is_file():
             return
         import re

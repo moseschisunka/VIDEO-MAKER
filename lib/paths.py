@@ -8,15 +8,80 @@ board watches it. Define it once.
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+
+def _is_source_checkout() -> bool:
+    """Return whether this package is being imported from a source checkout.
+
+    ``REPO_ROOT`` points at ``site-packages`` for a wheel install.  The
+    checkout marker keeps runtime output (projects, logs, and ``.env``) out of
+    that read-only location while preserving the existing source layout.
+    """
+    return (REPO_ROOT / "pyproject.toml").is_file()
+
+
+def runtime_root() -> Path:
+    """Return the writable working root for this invocation.
+
+    Source runs keep their historical repository-relative behavior.  An
+    installed package uses the caller's working directory so it can write
+    projects and load a local ``.env`` without modifying ``site-packages``.
+    """
+    if _is_source_checkout():
+        return REPO_ROOT
+    return Path.cwd().resolve()
+
+
+def _resource_roots() -> tuple[Path, ...]:
+    """Return roots searched for package data in priority order.
+
+    Setuptools ``data-files`` are installed beneath the environment prefix,
+    while package data in a source checkout lives beside the Python modules.
+    The optional override is useful for deployments that unpack release data
+    separately from the wheel.
+    """
+    roots: list[Path] = []
+    override = os.environ.get("OPENMONTAGE_RESOURCE_ROOT")
+    if override:
+        roots.append(Path(override).expanduser().resolve())
+    roots.append(REPO_ROOT)
+    prefix = Path(sys.prefix).resolve()
+    if prefix not in roots:
+        roots.append(prefix)
+    return tuple(roots)
+
+
+def resource_path(relative: Path | str) -> Path:
+    """Resolve a tracked release resource in source or wheel layouts.
+
+    Existing files/directories are selected from the first matching root.  A
+    non-existent path falls back to the primary package root so callers that
+    create runtime files retain the source-tree behavior.
+    """
+    candidate = Path(relative).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    roots = _resource_roots()
+    for root in roots:
+        resolved = root / candidate
+        if resolved.exists():
+            return resolved
+    return roots[0] / candidate
+
+
 # Overridable for staging/screenshots/tests. Everything — checkpoint writes,
-# event attribution, the Backlot board — follows the same root.
-PROJECTS_DIR = Path(os.environ.get("OPENMONTAGE_PROJECTS_DIR") or (REPO_ROOT / "projects"))
+# event attribution, the Backlot board — follows the same root.  An installed
+# package must not default to writing under site-packages.
+PROJECTS_DIR = Path(
+    os.environ.get("OPENMONTAGE_PROJECTS_DIR")
+    or (REPO_ROOT / "projects" if _is_source_checkout() else Path.cwd() / "projects")
+).expanduser().resolve()
 
 
 class RunPathError(ValueError):
@@ -100,4 +165,12 @@ def run_paths(
     return paths
 
 
-__all__ = ["PROJECTS_DIR", "REPO_ROOT", "RunPathError", "RunPaths", "run_paths"]
+__all__ = [
+    "PROJECTS_DIR",
+    "REPO_ROOT",
+    "RunPathError",
+    "RunPaths",
+    "resource_path",
+    "run_paths",
+    "runtime_root",
+]

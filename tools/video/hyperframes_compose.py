@@ -26,6 +26,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from lib.paths import resource_path, runtime_root
 from lib.media_contracts import MediaContractError, strict_bool
 from tools.base_tool import (
     BaseTool,
@@ -427,8 +428,7 @@ class HyperFramesCompose(BaseTool):
         binary = shutil.which("hyperframes")
         if binary:
             candidates.append(Path(binary))
-        repo_root = Path(__file__).resolve().parents[2]
-        roots = (Path.cwd(), repo_root)
+        roots = (Path.cwd(), runtime_root(), resource_path("."))
         for root in roots:
             for name in ("hyperframes", "hyperframes.cmd", "hyperframes.ps1"):
                 candidates.append(root / "node_modules" / ".bin" / name)
@@ -1762,12 +1762,14 @@ class HyperFramesCompose(BaseTool):
                 return "vendor/gsap.min.js"
         configured = os.environ.get("OPENMONTAGE_GSAP_PATH")
         candidates = [Path(configured).expanduser()] if configured else []
-        repo_root = Path(__file__).resolve().parents[2]
+        repo_root = runtime_root()
+        packaged_vendor = resource_path("tools/video/vendor")
         candidates.extend(
             [
                 workspace / "node_modules" / "gsap" / "dist" / "gsap.min.js",
                 repo_root / "node_modules" / "gsap" / "dist" / "gsap.min.js",
                 repo_root / "tools" / "video" / "vendor" / "gsap.min.js",
+                packaged_vendor / "gsap.min.js",
             ]
         )
         for candidate in candidates:

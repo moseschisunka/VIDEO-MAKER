@@ -61,6 +61,7 @@ from lib.video_timeline import (
     validate_narration_timeline,
     validate_visual_timeline,
 )
+from lib.paths import resource_path
 
 
 class VideoCompose(BaseTool):
@@ -299,7 +300,7 @@ class VideoCompose(BaseTool):
 
         if not _shutil.which("npx"):
             return False
-        composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
+        composer_dir = resource_path("remotion-composer")
         if not composer_dir.exists() or not (composer_dir / "package.json").exists():
             return False
         # Check that node_modules are actually installed — without this,
@@ -358,7 +359,7 @@ class VideoCompose(BaseTool):
                 "and motion-graphics pipelines that already use the scene-component stack."
             )
         else:
-            composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
+            composer_dir = resource_path("remotion-composer")
             if composer_dir.exists() and (composer_dir / "package.json").exists() and not (composer_dir / "node_modules").exists():
                 info["remotion_note"] = (
                     "Remotion project exists but node_modules are NOT installed. "
@@ -1202,7 +1203,7 @@ class VideoCompose(BaseTool):
                 ),
             )
 
-        composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
+        composer_dir = resource_path("remotion-composer")
         if not composer_dir.exists() or not (composer_dir / "node_modules").exists():
             return ToolResult(
                 success=False,
@@ -2543,7 +2544,7 @@ class VideoCompose(BaseTool):
             return ToolResult(success=False, error=f"Caption render contract rejected: {exc}")
 
         # remotion-composer lives at project root
-        composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
+        composer_dir = resource_path("remotion-composer")
         repo_root = composer_dir.parent
         if run_envelope is not None:
             # Never share public/staged assets between projects or runs. The

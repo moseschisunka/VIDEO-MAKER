@@ -11,11 +11,13 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from lib.paths import runtime_root
+
 
 def load_env(project_root: Optional[Path] = None) -> None:
     """Load .env file from project root."""
     if project_root is None:
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = runtime_root()
     env_path = project_root / ".env"
     if env_path.exists():
         load_dotenv(env_path)

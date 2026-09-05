@@ -28,9 +28,18 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool
 
+from lib.agent_launcher import (
+    AgentConfigurationError,
+    AgentLaunchError,
+    agent_command_status,
+    configured_agent_id,
+    launch_agent,
+    read_agent_process,
+)
 from lib.approval_contracts import ApprovalValidationError
 from lib.checkpoint import CheckpointValidationError, init_project, read_checkpoint, write_checkpoint
 from lib.demo_runner import RUNNER_KIND, is_internal_demo_project
+from lib.env_loader import load_env
 from lib.pipeline_release import pipeline_release_metadata, studio_release_status
 from lib.project_identity import validate_project_identity
 from lib.voice_contracts import canonical_voice_provider
@@ -62,6 +71,11 @@ from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_sta
 
 
 _logger = logging.getLogger("openmontage.backlot")
+
+# Backlot can be launched directly with ``uvicorn`` or ``python -m backlot``;
+# make the documented local .env launcher configuration available in both
+# cases instead of relying on a tool module being imported first.
+load_env()
 
 class CreateProjectRequest(BaseModel):
     title: str
@@ -423,6 +437,8 @@ def _normalise_create_request(request: CreateProjectRequest) -> dict:
     voice = str(request.voice or "").strip()
     requested_provider = str(request.voice_provider or "").strip().lower()
     alias_provider = str(request.tts_provider or "").strip().lower()
+    if alias_provider and "voice_provider" not in request.model_fields_set:
+        requested_provider = ""
     # Compare provider aliases by identity, not spelling.  The public request
     # exposes ``voice_provider`` while older clients still send
     # ``tts_provider``; ``edge`` and ``edge_tts`` must not be rejected as a
@@ -438,6 +454,8 @@ def _normalise_create_request(request: CreateProjectRequest) -> dict:
     render_runtime = str(request.render_runtime or "").strip().lower()
     requested_profile = str(request.output_profile or "").strip().lower()
     alias_profile = str(request.profile or "").strip().lower()
+    if alias_profile and "output_profile" not in request.model_fields_set:
+        requested_profile = ""
     output_profile = alias_profile or requested_profile
     aspect_ratio = str(request.aspect_ratio or "").strip()
     source_mode = str(request.source_mode or "").strip().lower() or None
@@ -650,281 +668,6 @@ def _generate_production_config(
         "visual_variant": visual_variant if visual_variant in VISUAL_VARIANTS else "balanced-grid",
         "duration_policy": "content_led_no_studio_ceiling",
     }
-
-_PRODUCTION_SCRIPT_TEMPLATE = '''import os
-import json
-import asyncio
-import edge_tts
-from pathlib import Path
-
-from schemas.artifacts import validate_artifact
-from lib.checkpoint import write_checkpoint, PROJECTS_DIR
-from tools.video.video_compose import VideoCompose
-
-PROJECT_DIR = Path("projects") / os.environ.get("PROJECT_ID", "default")
-ARTIFACTS_DIR = PROJECT_DIR / "artifacts"
-
-with open(ARTIFACTS_DIR / "project_config.json", "r", encoding="utf-8") as f:
-    config = json.load(f)
-
-PROJECT_ID = config["project_id"]
-TITLE = config["title"]
-TOPIC = config["topic"]
-VOICE = config["voice"]
-PLAYBOOK = config["playbook"]
-
-PROJECT_DIR = Path("projects") / PROJECT_ID
-ARTIFACTS_DIR = PROJECT_DIR / "artifacts"
-ASSETS_DIR = PROJECT_DIR / "assets"
-AUDIO_DIR = ASSETS_DIR / "audio"
-IMAGES_DIR = ASSETS_DIR / "images"
-RENDERS_DIR = PROJECT_DIR / "renders"
-
-for d in [ARTIFACTS_DIR, AUDIO_DIR, IMAGES_DIR, RENDERS_DIR]:
-    d.mkdir(parents=True, exist_ok=True)
-
-print(f"Starting OpenMontage {PROJECT_ID} pipeline...")
-
-# 1. Proposal Packet
-proposal_packet = {
-    "version": "1.0",
-    "topic": TOPIC,
-    "title": TITLE,
-    "target_duration_seconds": 30,
-    "selected_concept": {
-        "id": "concept_a",
-        "title": TITLE,
-        "hook": f"An insightful look into {TITLE}...",
-        "core_message": TOPIC,
-        "tone": "inspiring",
-        "key_points": [
-            "Introduction and core fundamentals",
-            "Key mechanisms and practical types",
-            "Real-world application and impact",
-            "Key takeaways and future outlook"
-        ],
-        "narrative_structure": "journey",
-        "suggested_playbook": PLAYBOOK
-    },
-    "production_plan": {
-        "pipeline_type": "animated-explainer",
-        "render_runtime": "remotion",
-        "composition_mode": "templated",
-        "estimated_cost_usd": 0.0
-    }
-}
-with open(ARTIFACTS_DIR / "proposal_packet.json", "w", encoding="utf-8") as f:
-    json.dump(proposal_packet, f, indent=2)
-
-# 2. Script Generation
-script = {
-    "version": "1.0",
-    "title": TITLE,
-    "total_duration_seconds": 30.0,
-    "sections": [
-        {
-            "id": "sec_1",
-            "label": f"Introduction - {TITLE}",
-            "text": f"Welcome to this exploration of {TITLE}. {TOPIC[:140]}",
-            "start_seconds": 0.0,
-            "end_seconds": 7.5
-        },
-        {
-            "id": "sec_2",
-            "label": "Core Principles",
-            "text": f"Understanding the fundamental concepts behind {TITLE} allows us to unlock new insights and solve complex challenges.",
-            "start_seconds": 7.5,
-            "end_seconds": 15.0
-        },
-        {
-            "id": "sec_3",
-            "label": "Real-World Application",
-            "text": f"In practice, these principles are used by experts worldwide to drive innovation, optimize workflows, and achieve remarkable results.",
-            "start_seconds": 15.0,
-            "end_seconds": 22.5
-        },
-        {
-            "id": "sec_4",
-            "label": "Conclusion",
-            "text": f"By mastering {TITLE}, we gain the knowledge and tools needed to shape the future of our field.",
-            "start_seconds": 22.5,
-            "end_seconds": 30.0
-        }
-    ]
-}
-validate_artifact("script", script)
-with open(ARTIFACTS_DIR / "script.json", "w", encoding="utf-8") as f:
-    json.dump(script, f, indent=2)
-write_checkpoint(PROJECTS_DIR, PROJECT_ID, "script", "completed", {"script": script}, human_approved=True)
-print("Stage 1 (Script): COMPLETE")
-
-# 3. Generate Voice Narration (TTS)
-async def generate_narration():
-    full_text = " ".join([s["text"] for s in script["sections"]])
-    audio_path = str(AUDIO_DIR / "narration.mp3")
-    comm = edge_tts.Communicate(full_text, VOICE)
-    await comm.save(audio_path)
-    print("Narration saved to:", audio_path)
-
-asyncio.run(generate_narration())
-
-# 4. Scene Plan
-scene_plan = {
-    "version": "1.0",
-    "style_playbook": PLAYBOOK,
-    "scenes": [
-        {
-            "id": "scene_1",
-            "type": "hero_title",
-            "description": f"Opening title card: {TITLE}",
-            "start_seconds": 0.0,
-            "end_seconds": 7.5,
-            "script_section_id": "sec_1"
-        },
-        {
-            "id": "scene_2",
-            "type": "text_card",
-            "description": "Core Principles & Architecture",
-            "start_seconds": 7.5,
-            "end_seconds": 15.0,
-            "script_section_id": "sec_2"
-        },
-        {
-            "id": "scene_3",
-            "type": "kpi_grid",
-            "description": "Impact Overview Dashboard",
-            "start_seconds": 15.0,
-            "end_seconds": 22.5,
-            "script_section_id": "sec_3"
-        },
-        {
-            "id": "scene_4",
-            "type": "callout",
-            "description": f"Conclusion Insight on {TITLE}",
-            "start_seconds": 22.5,
-            "end_seconds": 30.0,
-            "script_section_id": "sec_4"
-        }
-    ]
-}
-validate_artifact("scene_plan", scene_plan)
-with open(ARTIFACTS_DIR / "scene_plan.json", "w", encoding="utf-8") as f:
-    json.dump(scene_plan, f, indent=2)
-write_checkpoint(PROJECTS_DIR, PROJECT_ID, "scene_plan", "completed", {"scene_plan": scene_plan}, human_approved=True)
-print("Stage 2 (Scene Plan): COMPLETE")
-
-# 5. Asset Manifest (No more static images)
-asset_manifest = {
-    "version": "1.0",
-    "assets": [
-        {"id": "asset_audio_narration", "type": "narration", "path": "assets/audio/narration.mp3", "source_tool": "edge_tts", "scene_id": "scene_1"}
-    ]
-}
-validate_artifact("asset_manifest", asset_manifest)
-with open(ARTIFACTS_DIR / "asset_manifest.json", "w") as f:
-    json.dump(asset_manifest, f, indent=2)
-write_checkpoint(PROJECTS_DIR, PROJECT_ID, "assets", "completed", {"asset_manifest": asset_manifest}, human_approved=True)
-print("Stage 3 (Assets): COMPLETE")
-
-# 6. Edit Decisions (Rich Motion Graphics)
-edit_decisions = {
-    "version": "1.0",
-    "render_runtime": "remotion",
-    "renderer_family": "explainer-teacher",
-    "composition_mode": "templated",
-    "theme": PLAYBOOK,
-    "cuts": [
-        {
-            "id": "cut_1", "type": "hero_title",
-            "text": TITLE, "heroSubtitle": "An OpenMontage Explainer",
-            "in_seconds": 0.0, "out_seconds": 7.5,
-            "transition_out": "fade"
-        },
-        {
-            "id": "cut_2", "type": "text_card",
-            "text": "Core Principles & Architecture",
-            "in_seconds": 7.5, "out_seconds": 15.0,
-            "animation": "slide-up"
-        },
-        {
-            "id": "cut_3", "type": "kpi_grid",
-            "title": "Impact Overview",
-            "chartData": [
-                {"label": "Efficiency", "value": "85%"},
-                {"label": "Adoption", "value": "2.4x"},
-                {"label": "Accuracy", "value": "99.9%"}
-            ],
-            "in_seconds": 15.0, "out_seconds": 22.5
-        },
-        {
-            "id": "cut_4", "type": "callout",
-            "text": "The future is defined by those who master these concepts today.",
-            "callout_type": "tip",
-            "title": "Key Insight",
-            "in_seconds": 22.5, "out_seconds": 30.0,
-            "transition_out": "fade"
-        }
-    ],
-    "overlays": [
-        {
-            "type": "section_title",
-            "text": "INTRODUCTION",
-            "in_seconds": 0.0, "out_seconds": 7.5,
-            "position": "top-left"
-        },
-        {
-            "type": "stat_reveal",
-            "text": "90%",
-            "subtitle": "Global Usage",
-            "in_seconds": 16.0, "out_seconds": 21.0,
-            "position": "bottom-right"
-        }
-    ]
-}
-validate_artifact("edit_decisions", edit_decisions)
-with open(ARTIFACTS_DIR / "edit_decisions.json", "w") as f:
-    json.dump(edit_decisions, f, indent=2)
-write_checkpoint(PROJECTS_DIR, PROJECT_ID, "edit", "completed", {"edit_decisions": edit_decisions}, human_approved=True)
-print("Stage 4 (Edit Decisions): COMPLETE")
-
-# 8. Video Composition
-print("Starting video composition and render...")
-vc = VideoCompose()
-final_output = str(RENDERS_DIR / "final.mp4")
-res = vc.execute({
-    "operation": "render",
-    "edit_decisions": edit_decisions,
-    "asset_manifest": asset_manifest,
-    "audio_path": str(AUDIO_DIR / "narration.mp3"),
-    "output_path": final_output,
-    "proposal_packet": proposal_packet
-})
-
-if res.success and os.path.isfile(final_output):
-    render_report = {
-        "version": "1.0",
-        "outputs": [
-            {
-                "path": final_output,
-                "format": "mp4",
-                "codec": "h264",
-                "audio_codec": "aac",
-                "resolution": "1920x1080",
-                "fps": 30.0,
-                "duration_seconds": 31.06,
-                "file_size_bytes": os.path.getsize(final_output) if os.path.exists(final_output) else 10203569
-            }
-        ],
-        "render_grammar": "explainer-teacher",
-        "render_time_seconds": getattr(res, "duration_seconds", 105.0) or 105.0
-    }
-    with open(ARTIFACTS_DIR / "render_report.json", "w") as f:
-        json.dump(render_report, f, indent=2)
-    write_checkpoint(PROJECTS_DIR, PROJECT_ID, "compose", "completed", {"render_report": render_report}, human_approved=True)
-
-print("Pipeline execution complete! Deliverable at:", final_output)
-'''
-
 
 _PROJECT_RUNNER_TEMPLATE = '''"""Quarantined Backlot project launcher.
 
@@ -1294,6 +1037,8 @@ def create_app() -> FastAPI:
                     except asyncio.TimeoutError:
                         yield _sse({"type": "heartbeat", "ts": time.time()})
                         continue
+                    if not _project_is_allowed(changed):
+                        continue
                     while not q.empty():
                         try:
                             q.get_nowait()
@@ -1302,6 +1047,11 @@ def create_app() -> FastAPI:
                     yield _sse({"type": "change", "project_id": changed})
             finally:
                 hub.unsubscribe(q)
+
+        return StreamingResponse(stream(), media_type="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        })
 
     @app.get("/api/playbooks")
     async def playbooks_endpoint() -> list:
@@ -1488,7 +1238,11 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/project/{project_id}/run")
-    async def run_project_endpoint(project_id: str, agent_id: str = "backlot-ui") -> dict:
+    async def run_project_endpoint(
+        project_id: str,
+        request: Request,
+        agent_id: str | None = None,
+    ) -> dict:
         import subprocess, sys
         project_dir = _safe_project_dir(project_id)
         if is_internal_demo_project(project_dir):
@@ -1519,10 +1273,15 @@ def create_app() -> FastAPI:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
-        # Ordinary runs are handed to the agent control plane.  The API claims
-        # the durable work order and returns the manifest/director contract;
-        # it does not spawn the quarantined Python demo runner or invent stage
-        # output on the caller's behalf.
+        # Ordinary runs belong to the external agent control plane.  A caller
+        # that names ``agent_id`` is already an agent and receives the durable
+        # manifest handoff.  The Backlot UI omits it, which asks this endpoint
+        # to launch the operator-configured agent process instead of claiming
+        # work and silently dropping the handoff on the browser floor.
+        explicit_agent_id = str(agent_id or "").strip()
+        auto_launch = not explicit_agent_id
+        requested_agent_id = explicit_agent_id or configured_agent_id()
+        launch_configuration = agent_command_status() if auto_launch else None
         try:
             context = await asyncio.to_thread(load_manifest_stage_context, project_dir)
         except ManifestExecutionError as exc:
@@ -1547,6 +1306,45 @@ def create_app() -> FastAPI:
                     + scope_detail
                 ),
             )
+        if auto_launch and launch_configuration and not launch_configuration.get("valid"):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "The configured external agent command is invalid. "
+                    f"Fix {launch_configuration.get('error') or 'OPENMONTAGE_AGENT_COMMAND'} "
+                    "before running this project."
+                ),
+            )
+        if auto_launch and launch_configuration and not launch_configuration.get("configured"):
+            # Do not claim a fresh run when there is no process we can start.
+            # An existing live lease is handled idempotently below, so an
+            # already-running external agent remains observable from Backlot.
+            claim = context.order.get("claim") or {}
+            expires_raw = claim.get("lease_expires_at")
+            try:
+                expires = (
+                    datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+                    if expires_raw
+                    else None
+                )
+                if expires is not None and expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                expires = None
+            live_claim = bool(
+                claim.get("claimed_by")
+                and expires is not None
+                and expires > datetime.now(timezone.utc)
+            )
+            if not live_claim:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "No production agent is configured for Run Pipeline. "
+                        "Set OPENMONTAGE_AGENT_COMMAND to the trusted agent command "
+                        "(and optionally OPENMONTAGE_AGENT_ID), then retry."
+                    ),
+                )
         # Remember whether this request already observed a live lease owned
         # by the same caller.  claim_work_order intentionally renews such a
         # lease idempotently; this flag makes that behavior explicit to API
@@ -1565,7 +1363,7 @@ def create_app() -> FastAPI:
                 pre_expires = pre_expires.replace(tzinfo=timezone.utc)
             pre_replay = bool(
                 pre_owner
-                and str(pre_owner) == str(agent_id).strip()
+                and str(pre_owner) == requested_agent_id
                 and pre_expires is not None
                 and pre_expires > datetime.now(timezone.utc)
             )
@@ -1575,7 +1373,7 @@ def create_app() -> FastAPI:
             order = await asyncio.to_thread(
                 claim_work_order,
                 project_dir,
-                agent_id,
+                requested_agent_id,
                 lease_seconds=DEFAULT_LEASE_SECONDS,
             )
         except WorkOrderConflictError as exc:
@@ -1604,19 +1402,32 @@ def create_app() -> FastAPI:
                     existing_context = await asyncio.to_thread(
                         load_manifest_stage_context, project_dir
                     )
+                    launch_info = {
+                        "status": "already_running",
+                        "agent_id": owner,
+                        "run_id": existing.get("run_id"),
+                    }
+                    process_record = read_agent_process(project_dir)
+                    if (
+                        isinstance(process_record, dict)
+                        and str(process_record.get("run_id") or "")
+                        == str(existing.get("run_id") or "")
+                    ):
+                        launch_info = {**process_record, "status": "already_running"}
                     _invalidate_summary(project_id)
                     hub.publish(project_id)
                     return {
                         "ok": True,
                         "project_id": project_id,
-                        "execution_mode": "manifest_agent",
+                        "execution_mode": "external_agent" if auto_launch else "manifest_agent",
                         "agent_id": owner,
-                        "requested_agent_id": agent_id,
+                        "requested_agent_id": requested_agent_id,
                         "idempotent_replay": True,
                         "next_stage": existing.get("next_stage"),
                         "stage_skill": existing_context.director_skill,
                         "work_order": existing,
                         "execution": existing_context.as_dict(),
+                        "agent_launch": launch_info,
                     }
             except (ManifestExecutionError, WorkOrderStateError, WorkOrderValidationError, ValueError):
                 # If the lease expired or the run became terminal between the
@@ -1626,18 +1437,81 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (WorkOrderStateError, WorkOrderValidationError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if auto_launch and pre_replay:
+            launch_info = {
+                "status": "already_running",
+                "agent_id": requested_agent_id,
+                "run_id": order.get("run_id"),
+            }
+            process_record = read_agent_process(project_dir)
+            if (
+                isinstance(process_record, dict)
+                and str(process_record.get("run_id") or "")
+                == str(order.get("run_id") or "")
+            ):
+                launch_info = {**process_record, "status": "already_running"}
+            execution_mode = "external_agent"
+        elif auto_launch:
+            try:
+                launch = await asyncio.to_thread(
+                    launch_agent,
+                    project_dir,
+                    order,
+                    agent_id=requested_agent_id,
+                    backlot_url=str(request.base_url).rstrip("/"),
+                )
+            except (AgentConfigurationError, AgentLaunchError) as exc:
+                # A claimed-but-unlaunched run is worse than a visible setup
+                # error: release the lease so the operator can correct the
+                # command and retry without waiting five minutes.
+                try:
+                    await asyncio.to_thread(
+                        release_work_order,
+                        project_dir,
+                        requested_agent_id,
+                        reset_stage=True,
+                    )
+                except (WorkOrderConflictError, WorkOrderStateError, WorkOrderValidationError):
+                    pass
+                _invalidate_summary(project_id)
+                hub.publish(project_id)
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"External agent could not be started: {exc}",
+                ) from exc
+            launch_info = launch.as_dict()
+            execution_mode = "external_agent"
+        else:
+            launch_info = {
+                "status": "handoff",
+                "agent_id": requested_agent_id,
+                "run_id": order.get("run_id"),
+                "message": "Manifest handoff returned to the explicitly named agent.",
+            }
+            execution_mode = "manifest_agent"
+        # Claiming can update the durable state observed by the execution
+        # context.  Refresh it before returning so the UI has the same stage
+        # and lease view as the work-order payload.
+        try:
+            context = await asyncio.to_thread(load_manifest_stage_context, project_dir)
+        except ManifestExecutionError:
+            # The claim itself is already durable; retain the pre-claim
+            # manifest contract if a concurrent file update makes this read
+            # transiently unavailable.
+            pass
         _invalidate_summary(project_id)
         hub.publish(project_id)
         return {
             "ok": True,
             "project_id": project_id,
-            "execution_mode": "manifest_agent",
-            "agent_id": agent_id,
+            "execution_mode": execution_mode,
+            "agent_id": requested_agent_id,
             "idempotent_replay": pre_replay,
             "next_stage": order.get("next_stage"),
             "stage_skill": context.director_skill,
             "work_order": order,
             "execution": context.as_dict(),
+            "agent_launch": launch_info,
         }
 
     @app.post("/api/project/{project_id}/variant")
@@ -1874,10 +1748,10 @@ def create_app() -> FastAPI:
                 notes=request.notes,
                 agent_id=request.agent_id,
             )
-        except (WorkOrderStateError, WorkOrderValidationError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except WorkOrderConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (WorkOrderStateError, WorkOrderValidationError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except (ApprovalValidationError, CheckpointValidationError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1907,10 +1781,10 @@ def create_app() -> FastAPI:
                 notes=request.notes,
                 agent_id=request.agent_id,
             )
-        except (WorkOrderStateError, WorkOrderValidationError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except WorkOrderConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (WorkOrderStateError, WorkOrderValidationError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except (ApprovalValidationError, CheckpointValidationError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         _invalidate_summary(project_id)

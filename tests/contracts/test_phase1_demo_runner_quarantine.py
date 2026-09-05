@@ -43,18 +43,21 @@ def _marker(project: Path, *, pipeline_type: str = "animated-explainer") -> None
     )
 
 
-def test_regular_project_run_uses_manifest_agent_without_spawning_demo_runner(client, monkeypatch) -> None:
+def test_explicit_agent_run_returns_manifest_handoff_without_spawning_demo_runner(client, monkeypatch) -> None:
     test_client, projects = client
     created = test_client.post("/api/project/create", json={"title": "A real screen demo"})
     assert created.status_code == 200
 
     spawned = []
     monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: spawned.append((args, kwargs)))
-    response = test_client.post(f"/api/project/{created.json()['project_id']}/run")
+    response = test_client.post(
+        f"/api/project/{created.json()['project_id']}/run?agent_id=manual-agent"
+    )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["execution_mode"] == "manifest_agent"
+    assert payload["agent_id"] == "manual-agent"
     assert payload["next_stage"] == "idea"
     assert payload["stage_skill"] == "pipelines/screen-demo/idea-director"
     assert spawned == []

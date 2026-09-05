@@ -166,7 +166,21 @@ function renderSlate(s) {
         const response = await fetch(`/api/project/${encodedProjectId}/run`, { method: "POST" });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.ok !== true) {
-          throw new Error(data.detail || data.error || `HTTP ${response.status}`);
+          const detail = typeof data.detail === "string"
+            ? data.detail
+            : data.detail?.message || data.error || `HTTP ${response.status}`;
+          throw new Error(detail);
+        }
+        const launchStatus = data.agent_launch?.status
+          || (data.execution_mode === "internal_demo" ? "started" : null);
+        if (launchStatus === "started") {
+          runBtn.innerHTML = "<span>✓ Agent started</span>";
+        } else if (launchStatus === "already_running") {
+          runBtn.innerHTML = "<span>✓ Agent already running</span>";
+        } else if (launchStatus === "handoff") {
+          runBtn.innerHTML = "<span>✓ Handoff returned</span>";
+        } else {
+          throw new Error("Run Pipeline returned no agent launch status.");
         }
       } catch (e) {
         console.error("Run pipeline failed:", e);

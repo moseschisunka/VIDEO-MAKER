@@ -15,6 +15,7 @@
   <a href="#sponsors">Sponsors</a> &nbsp;·&nbsp;
   <a href="docs/PROVIDERS.md">Providers</a> &nbsp;·&nbsp;
   <a href="docs/PR_REVIEW_GUIDE.md">Review Guide</a> &nbsp;·&nbsp;
+  <a href="docs/AGENT_LAUNCH.md">Agent Launch</a> &nbsp;·&nbsp;
   <a href="AGENT_GUIDE.md">Agent Guide</a>
 </p>
 
@@ -136,7 +137,7 @@ Works with **Claude Code, Cursor, Copilot, Windsurf, Codex** — any AI coding a
 
 Chat tells you what the agent *said*. **Backlot shows you what the production is actually doing** — a local board that fills itself in as the pipeline runs. Stages light up, the script lands as a screenplay page, scene cards shimmer while assets generate, and every provider decision and dollar spent is on the wall.
 
-When a production starts, the agent opens it for you automatically. No setup, no reporting — the board derives everything from the project files the pipeline already writes.
+When a production starts, the configured agent opens it for you automatically. Backlot derives the live state from the project files the pipeline writes and reports a clear setup error when no agent command is configured. See `PERSONAL_SETUP.md` for the local launcher contract.
 
 <p align="center"><img src="docs/images/backlot/board-live.png" alt="Backlot live board — assets generating" width="920"></p>
 

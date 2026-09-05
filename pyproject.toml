@@ -72,9 +72,9 @@ include = [
 "styles" = ["*.yaml", "*.yml", "*.json"]
 "tools" = ["_comfyui/workflows/**/*", "video/vendor/**/*"]
 
-# The application still resolves these legacy root-relative paths at runtime.
-# Keep them in the wheel while the resource-root migration is handled in a
-# later packaging hardening task; PR-1001 tests the installed paths directly.
+# These release assets are shared by the Python tools and the Remotion
+# composer.  ``lib.paths.resource_path`` resolves them from the source root or
+# the conventional wheel install prefix at runtime.
 [tool.setuptools.data-files]
 "." = ["config.yaml"]
 "remotion-composer" = [

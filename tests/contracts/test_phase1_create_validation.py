@@ -62,6 +62,39 @@ def test_rejected_create_requests_leave_no_project(
     assert list(projects.iterdir()) == []
 
 
+@pytest.mark.parametrize("payload, field, expected", [
+    ({"tts_provider": "open-ai", "voice": "alloy"}, "voice_provider", "openai"),
+    ({"profile": "youtube_shorts"}, "output_profile", "youtube_shorts"),
+])
+def test_legacy_alias_without_canonical_field_overrides_default(client, payload, field, expected):
+    test_client, projects = client
+    response = test_client.post("/api/project/create", json={"title": "Legacy client", **payload})
+    assert response.status_code == 200, response.text
+    config = json.loads(
+        (projects / response.json()["project_id"] / "artifacts" / "project_config.json").read_text(encoding="utf-8")
+    )
+    assert config[field] == expected
+
+
+@pytest.mark.parametrize("action", ["approve", "revise"])
+def test_human_decision_conflicts_return_409(client, monkeypatch, action):
+    from lib.work_order import WorkOrderConflictError
+
+    test_client, _ = client
+    created = test_client.post("/api/project/create", json={"title": "Approval conflict"})
+    assert created.status_code == 200
+
+    def conflict(*args, **kwargs):
+        raise WorkOrderConflictError("another agent owns this run")
+
+    monkeypatch.setattr(server_mod, "decide_human_gate", conflict)
+    response = test_client.post(
+        f"/api/project/{created.json()['project_id']}/{action}", json={"stage": "idea"},
+    )
+    assert response.status_code == 409
+    assert "another agent" in response.json()["detail"]
+
+
 def test_valid_create_persists_every_explicit_selection(client) -> None:
     test_client, projects = client
     response = test_client.post(

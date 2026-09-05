@@ -40,7 +40,23 @@ Grab one free key to unlock illustrative visuals for topics that aren't real-foo
 
 ## How to make a video
 
-This is agent-driven, not scripted — you ask, the agent drives the pipeline. Per video:
+This is agent-driven, not scripted — you ask, the agent drives the pipeline. If
+you use the Backlot **Run Pipeline** button, configure the trusted local agent
+command first in `.env`:
+
+```dotenv
+OPENMONTAGE_AGENT_COMMAND=python -m my_openmontage_agent
+OPENMONTAGE_AGENT_ID=openmontage-agent
+```
+
+The command is started without a shell and receives the project, run, stage,
+Backlot URL, and a ready-to-forward prompt through `OPENMONTAGE_*` environment
+variables. Without this setting, Backlot leaves the work order queued and
+reports the setup step; it does not claim that a browser click started
+production. You can also continue the handoff from an external coding agent
+by calling `/run?agent_id=<your-id>`.
+
+Per video:
 
 1. Say what you want: topic, duration, tone, platform. Mention if you want a talking avatar vs. narrated visuals vs. real-footage documentary.
 2. The agent runs preflight, picks a pipeline from `pipeline_defs/`, and shows you the capability menu + voice/music/runtime choices.

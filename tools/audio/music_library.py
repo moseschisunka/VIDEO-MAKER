@@ -33,9 +33,11 @@ from tools.base_tool import (
     ToolTier,
 )
 from lib.music_contracts import normalize_music_provenance
+from lib.paths import runtime_root
 
-# Repository root: tools/audio/music_library.py -> parents[2]
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# User-provided music belongs to the writable checkout/runtime root, not the
+# installed package directory.
+_PROJECT_ROOT = runtime_root()
 
 # Common royalty-free audio container extensions a user might drop in.
 _AUDIO_EXTENSIONS = {

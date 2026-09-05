@@ -30,6 +30,7 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
+from lib.paths import resource_path
 
 
 class CompositionValidator(BaseTool):
@@ -147,6 +148,9 @@ class CompositionValidator(BaseTool):
                     if public.is_dir():
                         resolved = public
                         break
+                packaged_public = resource_path("remotion-composer/public")
+                if resolved is None and packaged_public.is_dir():
+                    resolved = packaged_public
                 assets_root = resolved or comp_path.parent
 
         errors: list[str] = []

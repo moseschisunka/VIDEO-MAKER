@@ -93,6 +93,12 @@ Python provides **tools and persistence only**. All intelligence lives in skill 
 
 OpenMontage does not call LLM APIs at runtime. The coding assistant running in the user's IDE _is_ the LLM. Tools that need generation (images, video, TTS) call domain-specific APIs directly (ElevenLabs, fal.ai, HeyGen, etc.), not general-purpose LLM endpoints.
 
+Backlot can optionally start the operator's external coding-agent/worker
+command for a manifest run (`OPENMONTAGE_AGENT_COMMAND`). This is a process
+bridge, not a Python production orchestrator: the child receives the durable
+project/run/stage handoff, then claims/heartbeats and writes artifacts through
+the existing agent-first contracts. See `docs/AGENT_LAUNCH.md`.
+
 ### 3. Dual-Provider Support
 
 Every capability must support both **API providers** (cloud, paid) and **local/open-source alternatives** (free, GPU-dependent). The selector pattern enforces this by routing to whatever is available.

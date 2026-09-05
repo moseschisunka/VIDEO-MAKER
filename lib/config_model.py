@@ -12,6 +12,8 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, Field
 
+from lib.paths import resource_path, runtime_root
+
 
 class BudgetMode(str, Enum):
     OBSERVE = "observe"
@@ -77,7 +79,7 @@ class OpenMontageConfig(BaseModel):
     def load(cls, config_path: Optional[Path] = None) -> "OpenMontageConfig":
         """Load config from YAML file. Falls back to defaults if file missing."""
         if config_path is None:
-            config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+            config_path = resource_path("config.yaml")
 
         if config_path.exists():
             with open(config_path, encoding="utf-8") as f:
@@ -89,6 +91,6 @@ class OpenMontageConfig(BaseModel):
     def resolve_path(self, key: str, project_root: Optional[Path] = None) -> Path:
         """Resolve a relative path from PathsConfig against project root."""
         if project_root is None:
-            project_root = Path(__file__).resolve().parent.parent
+            project_root = runtime_root()
         value = getattr(self.paths, key)
         return (project_root / value).resolve()

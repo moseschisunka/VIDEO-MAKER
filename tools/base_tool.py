@@ -25,6 +25,7 @@ from typing import Any, Callable, Optional
 
 from lib.secrets import redact_text
 from lib.observability import metrics
+from lib.paths import runtime_root
 
 
 def _load_dotenv() -> None:
@@ -34,7 +35,7 @@ def _load_dotenv() -> None:
     even when tools are imported directly without going through the registry.
     Only sets variables that are not already in the environment.
     """
-    env_path = Path(__file__).resolve().parent.parent / ".env"
+    env_path = runtime_root() / ".env"
     if not env_path.is_file():
         return
     import re

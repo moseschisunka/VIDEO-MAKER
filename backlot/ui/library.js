@@ -514,7 +514,17 @@ async function handleCreateProject(e) {
         const runResponse = await fetch(`/api/project/${data.project_id}/run`, { method: "POST" });
         const runData = await runResponse.json().catch(() => ({}));
         if (!runResponse.ok || runData.ok !== true) {
-          throw new Error(runData.detail || runData.error || `HTTP ${runResponse.status}`);
+          const detail = typeof runData.detail === "string"
+            ? runData.detail
+            : runData.detail?.message || runData.error || `HTTP ${runResponse.status}`;
+          throw new Error(detail);
+        }
+        // The API either started the configured external agent or returned a
+        // durable idempotent handoff. Keep the launch state available for a
+        // future caller instead of assuming a browser redirect itself started
+        // production.
+        if (!runData.agent_launch?.status && runData.execution_mode !== "internal_demo") {
+          throw new Error("Run Pipeline returned no agent launch status.");
         }
       } catch (runErr) {
         runError = runErr;

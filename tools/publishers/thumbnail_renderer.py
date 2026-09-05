@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.creator_profile import load_creator_profile
+from lib.paths import resource_path
 from schemas.artifacts import validate_artifact
 from tools.base_tool import (
     BaseTool,
@@ -72,7 +73,7 @@ def _logo_data_uri(profile: dict[str, Any]) -> str | None:
         return None
     path = Path(raw)
     if not path.is_absolute():
-        path = Path(__file__).resolve().parents[2] / path
+        path = resource_path(path)
     if not path.is_file():
         return None
     mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
