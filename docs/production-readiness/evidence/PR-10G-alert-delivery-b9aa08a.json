@@ -1,6 +1,8 @@
 {
   "gate_id": "PR-10G-OBS-03",
-  "status": "PASS",
+  "status": "SIMULATED_PASS",
+  "evidence_kind": "localhost_simulation",
+  "production_gate_satisfied": false,
   "alert_sink_provider": "OpenMontage External Paging Receiver (PagerDuty/Alertmanager API)",
   "alert_sink_endpoint": "http://127.0.0.1:50225/api/v2/alerts",
   "fired_rules": [
@@ -16,7 +18,7 @@
   "receipt_count": 2,
   "acknowledgement_recorded": true,
   "acknowledged_alert_id": "c632a8ea-cd68-406f-84c9-9a416b031233",
-  "acknowledged_by": "Moses Chisunka (OpenMontage Operator)",
+  "acknowledged_by": "simulation-agent",
   "tested_at": "2026-09-04T12:08:19.652041+00:00",
-  "reviewer": "Moses Chisunka (OpenMontage Operator / On-Call Reviewer)"
+  "reviewer": null
 }

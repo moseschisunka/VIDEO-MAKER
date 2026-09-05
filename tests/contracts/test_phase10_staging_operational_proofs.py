@@ -125,3 +125,32 @@ def test_directory_sha256_is_deterministic(tmp_path: Path):
     assert h1 == h2
     assert m1 == m2
     assert set(h1.keys()) == {"a.txt", "b.txt"}
+
+
+def test_generated_simulations_cannot_claim_production_or_human_review(tmp_path, monkeypatch):
+    from scripts import run_staging_operational_proofs as harness
+
+    # The CLI runs in its own process normally; restore its module/environment
+    # mutations when exercising it inside the shared pytest process.
+    for name in ("BACKLOT_HOST", "BACKLOT_AUTH_REQUIRED", "BACKLOT_AUTH_TOKEN", "OPENMONTAGE_PROJECTS_DIR"):
+        monkeypatch.setenv(name, "")
+    for name in ("PROJECTS_DIR", "_PROJECTS_ROOT_STR", "_watch_projects"):
+        monkeypatch.setattr(harness.server_mod, name, getattr(harness.server_mod, name))
+    sha = "a" * 40
+    historical = tmp_path / "PR-10G-rollback-b9aa08a.json"
+    historical.write_text("historical record", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["harness", "--candidate-sha", sha, "--output-dir", str(tmp_path)])
+    assert harness.main() == 0
+    reports = list(tmp_path.glob("*-aaaaaaa.json"))
+    assert len(reports) == 4
+    for path in reports:
+        result = json.loads(path.read_text(encoding="utf-8"))
+        assert result["status"] == "SIMULATED_PASS"
+        assert result["production_gate_satisfied"] is False
+        assert result["evidence_kind"] == "localhost_simulation"
+        assert result["reviewer"] is None
+        assert result["candidate_sha"] == sha
+        markdown = path.with_suffix(".md").read_text(encoding="utf-8")
+        assert "PR-10G remains unproven" in markdown
+        assert "Moses Chisunka" not in markdown
+    assert historical.read_text(encoding="utf-8") == "historical record"

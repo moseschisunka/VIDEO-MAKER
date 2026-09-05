@@ -1,4 +1,6 @@
-"""Execute the four environment-owned PR-10G operational proofs in the staging environment.
+"""Run localhost simulations of four PR-10G operational requirements.
+
+These results do not certify deployed infrastructure or human review.
 
 Proofs executed:
 1. SEC-06: Trusted Edge Boundary (origin cloaking, strict CORS, bearer auth, HTTP 429 rate limiting)
@@ -16,6 +18,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import socket
 import sys
 import tempfile
@@ -212,10 +215,12 @@ def run_sec06_proof(cluster: StagingCluster) -> dict[str, Any]:
     all_passed = all([t1_pass, t2_pass, t3_pass, t4_pass, t5_pass, t6_pass, t7_pass])
     return {
         "gate_id": "PR-10G-SEC-06",
-        "status": "PASS" if all_passed else "FAIL",
+        "status": "SIMULATED_PASS" if all_passed else "FAIL",
+        "evidence_kind": "localhost_simulation",
+        "production_gate_satisfied": False,
         "edge_provider": "OpenMontage-Edge/1.0",
         "edge_url": base_url,
-        "origin_cloaked": True,
+        "origin_cloaked": None,  # External origin reachability is not tested here.
         "unauthenticated_health_status": h_public.status_code,
         "missing_bearer_status": m_missing.status_code,
         "invalid_bearer_status": m_invalid.status_code,
@@ -227,7 +232,7 @@ def run_sec06_proof(cluster: StagingCluster) -> dict[str, Any]:
         "rate_limit_responses": burst_results,
         "rate_limited_count": rate_limited_count,
         "tested_at": datetime.now(timezone.utc).isoformat(),
-        "reviewer": "Moses Chisunka (OpenMontage Operator / Security Reviewer)",
+        "reviewer": None,
     }
 
 
@@ -272,7 +277,9 @@ def run_obs02_proof(cluster: StagingCluster) -> dict[str, Any]:
 
     return {
         "gate_id": "PR-10G-OBS-02",
-        "status": "PASS" if all_passed else "FAIL",
+        "status": "SIMULATED_PASS" if all_passed else "FAIL",
+        "evidence_kind": "localhost_simulation",
+        "production_gate_satisfied": False,
         "metrics_sink": "OpenMontage External Metrics SQLite TSDB",
         "scrape_endpoint": f"http://127.0.0.1:{cluster.backlot_port}/api/metrics/prometheus",
         "pre_restart_scrape_status": s1["status"],
@@ -287,7 +294,7 @@ def run_obs02_proof(cluster: StagingCluster) -> dict[str, Any]:
         "zero_secret_or_prompt_leaks": (durability_check["label_leak_count"] == 0),
         "restart_timestamp": restart_time,
         "tested_at": datetime.now(timezone.utc).isoformat(),
-        "reviewer": "Moses Chisunka (OpenMontage Operator / Observability Reviewer)",
+        "reviewer": None,
     }
 
 
@@ -325,7 +332,7 @@ def run_obs03_proof(cluster: StagingCluster) -> dict[str, Any]:
         ack_url = f"{sink_url}/{p0_alert['alert_id']}/ack"
         ack_resp = requests.post(
             ack_url,
-            json={"operator": "Moses Chisunka (OpenMontage Operator)"},
+            json={"operator": "simulation-agent"},
             timeout=5,
         )
         ack_result = ack_resp.json()
@@ -341,7 +348,9 @@ def run_obs03_proof(cluster: StagingCluster) -> dict[str, Any]:
 
     return {
         "gate_id": "PR-10G-OBS-03",
-        "status": "PASS" if all_passed else "FAIL",
+        "status": "SIMULATED_PASS" if all_passed else "FAIL",
+        "evidence_kind": "localhost_simulation",
+        "production_gate_satisfied": False,
         "alert_sink_provider": "OpenMontage External Paging Receiver (PagerDuty/Alertmanager API)",
         "alert_sink_endpoint": sink_url,
         "fired_rules": sorted(rule_ids),
@@ -351,9 +360,9 @@ def run_obs03_proof(cluster: StagingCluster) -> dict[str, Any]:
         "receipt_count": len(received_alerts),
         "acknowledgement_recorded": (ack_result is not None and ack_result.get("status") == "acknowledged"),
         "acknowledged_alert_id": p0_alert["alert_id"] if p0_alert else None,
-        "acknowledged_by": "Moses Chisunka (OpenMontage Operator)",
+        "acknowledged_by": "simulation-agent" if ack_result else None,
         "tested_at": datetime.now(timezone.utc).isoformat(),
-        "reviewer": "Moses Chisunka (OpenMontage Operator / On-Call Reviewer)",
+        "reviewer": None,
     }
 
 
@@ -442,7 +451,9 @@ def run_rec03_proof(cluster: StagingCluster) -> dict[str, Any]:
 
     return {
         "gate_id": "PR-10G-REC-03",
-        "status": "PASS" if all_passed else "FAIL",
+        "status": "SIMULATED_PASS" if all_passed else "FAIL",
+        "evidence_kind": "localhost_simulation",
+        "production_gate_satisfied": False,
         "deployment_target": "OpenMontage Staging Multi-Service Cluster",
         "baseline_digest": "sha256:baseline-b9aa08a-staging",
         "candidate_digest": "sha256:candidate-2791f1a-staging",
@@ -456,7 +467,7 @@ def run_rec03_proof(cluster: StagingCluster) -> dict[str, Any]:
         "zero_state_loss": state_identical,
         "zero_state_corruption": state_identical,
         "tested_at": datetime.now(timezone.utc).isoformat(),
-        "reviewer": "Moses Chisunka (OpenMontage Operator / Release Owner)",
+        "reviewer": None,
     }
 
 
@@ -509,7 +520,7 @@ Date: {date_str}
 
 ## 4. Decision
 
-**{rec03['status']}**. Rollback completed in {rec03['rollback_duration_seconds']:.2f}s with byte-for-byte state preservation verified across all project control files, checkpoints, and deliverables.
+**{rec03['status']}**. Local service restart preserved fixture bytes. No immutable image deployment or real rollback was executed. PR-10G remains unproven; human review is pending.
 """
     (evidence_dir / f"PR-10G-rollback-{candidate_sha[:7]}.md").write_text(rec03_md, encoding="utf-8")
 
@@ -545,7 +556,7 @@ Date: {date_str}
 
 ## 3. Decision
 
-**{sec06['status']}**. Deployed trusted edge successfully cloaks origin, enforces strict CORS without wildcard credentials, rejects missing/invalid bearer tokens, protects against credential reflection, and triggers HTTP 429 rate limiting under burst load.
+**{sec06['status']}**. Local proxy checks only. Real TLS, external origin isolation, and the deployed trusted edge remain untested. PR-10G remains unproven; human review is pending.
 """
     (evidence_dir / f"PR-10G-trusted-edge-{candidate_sha[:7]}.md").write_text(sec06_md, encoding="utf-8")
 
@@ -582,7 +593,7 @@ Date: {date_str}
 
 ## 3. Decision
 
-**{obs02['status']}**. External metrics store accurately aggregates Prometheus scrapes across application restarts, preserving cumulative SLO denominators and continuity without label secret leakage.
+**{obs02['status']}**. Local SQLite fixture scrapes only. Durable external aggregation and real process-restart SLO denominators remain unproven. PR-10G remains unproven; human review is pending.
 """
     (evidence_dir / f"PR-10G-metrics-durability-{candidate_sha[:7]}.md").write_text(obs02_md, encoding="utf-8")
 
@@ -617,7 +628,7 @@ Date: {date_str}
 
 ## 3. Decision
 
-**{obs03['status']}**. P0/P1 operational alerts successfully evaluated against `config/alerts.yaml` and delivered to the external paging sink in {obs03['delivery_latency_seconds']:.4f}s, with operator acknowledgement logged and verified.
+**{obs03['status']}**. Local mock receiver and automated acknowledgement only. No external paging delivery or human acknowledgement was verified. PR-10G remains unproven; human review is pending.
 """
     (evidence_dir / f"PR-10G-alert-delivery-{candidate_sha[:7]}.md").write_text(obs03_md, encoding="utf-8")
 
@@ -633,10 +644,12 @@ def main() -> int:
     parser.add_argument(
         "--candidate-sha",
         type=str,
-        default="b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e",
+        required=True,
         help="Commit SHA of candidate",
     )
     args = parser.parse_args()
+    if not re.fullmatch(r"[0-9a-f]{40}", args.candidate_sha):
+        parser.error("--candidate-sha must be a full 40-character lowercase commit SHA")
 
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -677,6 +690,11 @@ def main() -> int:
             print("\nShutting down Staging Cluster...")
             cluster.stop_all()
 
+    # Bind every machine-readable result to the supplied candidate identity.
+    # The caller must retain checkout/diff evidence when testing uncommitted code.
+    for result in (sec06, obs02, obs03, rec03):
+        result["candidate_sha"] = candidate_sha
+
     # Write JSON evidence files
     (output_dir / f"PR-10G-trusted-edge-{short_sha}.json").write_text(json.dumps(sec06, indent=2), encoding="utf-8")
     (output_dir / f"PR-10G-metrics-durability-{short_sha}.json").write_text(json.dumps(obs02, indent=2), encoding="utf-8")
@@ -686,16 +704,9 @@ def main() -> int:
     # Update Markdown evidence files
     update_evidence_markdown_files(output_dir, sec06, obs02, obs03, rec03, candidate_sha)
 
-    if short_sha != "b9aa08a":
-        (output_dir / "PR-10G-trusted-edge-b9aa08a.json").write_text(json.dumps(sec06, indent=2), encoding="utf-8")
-        (output_dir / "PR-10G-metrics-durability-b9aa08a.json").write_text(json.dumps(obs02, indent=2), encoding="utf-8")
-        (output_dir / "PR-10G-alert-delivery-b9aa08a.json").write_text(json.dumps(obs03, indent=2), encoding="utf-8")
-        (output_dir / "PR-10G-rollback-b9aa08a.json").write_text(json.dumps(rec03, indent=2), encoding="utf-8")
-        update_evidence_markdown_files(output_dir, sec06, obs02, obs03, rec03, "b9aa08a8b5c3dcc95d5b7473bdb1ab003b0f3c9e")
-
-    all_passed = all([sec06["status"] == "PASS", obs02["status"] == "PASS", obs03["status"] == "PASS", rec03["status"] == "PASS"])
+    all_passed = all(result["status"] == "SIMULATED_PASS" for result in (sec06, obs02, obs03, rec03))
     print("\n======================================================================")
-    print(f"OVERALL STAGING PROOFS STATUS: {'PASS' if all_passed else 'FAIL'}")
+    print(f"LOCAL SIMULATION STATUS: {'SIMULATED_PASS' if all_passed else 'FAIL'}; PR-10G remains unproven")
     print("======================================================================")
     return 0 if all_passed else 1
 

@@ -1,6 +1,8 @@
 {
   "gate_id": "PR-10G-REC-03",
-  "status": "PASS",
+  "status": "SIMULATED_PASS",
+  "evidence_kind": "localhost_simulation",
+  "production_gate_satisfied": false,
   "deployment_target": "OpenMontage Staging Multi-Service Cluster",
   "baseline_digest": "sha256:baseline-b9aa08a-staging",
   "candidate_digest": "sha256:candidate-2791f1a-staging",
@@ -20,5 +22,5 @@
   "zero_state_loss": true,
   "zero_state_corruption": true,
   "tested_at": "2026-09-04T12:08:21.196361+00:00",
-  "reviewer": "Moses Chisunka (OpenMontage Operator / Release Owner)"
+  "reviewer": null
 }

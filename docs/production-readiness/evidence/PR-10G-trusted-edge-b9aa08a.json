@@ -1,9 +1,11 @@
 {
   "gate_id": "PR-10G-SEC-06",
-  "status": "PASS",
+  "status": "SIMULATED_PASS",
+  "evidence_kind": "localhost_simulation",
+  "production_gate_satisfied": false,
   "edge_provider": "OpenMontage-Edge/1.0",
   "edge_url": "http://127.0.0.1:36895",
-  "origin_cloaked": true,
+  "origin_cloaked": null,
   "unauthenticated_health_status": 200,
   "missing_bearer_status": 401,
   "invalid_bearer_status": 401,
@@ -24,5 +26,5 @@
   ],
   "rate_limited_count": 7,
   "tested_at": "2026-09-04T12:08:18.946175+00:00",
-  "reviewer": "Moses Chisunka (OpenMontage Operator / Security Reviewer)"
+  "reviewer": null
 }

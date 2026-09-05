@@ -1,6 +1,8 @@
 {
   "gate_id": "PR-10G-OBS-02",
-  "status": "PASS",
+  "status": "SIMULATED_PASS",
+  "evidence_kind": "localhost_simulation",
+  "production_gate_satisfied": false,
   "metrics_sink": "OpenMontage External Metrics SQLite TSDB",
   "scrape_endpoint": "http://127.0.0.1:41953/api/metrics/prometheus",
   "pre_restart_scrape_status": "PASS",
@@ -15,5 +17,5 @@
   "zero_secret_or_prompt_leaks": true,
   "restart_timestamp": 1788523698.9569776,
   "tested_at": "2026-09-04T12:08:19.642796+00:00",
-  "reviewer": "Moses Chisunka (OpenMontage Operator / Observability Reviewer)"
+  "reviewer": null
 }
