@@ -15,7 +15,7 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Frozen release candidate | None — `v1.0.0-rc2` is an experimental prerelease; candidate identity is not frozen across branch |
 | Production decision | Not eligible / Production locked |
 | Latest supported CI run | `33871877480` (`fe1d73a`) / `33870762963` (`03745d3`) — **1,309 passed** release-blocker contracts, **1,768 passed** offline regression tests, clean install, container/Remotion render, and Phase 10 SLO/load/staging harness all passed. Real environment-owned operational proofs remain required. |
-| Latest local code checkpoint | `6ec8d2f` — canonical TTS provider aliases across the Backlot boundary and internal runner; **1,313 passed, 5 skipped, 1 deselected, 1 warning** local release-blocker contracts. Supported CI publication and rerun are pending. |
+| Latest local code checkpoint | `15d15b8` — canonical TTS provider aliases plus fail-closed localhost evidence classification; **1,313 passed, 5 skipped, 1 deselected, 1 warning** in the preceding local release-blocker run. Supported CI publication and rerun are pending. |
 | Latest local release-blocker rerun | `15d15b8` — **1,313 passed, 5 skipped, 1 deselected, 1 failed** (`PERF-01` Windows diagnostic); isolated SLO contracts pass **6/6**. Supported CI remains authoritative. |
 | Latest local offline regression | `15d15b8` — **1,772 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed**. Supported Ubuntu CI remains authoritative. |
 | Latest HyperFrames CI run | `33810441833` (`beec14f`) — opt-in HyperFrames QA suite passed (**2 passed, 1 skipped, 1 warning** in 2m43s; artifact `openmontage-hyperframes-qa`). |
