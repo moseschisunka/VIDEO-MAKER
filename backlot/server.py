@@ -33,6 +33,7 @@ from lib.checkpoint import CheckpointValidationError, init_project, read_checkpo
 from lib.demo_runner import RUNNER_KIND, is_internal_demo_project
 from lib.pipeline_release import pipeline_release_metadata, studio_release_status
 from lib.project_identity import validate_project_identity
+from lib.voice_contracts import canonical_voice_provider
 from lib.manifest_executor import (
     ManifestExecutionError,
     is_certified_executor_order,
@@ -422,6 +423,14 @@ def _normalise_create_request(request: CreateProjectRequest) -> dict:
     voice = str(request.voice or "").strip()
     requested_provider = str(request.voice_provider or "").strip().lower()
     alias_provider = str(request.tts_provider or "").strip().lower()
+    # Compare provider aliases by identity, not spelling.  The public request
+    # exposes ``voice_provider`` while older clients still send
+    # ``tts_provider``; ``edge`` and ``edge_tts`` must not be rejected as a
+    # false conflict before the manifest is even created.
+    if requested_provider:
+        requested_provider = canonical_voice_provider(requested_provider)
+    if alias_provider:
+        alias_provider = canonical_voice_provider(alias_provider)
     # ``tts_provider`` was the name used by the original Backlot client while
     # ``voice_provider`` is the public request name.  Accept either, but do
     # not silently choose one when a caller sends conflicting selections.

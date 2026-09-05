@@ -123,3 +123,19 @@ def test_valid_create_persists_every_explicit_selection(client) -> None:
         stage["name"] for stage in load_pipeline_readonly("screen-demo")["stages"]
     ]
     assert work_order["selections"]["output_profile"] == "youtube_landscape"
+
+
+def test_provider_aliases_do_not_create_a_false_conflict(client) -> None:
+    test_client, projects = client
+
+    response = test_client.post(
+        "/api/project/create",
+        json={"title": "Alias-compatible voice", "tts_provider": "edge"},
+    )
+
+    assert response.status_code == 200, response.text
+    project = projects / response.json()["project_id"]
+    proposal = json.loads((project / "artifacts" / "proposal_packet.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "artifacts" / "project_config.json").read_text(encoding="utf-8"))
+    assert proposal["voice_provider"] == "edge_tts"
+    assert config["tts_provider"] == "edge_tts"
