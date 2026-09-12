@@ -980,7 +980,7 @@ function renderActivity(s) {
       open.set(key, slot);
     } else {
       const slot = open.get(key);
-      if (slot) {
+      if (slot && (ev.event === "finish" || ev.event === "error")) {
         slot.count -= 1;
         if (slot.count <= 0) open.delete(key);
       }
@@ -996,13 +996,16 @@ function renderActivity(s) {
         `${ev.success === false ? "✕" : "✓"}${ev.duration_s != null ? ` ${ev.duration_s.toFixed ? ev.duration_s.toFixed(1) : ev.duration_s}s` : ""}${ev.cost_usd ? ` ${fmtMoney(ev.cost_usd)}` : ""}`);
     } else if (ev.event === "error") {
       statusEl = el("span", { class: "status err" }, "✕");
-    } else {
+    } else if (ev.event === "start") {
       statusEl = el("span", { class: "status run" }, "● running");
+    } else {
+      const label = String(ev.event || "event").replace(/_/g, " ");
+      statusEl = el("span", { class: "status" }, label);
     }
     body.append(el("div", { class: "act-row" },
       el("span", { class: "t" }, fmtClock(ev.ts)),
-      el("span", { class: "tool" }, ev.tool || ""),
-      el("span", { class: "target" }, ev.scene_id || ""),
+      el("span", { class: "tool" }, ev.tool || (ev.project_id ? "project" : "")),
+      el("span", { class: "target" }, ev.scene_id || ev.title || ""),
       statusEl,
     ));
   }

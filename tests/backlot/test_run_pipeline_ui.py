@@ -116,6 +116,9 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
 
                     page.on("dialog", dismiss_dialog)
                     page.goto(f"{base_url}/p/{project_id}", wait_until="networkidle")
+                    activity_panel = page.locator("aside .panel").filter(has_text="Activity")
+                    expect(activity_panel.locator(".status")).to_have_text("created")
+                    expect(activity_panel.locator(".status.run")).to_have_count(0)
                     run_button = page.get_by_title("Run automated video production")
                     expect(run_button).to_contain_text("Run Pipeline")
                     run_url = f"{base_url}/api/project/{project_id}/run"
