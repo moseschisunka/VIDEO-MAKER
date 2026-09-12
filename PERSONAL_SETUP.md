@@ -45,9 +45,17 @@ you use the Backlot **Run Pipeline** button, configure the trusted local agent
 command first in `.env`:
 
 ```dotenv
-OPENMONTAGE_AGENT_COMMAND=python -m my_openmontage_agent
+OPENMONTAGE_AGENT_COMMAND=python -m lib.local_director codex
 OPENMONTAGE_AGENT_ID=openmontage-agent
 ```
+
+Use `claude` or `antigravity` in the command to select Claude Code or Google
+Antigravity instead. The selected CLI must already be installed, on `PATH`, and
+signed in; restart Backlot after switching. The adapter keeps model API keys
+out of the director process, so local directors use their own account sign-in.
+OpenMontage production tools still load media-provider credentials from `.env`.
+The adapter does not bypass each CLI's permission controls. See
+`docs/AGENT_LAUNCH.md` for the launch and permission contract.
 
 The command is started without a shell and receives the project, run, stage,
 Backlot URL, and a ready-to-forward prompt through `OPENMONTAGE_*` environment

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from backlot import server as server_mod
 from lib import agent_launcher
+from lib import local_director
 from lib.agent_launcher import (
     AgentLaunch,
     AgentLaunchError,
@@ -47,6 +48,24 @@ def test_missing_agent_command_does_not_claim_or_fake_a_run(client, monkeypatch)
 
     assert response.status_code == 503
     assert "OPENMONTAGE_AGENT_COMMAND" in response.json()["detail"]
+    order = json.loads((projects / project_id / "work_order.json").read_text(encoding="utf-8"))
+    assert order["status"] == "queued"
+    assert order["claim"]["claimed_by"] is None
+    assert order["stages"][0]["status"] == "ready"
+
+
+def test_missing_local_director_cli_does_not_claim_a_run(client, monkeypatch) -> None:
+    test_client, projects = client
+    monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m lib.local_director claude")
+    monkeypatch.setattr(local_director.shutil, "which", lambda _name: None)
+    created = test_client.post("/api/project/create", json={"title": "Local director setup"})
+    assert created.status_code == 200, created.text
+    project_id = created.json()["project_id"]
+
+    response = test_client.post(f"/api/project/{project_id}/run")
+
+    assert response.status_code == 503
+    assert "claude" in response.json()["detail"]
     order = json.loads((projects / project_id / "work_order.json").read_text(encoding="utf-8"))
     assert order["status"] == "queued"
     assert order["claim"]["claimed_by"] is None
@@ -235,6 +254,82 @@ def test_launcher_uses_shell_free_argv_and_persists_record(tmp_path: Path, monke
     record = json.loads((tmp_path / "agent_process.json").read_text(encoding="utf-8"))
     assert record["status"] == "started"
     assert record["command"] == ["python", "-m", "my_agent"]
+
+
+def test_local_director_command_status_rejects_missing_cli(monkeypatch) -> None:
+    monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m lib.local_director claude")
+    monkeypatch.setattr(local_director.shutil, "which", lambda _name: None)
+
+    status = agent_launcher.agent_command_status()
+
+    assert status["configured"] is True
+    assert status["valid"] is False
+    assert status["director"] == "claude"
+    assert "claude" in status["error"]
+
+
+@pytest.mark.parametrize(
+    ("director", "expected_executable", "expected_args", "prompt_on_stdin"),
+    [
+        ("codex", "codex.exe", ["exec", "--sandbox", "workspace-write", "--cd"], True),
+        ("claude", "claude.exe", ["-p"], False),
+        ("antigravity", "agy.exe", ["-p"], False),
+    ],
+)
+def test_local_director_uses_account_sign_in_and_receives_prompt(
+    director: str,
+    expected_executable: str,
+    expected_args: list[str],
+    prompt_on_stdin: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda command: f"C:/tools/{expected_executable}"
+        if command in {
+            local_director.DIRECTOR_EXECUTABLES[director],
+            f"{local_director.DIRECTOR_EXECUTABLES[director]}.exe",
+        }
+        else None,
+    )
+
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+        captured["kwargs"] = kwargs
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(local_director.subprocess, "run", fake_run)
+    source_env = {
+        "OPENMONTAGE_AGENT_PROMPT": "produce the requested local video",
+        "OPENAI_API_KEY": "openai-production-key",
+        "ANTHROPIC_API_KEY": "anthropic-production-key",
+        "ANTHROPIC_AUTH_TOKEN": "anthropic-api-token",
+        "GEMINI_API_KEY": "gemini-production-key",
+        "GOOGLE_API_KEY": "google-production-key",
+        "BACKLOT_AUTH_TOKEN": "backlot-runtime-token",
+    }
+
+    result = local_director.run_local_director(director, env=source_env)
+
+    assert result == 0
+    assert captured["argv"][0].endswith(expected_executable)
+    if director == "codex":
+        assert captured["argv"][1:5] == expected_args
+        assert captured["argv"][5] == str(Path.cwd().resolve())
+        assert captured["argv"][6] == "-"
+    else:
+        assert captured["argv"][1:2] == expected_args
+        assert captured["argv"][2] == source_env["OPENMONTAGE_AGENT_PROMPT"]
+    assert captured["kwargs"]["input"] == (
+        source_env["OPENMONTAGE_AGENT_PROMPT"] if prompt_on_stdin else None
+    )
+    assert captured["kwargs"]["shell"] is False
+    for credential in local_director.MODEL_API_CREDENTIALS:
+        assert credential not in captured["kwargs"]["env"]
+    assert captured["kwargs"]["env"]["BACKLOT_AUTH_TOKEN"] == "backlot-runtime-token"
+    assert source_env["OPENAI_API_KEY"] == "openai-production-key"
 
 
 def test_launcher_can_start_a_real_short_lived_process(tmp_path: Path, monkeypatch) -> None:

@@ -26,6 +26,11 @@ from typing import Any
 
 from lib.paths import REPO_ROOT, runtime_root
 from lib.secrets import redact_text
+from lib.local_director import (
+    LocalDirectorError,
+    director_from_command,
+    find_director_executable,
+)
 
 AGENT_COMMAND_ENV = "OPENMONTAGE_AGENT_COMMAND"
 AGENT_ID_ENV = "OPENMONTAGE_AGENT_ID"
@@ -109,10 +114,23 @@ def agent_command_status() -> dict[str, Any]:
             "valid": True,
             "agent_id": configured_agent_id(),
         }
+    director = director_from_command(argv)
+    if director:
+        try:
+            find_director_executable(director)
+        except LocalDirectorError as exc:
+            return {
+                "configured": True,
+                "valid": False,
+                "agent_id": configured_agent_id(),
+                "director": director,
+                "error": str(exc),
+            }
     return {
         "configured": True,
         "valid": True,
         "agent_id": configured_agent_id(),
+        **({"director": director} if director else {}),
         # Keep diagnostics useful without persisting environment secrets.
         "command": [redact_text(part) for part in argv],
     }

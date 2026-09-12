@@ -174,6 +174,7 @@ def test_release_assets_are_present_in_built_wheel(
                 "import json, sys; from pathlib import Path; "
                 f"sys.path.extend({json.dumps(probe_dependency_paths)}); "
                 "from lib.config_model import OpenMontageConfig; "
+                "from lib.local_director import DIRECTOR_EXECUTABLES; "
                 "from lib.paths import PROJECTS_DIR, resource_path; "
                 "cfg=OpenMontageConfig.load(); "
                 "print(json.dumps({"
@@ -184,7 +185,8 @@ def test_release_assets_are_present_in_built_wheel(
                 "'cwd_projects': str(Path.cwd().resolve() / 'projects'), "
                 "'output': str(cfg.resolve_path('output_dir')), "
                 "'cwd_output': str(Path.cwd().resolve() / 'output'), "
-                "'default_fps': cfg.output.default_fps}))"
+                "'default_fps': cfg.output.default_fps, "
+                "'local_directors': sorted(DIRECTOR_EXECUTABLES)}))"
             ),
         ],
         cwd=tmp_path,
@@ -204,6 +206,7 @@ def test_release_assets_are_present_in_built_wheel(
     assert probe_payload["projects"] == probe_payload["cwd_projects"]
     assert probe_payload["output"] == probe_payload["cwd_output"]
     assert probe_payload["default_fps"] == 30
+    assert probe_payload["local_directors"] == ["antigravity", "claude", "codex"]
 
 
 @pytest.mark.skipif(
