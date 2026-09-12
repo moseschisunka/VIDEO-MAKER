@@ -137,10 +137,7 @@ demo-list: ensure-venv
 	$(RUN_PYTHON) render_demo.py --list
 
 lint: ensure-venv
-	$(RUN_PYTHON) -m py_compile tools/base_tool.py
-	$(RUN_PYTHON) -m py_compile tools/tool_registry.py
-	$(RUN_PYTHON) -m py_compile tools/cost_tracker.py
-	$(RUN_PYTHON) -m py_compile tools/analysis/composition_validator.py
+	$(RUN_PYTHON) -m compileall -q backlot config content_templates lib pipeline_defs profiles schemas scripts skills styles tests tools
 
 clean:
 	$(BASE_PYTHON) -c "import pathlib, shutil; excluded=[pathlib.Path('$(VENV_DIR)'), pathlib.Path('venv')]; skip=lambda p: any(p == root or root in p.parents for root in excluded); roots=[p for p in pathlib.Path('.').rglob('__pycache__') if not skip(p)]; [shutil.rmtree(p) for p in roots]; files=[p for p in pathlib.Path('.').rglob('*.pyc') if not skip(p)]; [p.unlink() for p in files]"

@@ -115,9 +115,13 @@ def test_creation_wizard_uses_authoritative_catalogs_and_fails_closed() -> None:
     assert 'Current production options could not be loaded. Retry before creating a video.' in library_js
     assert 'const pipelines = availablePipelines;' in library_js
     assert 'const playbooks = compatiblePlaybooksForSelectedPipeline();' in library_js
-    assert 'const voices = availableVoices;' in library_js
     assert 'const validPipelines = Array.isArray(pipelines)' in library_js
-    assert 'const validVoices = Array.isArray(voices)' in library_js
+    assert 'getJSON("/api/voice-providers")' in library_js
+    assert 'const validVoiceProviders = Array.isArray(voiceCatalog?.providers)' in library_js
+    assert 'availableVoiceProviders = validVoiceProviders;' in library_js
+    assert 'availableVoices = Array.isArray(provider?.voices) ? provider.voices : [];' in library_js
+    assert 'select.disabled = !provider || !provider.available || availableVoices.length === 0;' in library_js
+    assert 'if (!selectedProvider || !selectedProvider.voices.some((item) => item.id === voice))' in library_js
     assert 'normalizeWizardSelections();' in library_js
     assert 'compatiblePlaybooksForSelectedPipeline' in library_js
     assert 'function projectStageCount(project)' in library_js
