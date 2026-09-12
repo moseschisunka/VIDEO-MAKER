@@ -1410,27 +1410,27 @@ def create_app() -> FastAPI:
                     "before running this project."
                 ),
             )
+        claim = context.order.get("claim") or {}
+        expires_raw = claim.get("lease_expires_at")
+        try:
+            expires = (
+                datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+                if expires_raw
+                else None
+            )
+            if expires is not None and expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            expires = None
+        live_owner = claim.get("claimed_by")
+        live_claim = bool(
+            live_owner
+            and expires is not None
+            and expires > datetime.now(timezone.utc)
+        )
         if auto_launch and launch_configuration and not launch_configuration.get("configured"):
             # Do not claim a fresh run when there is no process we can start.
-            # An existing live lease is handled idempotently below, so an
-            # already-running external agent remains observable from Backlot.
-            claim = context.order.get("claim") or {}
-            expires_raw = claim.get("lease_expires_at")
-            try:
-                expires = (
-                    datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
-                    if expires_raw
-                    else None
-                )
-                if expires is not None and expires.tzinfo is None:
-                    expires = expires.replace(tzinfo=timezone.utc)
-            except (TypeError, ValueError):
-                expires = None
-            live_claim = bool(
-                claim.get("claimed_by")
-                and expires is not None
-                and expires > datetime.now(timezone.utc)
-            )
+            # An existing lease remains observable from Backlot.
             if not live_claim:
                 raise HTTPException(
                     status_code=503,
@@ -1440,30 +1440,54 @@ def create_app() -> FastAPI:
                         "(and optionally OPENMONTAGE_AGENT_ID), then retry."
                     ),
                 )
-        # Remember whether this request already observed a live lease owned
-        # by the same caller.  claim_work_order intentionally renews such a
-        # lease idempotently; this flag makes that behavior explicit to API
-        # clients without creating a second run.
-        pre_replay = False
-        try:
-            pre_claim = context.order.get("claim") or {}
-            pre_owner = pre_claim.get("claimed_by")
-            pre_expires_raw = pre_claim.get("lease_expires_at")
-            pre_expires = (
-                datetime.fromisoformat(str(pre_expires_raw).replace("Z", "+00:00"))
-                if pre_expires_raw
-                else None
-            )
-            if pre_expires is not None and pre_expires.tzinfo is None:
-                pre_expires = pre_expires.replace(tzinfo=timezone.utc)
-            pre_replay = bool(
-                pre_owner
-                and str(pre_owner) == requested_agent_id
-                and pre_expires is not None
-                and pre_expires > datetime.now(timezone.utc)
-            )
-        except (TypeError, ValueError):
-            pre_replay = False
+
+        def replay_payload(order: dict[str, Any], stage_context: Any, owner: str) -> dict[str, Any]:
+            launch_info = {
+                "status": "already_running",
+                "agent_id": owner,
+                "run_id": order.get("run_id"),
+            }
+            if auto_launch:
+                process_record = read_agent_process(project_dir)
+                if (
+                    isinstance(process_record, dict)
+                    and str(process_record.get("run_id") or "")
+                    == str(order.get("run_id") or "")
+                ):
+                    launch_info = {**process_record, "status": "already_running"}
+            elif owner == requested_agent_id:
+                launch_info = {
+                    "status": "handoff",
+                    "agent_id": requested_agent_id,
+                    "run_id": order.get("run_id"),
+                    "message": "Manifest handoff returned to the explicitly named agent.",
+                }
+            response = {
+                "ok": True,
+                "project_id": project_id,
+                "execution_mode": "external_agent" if auto_launch else "manifest_agent",
+                "agent_id": owner,
+                "idempotent_replay": True,
+                "next_stage": order.get("next_stage"),
+                "stage_skill": stage_context.director_skill,
+                "work_order": order,
+                "execution": stage_context.as_dict(),
+                "agent_launch": launch_info,
+            }
+            if owner != requested_agent_id:
+                response["requested_agent_id"] = requested_agent_id
+            return response
+
+        active_replay = bool(
+            live_claim
+            and context.order.get("status") not in {"completed", "cancelled"}
+        )
+        if active_replay:
+            # Run is a start/handoff request, not a lease heartbeat. Replaying
+            # it must not rewrite the work order or reload an unchanged
+            # manifest context; agents renew leases through /heartbeat.
+            return replay_payload(context.order, context, str(live_owner))
+
         try:
             order = await asyncio.to_thread(
                 claim_work_order,
@@ -1497,33 +1521,9 @@ def create_app() -> FastAPI:
                     existing_context = await asyncio.to_thread(
                         load_manifest_stage_context, project_dir
                     )
-                    launch_info = {
-                        "status": "already_running",
-                        "agent_id": owner,
-                        "run_id": existing.get("run_id"),
-                    }
-                    process_record = read_agent_process(project_dir)
-                    if (
-                        isinstance(process_record, dict)
-                        and str(process_record.get("run_id") or "")
-                        == str(existing.get("run_id") or "")
-                    ):
-                        launch_info = {**process_record, "status": "already_running"}
                     _invalidate_summary(project_id)
                     hub.publish(project_id)
-                    return {
-                        "ok": True,
-                        "project_id": project_id,
-                        "execution_mode": "external_agent" if auto_launch else "manifest_agent",
-                        "agent_id": owner,
-                        "requested_agent_id": requested_agent_id,
-                        "idempotent_replay": True,
-                        "next_stage": existing.get("next_stage"),
-                        "stage_skill": existing_context.director_skill,
-                        "work_order": existing,
-                        "execution": existing_context.as_dict(),
-                        "agent_launch": launch_info,
-                    }
+                    return replay_payload(existing, existing_context, str(owner))
             except (ManifestExecutionError, WorkOrderStateError, WorkOrderValidationError, ValueError):
                 # If the lease expired or the run became terminal between the
                 # conflict and this read, preserve the original conflict
@@ -1532,21 +1532,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (WorkOrderStateError, WorkOrderValidationError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if auto_launch and pre_replay:
-            launch_info = {
-                "status": "already_running",
-                "agent_id": requested_agent_id,
-                "run_id": order.get("run_id"),
-            }
-            process_record = read_agent_process(project_dir)
-            if (
-                isinstance(process_record, dict)
-                and str(process_record.get("run_id") or "")
-                == str(order.get("run_id") or "")
-            ):
-                launch_info = {**process_record, "status": "already_running"}
-            execution_mode = "external_agent"
-        elif auto_launch:
+        if auto_launch:
             try:
                 launch = await asyncio.to_thread(
                     launch_agent,
@@ -1601,7 +1587,7 @@ def create_app() -> FastAPI:
             "project_id": project_id,
             "execution_mode": execution_mode,
             "agent_id": requested_agent_id,
-            "idempotent_replay": pre_replay,
+            "idempotent_replay": False,
             "next_stage": order.get("next_stage"),
             "stage_skill": context.director_skill,
             "work_order": order,

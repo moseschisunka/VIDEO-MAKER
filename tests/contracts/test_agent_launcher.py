@@ -60,8 +60,10 @@ def test_configured_agent_is_launched_and_receives_run_identity(client, monkeypa
     project_id = created.json()["project_id"]
 
     captured = {}
+    launches = []
 
     def fake_launch(project_dir, order, *, agent_id, backlot_url):
+        launches.append(str(order["run_id"]))
         captured.update(
             {
                 "project_dir": project_dir,
@@ -92,6 +94,14 @@ def test_configured_agent_is_launched_and_receives_run_identity(client, monkeypa
     assert captured["agent_id"] == "configured-agent"
     assert captured["order"]["run_id"] == created.json()["work_order"]["run_id"]
     assert captured["backlot_url"].startswith("http://")
+
+    replay = test_client.post(f"/api/project/{project_id}/run")
+
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["idempotent_replay"] is True
+    assert replay.json()["work_order"]["claim"] == payload["work_order"]["claim"]
+    assert replay.json()["agent_launch"]["status"] == "already_running"
+    assert launches == [created.json()["work_order"]["run_id"]]
 
 
 def test_launch_failure_releases_the_claim_for_retry(client, monkeypatch) -> None:

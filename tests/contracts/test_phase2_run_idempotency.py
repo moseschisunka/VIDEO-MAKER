@@ -50,10 +50,11 @@ def test_repeated_run_requests_return_one_active_run(client, monkeypatch) -> Non
     first_order = first_payload["work_order"]
     assert first_payload["idempotent_replay"] is False
     assert first_order["claim"]["claimed_by"] == "agent-a"
+    first_claim = dict(first_order["claim"])
     first_lease_version = first_order["claim"]["lease_version"]
     first_run_id = first_order["run_id"]
 
-    # Same agent: claim renewal is idempotent and does not create a new run.
+    # A repeated start request is read-only; /heartbeat owns lease renewal.
     second = test_client.post(f"/api/project/{project_id}/run?agent_id=agent-a")
     assert second.status_code == 200, second.text
     second_payload = second.json()
@@ -61,6 +62,7 @@ def test_repeated_run_requests_return_one_active_run(client, monkeypatch) -> Non
     assert second_payload["idempotent_replay"] is True
     assert second_order["run_id"] == first_run_id
     assert second_order["claim"]["lease_version"] == first_lease_version
+    assert second_order["claim"] == first_claim
 
     # Different caller: the existing live lease is returned read-only rather
     # than producing a conflict that tempts the caller to launch a duplicate.
@@ -74,8 +76,9 @@ def test_repeated_run_requests_return_one_active_run(client, monkeypatch) -> Non
     assert third_order["run_id"] == first_run_id
     assert third_order["claim"]["claimed_by"] == "agent-a"
     assert third_order["claim"]["lease_version"] == first_lease_version
+    assert third_order["claim"] == first_claim
 
     persisted = json.loads(work_order_path.read_text(encoding="utf-8"))
     assert persisted["run_id"] == first_run_id
-    assert persisted["claim"]["claimed_by"] == "agent-a"
+    assert persisted["claim"] == first_claim
     assert spawned == []

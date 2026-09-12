@@ -108,7 +108,37 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                 try:
                     page = browser.new_page(viewport={"width": 1280, "height": 900})
                     dialogs: list[str] = []
+                    catalog_events: list[str] = []
                     browser_project_id = ""
+
+                    def is_catalog_url(url: str) -> bool:
+                        return any(
+                            url.split("?", 1)[0].endswith(path)
+                            for path in ("/api/pipelines", "/api/playbooks", "/api/voice-providers")
+                        )
+
+                    page.on(
+                        "request",
+                        lambda request: catalog_events.append(f"request {request.url}")
+                        if is_catalog_url(request.url)
+                        else None,
+                    )
+                    page.on(
+                        "response",
+                        lambda response: catalog_events.append(
+                            f"response {response.status} {response.url}"
+                        )
+                        if is_catalog_url(response.url)
+                        else None,
+                    )
+                    page.on(
+                        "requestfailed",
+                        lambda request: catalog_events.append(
+                            f"failed {request.url}: {request.failure}"
+                        )
+                        if is_catalog_url(request.url)
+                        else None,
+                    )
 
                     def dismiss_dialog(dialog) -> None:
                         dialogs.append(dialog.message)
@@ -137,8 +167,16 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
 
                     page.goto(base_url, wait_until="networkidle")
                     page.locator("#createVideoBtn").click()
-                    expect(page.locator("#voiceProviderSelect")).to_have_value("", timeout=5_000)
-                    expect(page.locator('#voiceProviderSelect option[value="openai"]')).to_be_disabled()
+                    openai_provider_option = page.locator(
+                        '#voiceProviderSelect option[value="openai"]'
+                    )
+                    try:
+                        expect(openai_provider_option).to_be_attached(timeout=15_000)
+                    except AssertionError as exc:
+                        raise AssertionError(
+                            f"Narration provider catalog did not load: {catalog_events}"
+                        ) from exc
+                    expect(openai_provider_option).to_be_disabled()
                     expect(page.locator("#submitCreateBtn")).to_be_disabled()
                     page.locator("#voiceProviderSelect").select_option("edge_tts")
                     expect(page.locator("#voiceSelect")).to_have_value("en-US-ChristopherNeural")
@@ -168,7 +206,7 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     assert create_request_body["voice"] == "en-US-ChristopherNeural"
                     assert create_response_info.value.status == 200
                     auto_run_response = auto_run_info.value
-                    assert auto_run_response.status == 200
+                    assert auto_run_response.status == 200, auto_run_response.text()
                     assert auto_run_response.url.startswith(f"{base_url}/api/project/")
                     page.wait_for_url(f"{base_url}/p/**", timeout=10_000)
                     browser_project_id = page.url.split("/p/", 1)[1].split("?", 1)[0].rstrip("/")

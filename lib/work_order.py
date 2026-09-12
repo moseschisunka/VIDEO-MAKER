@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -51,6 +52,7 @@ DEFAULT_LEASE_SECONDS = 300
 # unless they have an explicit heartbeat policy.
 MIN_LEASE_SECONDS = 1
 MAX_LEASE_SECONDS = 86_400
+_ATOMIC_REPLACE_RETRY_DELAYS = (0.01, 0.02, 0.04, 0.08)
 
 
 class WorkOrderValidationError(ValueError):
@@ -185,7 +187,17 @@ def _atomic_write_order(project_path: Path, order: Mapping[str, Any]) -> Path:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+        for delay in _ATOMIC_REPLACE_RETRY_DELAYS:
+            try:
+                os.replace(temporary, destination)
+                break
+            except PermissionError:
+                # Windows may briefly deny replacement while another reader
+                # has the destination open. Keep the atomic write, retrying
+                # only this transient sharing/permission failure.
+                time.sleep(delay)
+        else:
+            os.replace(temporary, destination)
     finally:
         try:
             temporary.unlink(missing_ok=True)

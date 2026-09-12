@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from lib import work_order as work_order_module
 from lib.checkpoint import init_project, write_checkpoint
 from lib.pipeline_loader import load_pipeline_readonly
 from lib.work_order import (
@@ -103,6 +104,28 @@ def _awaiting_idea_checkpoint(tmp_path: Path) -> None:
         human_approval_required=True,
         human_approved=False,
     )
+
+
+def test_atomic_work_order_write_retries_transient_replace_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_replace = work_order_module.os.replace
+    attempts = 0
+
+    def replace_after_two_sharing_errors(source, destination) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise PermissionError("destination is temporarily open")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(work_order_module.os, "replace", replace_after_two_sharing_errors)
+    monkeypatch.setattr(work_order_module.time, "sleep", lambda _delay: None)
+
+    path = work_order_module._atomic_write_order(tmp_path, {"status": "running"})
+
+    assert attempts == 3
+    assert json.loads(path.read_text(encoding="utf-8")) == {"status": "running"}
 
 
 def test_only_one_live_agent_can_claim_and_heartbeat(tmp_path: Path) -> None:
