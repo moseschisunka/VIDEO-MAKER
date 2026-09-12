@@ -12,15 +12,18 @@ and real external durable metrics aggregation (`OBS-02`).
 
 | Area | Result | Evidence |
 |---|---|---|
-| Offline release-blocker contracts | PASS (latest supported CI) | Supported run `34689946142` on `54dfe6b` — `.venv/bin/python -m pytest tests/contracts -m "release_blocker and not live_provider and not hyperframes_qa" -q` → **1,328 passed, 5 skipped, 1 deselected, 1 warning** in 170.52s; live-provider checks were skipped |
+| Offline release-blocker contracts | PASS (latest supported CI) | Supported run `34706752705` on `3f2fca1` — release-blocker contract job passed; live-provider checks were skipped. See [`PR-10G-3f2fca1-ci.md`](PR-10G-3f2fca1-ci.md). |
 | Historical local corrective rerun | PASS (Windows diagnostic) | Checkpoint `6ec8d2f` — the same release-blocker selector plus provider-alias regressions → **1,313 passed, 5 skipped, 1 deselected, 1 warning** in 336.48s |
-| Latest local release-blocker diagnostic | PARTIAL (Windows diagnostic; corrected run passes in supported CI) | Checkpoint `4677660` → **1,324 passed, 5 skipped, 1 deselected, 4 failed** in 497.93s. One failure was a stale source-string assertion, updated in `b5c97ce`; three Windows p95 SLO measurements exceeded their targets (`PERF-01` 2.153s/2.0s, `PERF-04` 0.907s/0.5s, `PERF-06` 2.196s/2.0s). Supported Ubuntu CI passes the corrected suite and Phase 10 SLO job. |
+| Historical local release-blocker diagnostic | PARTIAL (Windows diagnostic; corrected run passes in supported CI) | Checkpoint `4677660` → **1,324 passed, 5 skipped, 1 deselected, 4 failed** in 497.93s. One failure was a stale source-string assertion, updated in `b5c97ce`; three Windows p95 SLO measurements exceeded their targets (`PERF-01` 2.153s/2.0s, `PERF-04` 0.907s/0.5s, `PERF-06` 2.196s/2.0s). Supported Ubuntu CI passes the corrected suite and Phase 10 SLO job. |
 | Latest historical local offline regression | PASS (Windows diagnostic) | Checkpoint `15d15b8` → `python -m pytest tests -m "not live_provider and not hyperframes_qa" -q` → **1,772 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed** in 440.44s; latest supported result is in run `34689946142` |
+| Latest local Windows full offline regression | PARTIAL (performance-only misses) | Checkpoint `4e62fac` → **1,803 passed, 6 skipped, 3 deselected, 1 passing subtest, 3 failed** in 909.51s. Cold `/api/projects` was 2.241s/2.0s, `PERF-01` p95 was 2.205s/2.0s, and `PERF-07` p95 was 0.602s/0.5s. The cold project budget passed alone; the isolated Phase 10 SLO module passed (**6 passed**). No thresholds were changed. Full details: [`PR-10G-4e62fac-ci.md`](PR-10G-4e62fac-ci.md). |
 | Phase 10 targeted contracts | PASS | `python -m pytest --basetemp=tmp/pytest-phase10 -q` across all Phase 10 contract modules (clean install, static/container render, auth/security, privacy, observability, alerting, backup/restore, load/soak, operations drills, SLOs, dependencies, package data, runbooks, staging operational proofs) → **74 passed**; supported CI remains authoritative |
 | UTF-8 authored text and wizard integrity | PASS (local Windows, live UI, and supported CI) | `tests/contracts/test_phase10_text_encoding.py` verifies UTF-8 loading and the provider-specific voice catalog, while the browser regression verifies explicit provider selection and persisted request identity; release-blocker contracts pass in run `34689946142` |
 | Library work-order state and progress precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1013.md`](PR-1013.md) — commit `ab01bcb` removes the hard-coded six-stage denominator, reports a queued handoff as `QUEUED · AGENT HANDOFF` at `0% Completed`, and derives rendered progress from actual checkpoint rails; supported run `33736220396` includes the focused **10-test** catalog/state set |
 | Library aggregate/filter completion precision | PASS (supported CI, local source/test, and read-only browser) | [`PR-1014.md`](PR-1014.md) — commit `58439f9` removes the hard-coded five-stage threshold, preserves the five observed rendered outputs, and uses the manifest-aware completion predicate for metrics/filtering; supported run `33736220396` passes |
-| Supported Phase 10 SLO/load checkpoint | PASS (latest supported CI) | Run `34689946142` on checkpoint `54dfe6b` — Phase 10 SLO/load evidence job passed; real environment operations remain unproven |
+| Supported Phase 10 SLO/load checkpoint | PASS (latest supported CI) | Run `34706752705` on checkpoint `3f2fca1` — Phase 10 SLO/load evidence job passed; real environment operations remain unproven |
+| Active-run replay and Windows work-order replacement | PASS (supported CI and targeted Windows regression) | [`PR-10G-4e62fac-ci.md`](PR-10G-4e62fac-ci.md) — repeated `/run` is read-only, heartbeat remains the lease-renewal path, and transient Windows replacement denials retry within a bounded window |
+| Concurrent run launch ownership | PASS (supported CI and targeted Windows regression) | [`PR-10G-3f2fca1-ci.md`](PR-10G-3f2fca1-ci.md) — simultaneous `/run` requests for the same unclaimed order result in one agent launch; the losing request receives the existing-running response |
 | Backup/restore/migration | PASS | [`PR-1008.md`](PR-1008.md) |
 | Operator runbooks | PASS (documentation contract) | [`PR-1010.md`](PR-1010.md) |
 | Bounded load/soak | PASS (supported CI) | [`PR-1009.md`](PR-1009.md), [`PR-10G-load-soak-linux-ci.json`](PR-10G-load-soak-linux-ci.json), and supported run `33871877480` |
@@ -38,8 +41,20 @@ and real external durable metrics aggregation (`OBS-02`).
 | Remotion default-props/container smoke | PASS (latest supported CI) | [`PR-10G-container-render-ci.json`](PR-10G-container-render-ci.json) and [`PR-10G-remotion-defaults.md`](PR-10G-remotion-defaults.md) — six asset-free/default-preview compositions render non-empty stills in the hardened image; container job in run `34689946142` passed |
 | Web security and trusted-edge boundary (`SEC-06`) | PARTIAL (simulated harness in CI) | [`PR-10G-trusted-edge-b9aa08a.md`](PR-10G-trusted-edge-b9aa08a.md) — local reverse proxy double verified origin cloaking, health 200, bearer 401, strict CORS, and 429 burst rate limiting; proof against a deployed production trusted edge remains required |
 | Security/auth/path/redaction contracts | PASS | [`PR-1004.md`](PR-1004.md), [`PR-1005.md`](PR-1005.md) |
-| Full repository regression suite | PASS (latest supported offline CI) | Supported offline regression in run `34689946142` on `54dfe6b` → **1,789 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed** in 263.96s |
+| Full repository regression suite | PASS (latest supported offline CI) | Supported offline regression job passed in run `34706752705` on `3f2fca1`; exact run evidence is linked above. |
 | Python dependency vulnerability audit | PASS (local) | `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt` both report **No known vulnerabilities found**; the local `openmontage` package is skipped because it is not published to PyPI |
+
+## Supported CI feedback (2026-09-12, latest)
+
+Run [`34706752705`](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34706752705) validates exact code SHA `3f2fca1bb1d0adbd9aa21956ace5255988275264`:
+- **Release blockers (offline contracts)**: passed.
+- **Offline regression suite**: passed.
+- **Clean install smoke**: passed.
+- **Container build and health contract**: passed.
+- **Phase 10 SLO/load evidence**: passed.
+- **Live-provider and HyperFrames checks**: intentionally skipped; this run does not prove external TTS operation or production readiness.
+
+The targeted local Windows regressions on the final code checkpoint passed: launcher/lease/idempotency contracts (**17 passed**), Phase 10 SLO module (**6 passed**), and browser handoff regression (**1 passed**). The latest full local offline run is on the immediate prior checkpoint `4e62fac` and remains partial due to three Windows performance-budget misses listed above; relevant isolated checks passed without changing their thresholds.
 
 ## Supported CI feedback (2026-09-04)
 

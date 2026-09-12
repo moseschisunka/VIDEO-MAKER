@@ -14,12 +14,12 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None — `v1.0.0-rc2` is an experimental prerelease; candidate identity is not frozen across branch |
 | Production decision | Not eligible / Production locked |
-| Latest supported CI run | `34700726327` (`166758c`) — all enabled release-blocker, offline regression, clean-install, container/Remotion, and Phase 10 SLO/load jobs passed. Live-provider and HyperFrames jobs were intentionally skipped. Exact evidence: [`PR-10G-166758c-ci.md`](evidence/PR-10G-166758c-ci.md). Real environment-owned operational proofs remain required. |
-| Latest local code checkpoint | `166758c` — chart text now inherits the selected theme in Explainer and TalkingHead; browser handoff and conventional-wheel regressions passed (**4 passed**), Remotion type-check passed, and a full 22-second H.264 render was visually inspected. |
-| Latest local SLO diagnostic | `9de5dc4` — combined Windows SLO run had three marginal p95 misses (`PERF-01` 2.0013s/2.0s, `PERF-04` 0.5156s/0.5s, `PERF-06` 2.0025s/2.0s); each failed case passed when run alone. The supported Linux SLO/load job passed on this checkpoint. |
-| Latest supported offline regression | `34700726327` (`166758c`) — release-blocker and offline regression jobs both completed successfully; run details are linked in [`PR-10G-166758c-ci.md`](evidence/PR-10G-166758c-ci.md). |
+| Latest supported CI run | `34706752705` (`3f2fca1`) — all enabled release-blocker, offline regression, clean-install, container/Remotion, and Phase 10 SLO/load jobs passed. Live-provider and HyperFrames jobs were intentionally skipped. Exact evidence: [`PR-10G-3f2fca1-ci.md`](evidence/PR-10G-3f2fca1-ci.md). Real environment-owned operational proofs remain required. |
+| Latest local code checkpoint | `3f2fca1` — duplicate Run replays are read-only, concurrent start claims are single-winner, agents renew leases through heartbeat, and atomic work-order replacement retries transient Windows sharing errors. Focused route/lease contracts, the browser handoff, and SLO module pass. |
+| Latest local SLO diagnostic | `3f2fca1` — isolated Phase 10 SLO module passed (**6 passed**). The latest combined Windows run on `4e62fac` had three performance-only misses (Backlot cold projects 2.241s/2.0s, `PERF-01` 2.205s/2.0s, `PERF-07` 0.602s/0.5s); each relevant check passed in isolation. `PERF-04` passed in that full run. |
+| Latest supported offline regression | `34706752705` (`3f2fca1`) — the release-blocker and offline regression jobs both completed successfully; exact evidence is linked in [`PR-10G-3f2fca1-ci.md`](evidence/PR-10G-3f2fca1-ci.md). |
 | Latest HyperFrames CI run | `34689946142` (`54dfe6b`) — opt-in QA passed (**2 passed, 2 skipped**) with a retained CI artifact. |
-| Last tracker update | 2026-09-12: supported CI run `34700726327` passes on `166758c`, including the chart contrast fix. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
+| Last tracker update | 2026-09-12: supported CI run `34706752705` passes on `3f2fca1`. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
 
 ## Status rules
 
