@@ -99,15 +99,15 @@ The browser regression also used the removed `a.lib-card` selector and assumed e
 
 ### 1. Prove the configured agent against a real workflow
 
-The launch boundary is now explicit and covered by contract tests, but `OPENMONTAGE_AGENT_COMMAND` is unset in the tested environment. A `codex` executable is present, but this review has not selected or configured it as the operator's production runner. Configure the actual local agent/worker, create a project from a clean browser session, and verify that the child process claims and heartbeats the same run, pauses at approval, resumes, and produces a playable deliverable. Keep the command in the operator's secret/runtime configuration rather than committing a machine-specific value.
+The launch boundary is now explicit and covered by both API and browser tests, but `OPENMONTAGE_AGENT_COMMAND` is unset in the tested environment. The browser test clicks the real Run Pipeline button, observes the launch response through the live UI refresh, and verifies a disposable worker process receives the project/run/stage/prompt handoff. A `codex` executable is present, but this review has not selected or configured it as the operator's production runner. Configure the actual local agent/worker, create a project from a clean browser session, and verify that the child process claims and heartbeats the same run, pauses at approval, resumes, and produces a playable deliverable. Keep the command in the operator's secret/runtime configuration rather than committing a machine-specific value.
 
 Acceptance: the process recorded in `agent_process.json` is the real agent, the board shows its owner and current stage, and a missing command never implies production has started.
 
 ### 2. Publish and validate one coherent candidate
 
-Preserve the ten unpublished commits and this review's patch together. The reviewed code candidate is on `codex/pr-10g-evidence-hardening`; supported Ubuntu CI passed on code SHA `2e535e3` in run [34685680478](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34685680478). Do not cite that result for a later code SHA. Keep deployment proofs as follow-up gates. Do not mechanically merge upstream or reset the customized fork.
+Keep the existing customized branch history. The reviewed code candidate is on `codex/pr-10g-evidence-hardening`; supported Ubuntu CI passed on exact code SHA `708a6d09836da74432938457b0bc95a76a7b44f8` in run [34687000964](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34687000964). Keep deployment proofs as follow-up gates. Do not mechanically merge upstream or reset the customized fork.
 
-Acceptance: one candidate SHA is shared by the branch, CI results, image digest, test outputs, and release record. Code CI is green on `2e535e3`; deployment proofs remain follow-up gates.
+Acceptance: keep the code SHA consistent across the branch and CI evidence. Tie any release image digest, deployment receipts, and release record to that same SHA. Code CI is green on `708a6d0`; deployment proofs remain follow-up gates.
 
 ### 3. Prove the two workflows produce useful videos
 
@@ -134,17 +134,16 @@ The resource lookup defect is repaired. A 2026-09-12 smoke built and installed a
 | `config.yaml` | Missing | Present |
 | `remotion-composer/package.json` | Missing | Present |
 
-The conventional-install regression passes locally and in the supported Ubuntu package-data contract. The actual wheel-based FFmpeg render passes locally. The wheel does not bundle `node_modules`; Remotion rendering from an installed wheel still depends on the deployment's Node dependency provisioning, while source-checkout Remotion rendering and the container's in-image Remotion still render passed in CI. Supported CI has not yet exercised the full `VideoCompose` wheel render.
+The conventional-install regression and full `VideoCompose` FFmpeg render now pass locally and in the supported Ubuntu package-data contract on the reviewed candidate. The wheel does not bundle `node_modules`; Remotion rendering from an installed wheel still depends on the deployment's Node dependency provisioning. Source-checkout Remotion rendering and the container's in-image Remotion still render passed in CI. The tested wheel path proves FFmpeg rendering and resource lookup, not installed-wheel Remotion rendering.
 
-Acceptance: repeat the wheel render on the supported Ubuntu/container deployment and exercise the installed Remotion path if that deployment promises it. Keep writable project/cache directories separate from installed resources. Add reproducible Python constraints for the supported deployment environment before release, without gratuitously upgrading providers.
+Acceptance: exercise installed-wheel Remotion rendering if the deployment promises that path. Keep writable project/cache directories separate from installed resources. Add reproducible Python constraints for the supported deployment environment before release, without gratuitously upgrading providers.
 
 ### 6. Reduce maintenance surface after the product path works
 
 - Put held workflows behind a secondary capability catalog. The create wizard currently displays long internal manifest descriptions, skill paths, and many disabled choices. Prefer two clear launch choices and short user-facing descriptions.
 - Fix the voice menu and dashboard to reflect actual selected/configured providers instead of universally advertising Microsoft/Edge. Edge TTS is network-dependent even when it requires no API key.
 - Keep the legacy demo runner isolated until a manifest-driven teaching workflow demonstrably replaces its useful behavior; then delete the replacement-obsolete code, not before.
-- Audit duplicated `.agents`/`.claude` instruction bundles for a shared canonical source. Preserve tool compatibility and attribution. Their protected locations and different consumers make wholesale deletion inappropriate here.
-- Replace source-string-only UI assertions with a small number of behavioral route/browser checks. The missing stream survived the existing large suite.
+- Replace source-string-only UI assertions with a few behavioral route/browser checks. Run Pipeline now has a real browser-to-worker regression; the missing live stream shows why this coverage matters.
 - Make `make lint` cover the first-party Python tree; currently it compiles only four files. The bounded Ruff scan used here found a missed undefined annotation without requiring a new architecture.
 
 ## Verification record
@@ -169,8 +168,10 @@ Acceptance: repeat the wheel render on the supported Ubuntu/container deployment
 | Installed-wheel render | Conventional venv installed the built wheel; isolated Python imported installed `VideoCompose`, loaded config/`screen-demo`/Remotion resources, and rendered a generated fixture from outside the checkout. Output: H.264 1920×1080 at 30 fps with AAC, 1.021333 seconds, 29,686 bytes; FFmpeg decode passed. SHA-256: `0dabfa8cc040d6d628ac97d0f7098704cc493bf2f3e060584c7c499f24cea063`. |
 | Supported Ubuntu CI, run [34685680478](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34685680478), code SHA `2e535e3ec1b4b57d1fae0844c82a3c3f9a4f4886` | **Success**: **1,785 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed** in 257.59 seconds; release-blocking contracts, clean-install smoke, container health and in-image still render, and Phase 10 SLO/load/operations jobs all passed. Live-provider and HyperFrames QA jobs were intentionally skipped. |
 | Focused Windows launcher contract | **7 passed** in 13.14 seconds, including missing-command fail-closed behavior, configured launch metadata, and a real short-lived local process receiving project/run/stage identity. |
+| Focused browser-launcher and installed-wheel render regressions on code SHA `708a6d09836da74432938457b0bc95a76a7b44f8` | **11 passed** locally across the real Run Pipeline browser click/worker handoff, launcher contracts, and a conventional-venv wheel render from outside the checkout with FFmpeg decode. |
+| Supported Ubuntu CI, run [34687000964](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34687000964), code SHA `708a6d09836da74432938457b0bc95a76a7b44f8` | **Success**: offline regression suite, release-blocking contracts, clean-install smoke, container health and in-image render, Phase 10 SLO/load/operations, and opt-in HyperFrames QA all passed. Live-provider checks were intentionally skipped. |
 | Whitespace validation | `git diff --check` passed. |
 
 Raw local logs are in `tmp/review-offline-tests.log`, `tmp/review-targeted-tests.log`, `tmp/review-isolated-slos.log`, `tmp/review-remotion-build.log`, `tmp/review-wheel-build.log`, and `tmp/review-wheel-install.log`. They are local review artifacts, not published release evidence. The installed FastAPI/Starlette test client emits an `httpx` deprecation warning; this review does not upgrade that dependency graph.
 
-Local Windows results are diagnostic. Supported CI completed successfully on code SHA `2e535e3`; no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.
+Local Windows results are diagnostic. Supported CI completed successfully on code SHA `708a6d0`; no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.
