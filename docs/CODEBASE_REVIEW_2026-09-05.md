@@ -95,6 +95,8 @@ The first supported Ubuntu run then exposed a second test-environment mismatch: 
 
 The browser regression also used the removed `a.lib-card` selector and assumed encoded traversal should render a not-found page. It now targets the current `a.studio-card` UI, verifies `?static=1` remains on project links, and expects HTTP 400 for the encoded path traversal rejected by the existing security contract. The UI now preserves static mode when opening a project from a static library capture.
 
+The creation wizard now gets provider readiness and voice catalogs from `/api/voice-providers`. It leaves the provider blank when none is configured, disables OpenAI without a key, requires an explicit Edge TTS selection, and sends the selected provider and one of its voices with the project request. The server exposes only setup status, never the API key. API and browser regressions cover catalog state, explicit selection, persistence, and auto-run. No live TTS or real agent call was made. The broader `make lint` target now syntax-checks the first-party Python tree rather than only four files.
+
 ## Remaining findings and next moves
 
 ### 1. Prove the configured agent against a real workflow
@@ -105,9 +107,9 @@ Acceptance: the process recorded in `agent_process.json` is the real agent, the 
 
 ### 2. Publish and validate one coherent candidate
 
-Keep the existing customized branch history. The reviewed code candidate is on `codex/pr-10g-evidence-hardening`; supported Ubuntu CI passed on exact code SHA `708a6d09836da74432938457b0bc95a76a7b44f8` in run [34687000964](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34687000964). Keep deployment proofs as follow-up gates. Do not mechanically merge upstream or reset the customized fork.
+Keep the existing customized branch history. Supported Ubuntu CI passed on exact code SHA `54dfe6b0a381ae4b78e6dda456f60dae1da82bba` in run [34689946142](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34689946142). Keep deployment proofs as follow-up gates. Do not mechanically merge upstream or reset the customized fork.
 
-Acceptance: keep the code SHA consistent across the branch and CI evidence. Tie any release image digest, deployment receipts, and release record to that same SHA. Code CI is green on `708a6d0`; deployment proofs remain follow-up gates.
+Acceptance: keep the code SHA consistent across the branch and CI evidence. Tie any release image digest, deployment receipts, and release record to that same SHA. Code CI is green on `54dfe6b`; deployment proofs remain follow-up gates.
 
 ### 3. Prove the two workflows produce useful videos
 
@@ -141,10 +143,10 @@ Acceptance: exercise installed-wheel Remotion rendering if the deployment promis
 ### 6. Reduce maintenance surface after the product path works
 
 - Put held workflows behind a secondary capability catalog. The create wizard currently displays long internal manifest descriptions, skill paths, and many disabled choices. Prefer two clear launch choices and short user-facing descriptions.
-- Fix the voice menu and dashboard to reflect actual selected/configured providers instead of universally advertising Microsoft/Edge. Edge TTS is network-dependent even when it requires no API key.
+- The creation wizard now reflects the selected provider and its own voice list. Confirm behavior with an explicitly configured live provider before enabling real narration; Edge TTS still needs internet access, and paid OpenAI checks remain opt-in.
 - Keep the legacy demo runner isolated until a manifest-driven teaching workflow demonstrably replaces its useful behavior; then delete the replacement-obsolete code, not before.
-- Replace source-string-only UI assertions with a few behavioral route/browser checks. Run Pipeline now has a real browser-to-worker regression; the missing live stream shows why this coverage matters.
-- Make `make lint` cover the first-party Python tree; currently it compiles only four files. The bounded Ruff scan used here found a missed undefined annotation without requiring a new architecture.
+- Keep launch and provider-selection confidence in behavioral browser/API tests. One stale source assertion failed when the voice catalog became provider-specific; it now checks the new catalog and fail-closed selection contract. Broader source-string cleanup is worthwhile only where an equivalent behavior test exists.
+- `make lint` now covers the first-party Python tree; retain the bounded Ruff undefined-name scan that caught a missed annotation without adding a new architecture.
 
 ## Verification record
 
@@ -170,8 +172,12 @@ Acceptance: exercise installed-wheel Remotion rendering if the deployment promis
 | Focused Windows launcher contract | **7 passed** in 13.14 seconds, including missing-command fail-closed behavior, configured launch metadata, and a real short-lived local process receiving project/run/stage identity. |
 | Focused browser-launcher and installed-wheel render regressions on code SHA `708a6d09836da74432938457b0bc95a76a7b44f8` | **11 passed** locally across the real Run Pipeline browser click/worker handoff, launcher contracts, and a conventional-venv wheel render from outside the checkout with FFmpeg decode. |
 | Supported Ubuntu CI, run [34687000964](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34687000964), code SHA `708a6d09836da74432938457b0bc95a76a7b44f8` | **Success**: offline regression suite, release-blocking contracts, clean-install smoke, container health and in-image render, Phase 10 SLO/load/operations, and opt-in HyperFrames QA all passed. Live-provider checks were intentionally skipped. |
+| Provider-selection, creation, agent-launch, and wizard regression checks on code SHA `54dfe6b0a381ae4b78e6dda456f60dae1da82bba` | **49 passed** in 23.97 seconds across Backlot API, create validation, agent launcher, browser launch/provider persistence, and UTF-8/wizard contracts. `node --check`, full-tree `compileall` including root-level Python sources, and `git diff --check` passed. |
+| Local Windows release-blocker diagnostic before the stale assertion update | **1,324 passed, 5 skipped, 1 deselected, 4 failed** in 497.93 seconds. One failure was the obsolete provider-catalog source assertion, fixed in `b5c97ce`; three were noisy local SLO p95 checks (`PERF-01` 2.153s/2.0s, `PERF-04` 0.907s/0.5s, `PERF-06` 2.196s/2.0s). The supported Ubuntu run is the release reference. |
+| Supported Ubuntu CI, run [34689946142](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34689946142), code SHA `54dfe6b0a381ae4b78e6dda456f60dae1da82bba` | **Success**: release blockers **1,328 passed**, 5 skipped, 1 deselected; offline regressions **1,789 passed**, 7 skipped, 3 deselected; clean-install smoke, container health and in-image render, Phase 10 SLO/load, and opt-in HyperFrames QA passed. Live-provider checks were intentionally skipped. |
+| Isolated local Backlot HTTP smoke | Root page returned **200**, provider selector was present, and `/api/pipelines`, `/api/playbooks`, `/api/voice-providers` returned 12, 6, and 2 entries. No provider was configured; OpenAI remained unavailable and Edge TTS required explicit selection. No TTS request or agent run was made. |
 | Whitespace validation | `git diff --check` passed. |
 
 Raw local logs are in `tmp/review-offline-tests.log`, `tmp/review-targeted-tests.log`, `tmp/review-isolated-slos.log`, `tmp/review-remotion-build.log`, `tmp/review-wheel-build.log`, and `tmp/review-wheel-install.log`. They are local review artifacts, not published release evidence. The installed FastAPI/Starlette test client emits an `httpx` deprecation warning; this review does not upgrade that dependency graph.
 
-Local Windows results are diagnostic. Supported CI completed successfully on code SHA `708a6d0`; no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.
+Local Windows performance results are diagnostic. Supported CI completed successfully on code SHA `54dfe6b`; live-provider checks were skipped, no external infrastructure change or production certification was performed, and a real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.

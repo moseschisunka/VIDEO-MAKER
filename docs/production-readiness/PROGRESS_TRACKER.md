@@ -14,12 +14,12 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None — `v1.0.0-rc2` is an experimental prerelease; candidate identity is not frozen across branch |
 | Production decision | Not eligible / Production locked |
-| Latest supported CI run | `33871877480` (`fe1d73a`) / `33870762963` (`03745d3`) — **1,309 passed** release-blocker contracts, **1,768 passed** offline regression tests, clean install, container/Remotion render, and Phase 10 SLO/load/staging harness all passed. Real environment-owned operational proofs remain required. |
-| Latest local code checkpoint | `15d15b8` — canonical TTS provider aliases plus fail-closed localhost evidence classification; **1,313 passed, 5 skipped, 1 deselected, 1 warning** in the preceding local release-blocker run. Supported CI publication and rerun are pending. |
-| Latest local release-blocker rerun | `15d15b8` — **1,313 passed, 5 skipped, 1 deselected, 1 failed** (`PERF-01` Windows diagnostic); isolated SLO contracts pass **6/6**. Supported CI remains authoritative. |
+| Latest supported CI run | `34689946142` (`54dfe6b`) — **1,328 passed** release-blocker contracts, **1,789 passed** offline regression tests, clean install, container/Remotion render, Phase 10 SLO/load evidence, and HyperFrames QA all passed. Live-provider checks were intentionally skipped. Real environment-owned operational proofs remain required. |
+| Latest local code checkpoint | `54dfe6b` — provider-specific wizard catalog contract and full-tree compile lint (including root-level Python files); **49 focused API, browser, launcher, and wizard tests passed**, plus JavaScript syntax and compile-all checks. |
+| Latest local release-blocker diagnostic | `4677660` — **1,324 passed, 5 skipped, 1 deselected, 4 failed** before the stale provider-catalog assertion was updated in `b5c97ce`; the remaining 3 failures were local Windows SLO p95 measurements (`PERF-01`, `PERF-04`, `PERF-06`). Supported Ubuntu CI passed the corrected checkpoint. |
 | Latest local offline regression | `15d15b8` — **1,772 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed**. Supported Ubuntu CI remains authoritative. |
-| Latest HyperFrames CI run | `33810441833` (`beec14f`) — opt-in HyperFrames QA suite passed (**2 passed, 1 skipped, 1 warning** in 2m43s; artifact `openmontage-hyperframes-qa`). |
-| Last tracker update | Corrective audit: Downgraded simulated staging proofs from production credit to simulated integration evidence. `PR-10G` is reopened as `BLOCKED`. Phase 11 gates `PR-1100`–`PR-1110` are reset to `NOT_RUN`/`BLOCKED` and `PR-11G` is marked `FAIL / PRODUCTION LOCKED`. Production declaration is not justified. |
+| Latest HyperFrames CI run | `34689946142` (`54dfe6b`) — opt-in QA passed (**2 passed, 2 skipped**) with a retained CI artifact. |
+| Last tracker update | 2026-09-12: provider selection is explicit and tied to the provider's own voice catalog; supported CI run `34689946142` passes on `54dfe6b`. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
 
 ## Status rules
 
