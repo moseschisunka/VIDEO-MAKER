@@ -6,7 +6,7 @@ Review date: 2026-09-05. Baseline: `4339c3d` on `codex/pr-10g-evidence-hardening
 
 Keep the agent-driven production model and the small certified execution surface. The project has substantial defensive infrastructure, but it is still an internal preview, not a finished self-service video studio. More providers, more pipelines, and more certification paperwork will not close the central product gap: a person must be able to move from a brief and source material to a reviewed, usable video, with a clear agent handoff and reliable recovery.
 
-This review makes bounded repairs and deletions. It does not declare production readiness, publish changes, or replace the existing readiness ledger.
+This review makes bounded repairs and deletions. It does not declare production readiness or replace the existing readiness ledger; local checks are kept separate from external release evidence.
 
 ## Repository and publication state
 
@@ -87,19 +87,25 @@ The wheel's root-level `data-files` are correctly installed below a virtual-envi
 
 The package-data contract now builds and installs the wheel into a conventional virtualenv, runs outside the checkout with isolated imports, and verifies config, manifests, and Remotion resources resolve successfully.
 
+## Follow-up repairs from 2026-09-12 testing
+
+The first broad rerun exposed a test-order leak: importing the browser screenshot fixture sets `OPENMONTAGE_PROJECTS_DIR` at module scope. The installed-wheel probe now clears the fixture's project/resource-root overrides in its child environment, so it verifies the conventional virtualenv defaults independently.
+
+The browser regression also used the removed `a.lib-card` selector and assumed encoded traversal should render a not-found page. It now targets the current `a.studio-card` UI, verifies `?static=1` remains on project links, and expects HTTP 400 for the encoded path traversal rejected by the existing security contract. The UI now preserves static mode when opening a project from a static library capture.
+
 ## Remaining findings and next moves
 
 ### 1. Prove the configured agent against a real workflow
 
-The launch boundary is now explicit and covered by contract tests, but this checkout has no external coding-agent command configured. Set `OPENMONTAGE_AGENT_COMMAND` to the actual local agent/worker, create a project from a clean browser session, and verify that the child process claims and heartbeats the same run, pauses at approval, resumes, and produces a playable deliverable. Keep the command in the operator's secret/runtime configuration rather than committing a machine-specific value.
+The launch boundary is now explicit and covered by contract tests, but `OPENMONTAGE_AGENT_COMMAND` is unset in the tested environment. A `codex` executable is present, but this review has not selected or configured it as the operator's production runner. Configure the actual local agent/worker, create a project from a clean browser session, and verify that the child process claims and heartbeats the same run, pauses at approval, resumes, and produces a playable deliverable. Keep the command in the operator's secret/runtime configuration rather than committing a machine-specific value.
 
 Acceptance: the process recorded in `agent_process.json` is the real agent, the board shows its owner and current stage, and a missing command never implies production has started.
 
 ### 2. Publish and validate one coherent candidate
 
-Preserve the ten unpublished commits and this review's patch together. Review the final diff, commit, push a candidate branch, and run supported Ubuntu CI against its exact SHA. Freeze the candidate only after the final patch passes. Do not cite an older successful run for a newer tree. Do not mechanically merge upstream or reset the customized fork.
+Preserve the ten unpublished commits and this review's patch together. The reviewed candidate is on `codex/pr-10g-evidence-hardening`; run supported Ubuntu CI against the final follow-up SHA before freezing it. Do not cite an older successful run for a newer tree. Do not mechanically merge upstream or reset the customized fork.
 
-Acceptance: one candidate SHA is shared by the branch, CI results, image digest, test outputs, and release record. This review is being published as one coherent candidate commit; CI and deployment proofs remain follow-up gates.
+Acceptance: one candidate SHA is shared by the branch, CI results, image digest, test outputs, and release record. CI and deployment proofs remain follow-up gates.
 
 ### 3. Prove the two workflows produce useful videos
 
@@ -119,16 +125,16 @@ Acceptance: environment-owned receipts, immutable deployment identity, restart/r
 
 ### 5. Validate installed rendering on the intended deployment model
 
-The resource lookup defect is repaired. The remaining release proof is an installed rendering smoke test: `pyproject.toml` still uses root-level `data-files`, so a wheel must be installed into a conventional virtual environment and exercised from outside the checkout. The new resolver now finds those files at the environment prefix; the prior isolated process had reported:
+The resource lookup defect is repaired. A 2026-09-12 smoke built and installed a wheel into a conventional virtual environment, then ran the installed `VideoCompose` from outside the checkout against a generated local fixture. It loaded config and manifest resources from the environment prefix, wrote projects beside the caller, and produced a valid H.264/AAC MP4 confirmed by `ffprobe` and a full FFmpeg decode. The earlier isolated process had reported:
 
 | Resource | At the code's `Lib/site-packages` root | At virtual-environment prefix |
 |---|---|---|
 | `config.yaml` | Missing | Present |
 | `remotion-composer/package.json` | Missing | Present |
 
-That lookup now passes in the conventional-install regression test. Checkout/container behavior remains a separate case.
+The conventional-install regression and actual FFmpeg render now pass locally. The wheel does not bundle `node_modules`; Remotion rendering from an installed wheel still depends on the deployment's Node dependency provisioning, while source-checkout Remotion rendering passed separately. Supported Ubuntu/container CI has not yet exercised the wheel render.
 
-Acceptance: install the wheel into a fresh conventional virtual environment, run from outside the checkout, load config/manifests/skills and the composer, and render a local fixture. Separate writable project/cache directories from installed resources. Add reproducible Python constraints for the supported deployment environment before release, without gratuitously upgrading providers.
+Acceptance: repeat the wheel render on the supported Ubuntu/container deployment and exercise the installed Remotion path if that deployment promises it. Keep writable project/cache directories separate from installed resources. Add reproducible Python constraints for the supported deployment environment before release, without gratuitously upgrading providers.
 
 ### 6. Reduce maintenance surface after the product path works
 
@@ -154,8 +160,13 @@ Acceptance: install the wheel into a fresh conventional virtual environment, run
 | Remotion bundle | **Passed**; `tmp/review-remotion-bundle/index.html` created. Webpack reported an optional cache snapshot warning. Uses installed local dependencies; fresh `npm ci`/container validation remains for candidate CI. |
 | Browser smoke | Library, loaded creation catalog, and unrefreshed live update verified at isolated `127.0.0.1:4765`; no production media or paid providers used. |
 | Wheel build and conventional install | Installation succeeded; isolated conventional-virtualenv lookup **passed** for config, pipeline manifest, Remotion package data, and writable project-root selection. |
+| Earlier broad rerun before follow-up test fixes | **1,783 passed, 1 failed, 7 skipped, 3 deselected, 1 subtest passed**; failure was the screenshot fixture leaking a project-root override into the installed-wheel probe. |
+| Browser-navigation and wheel-contract rerun | **3 passed** in 53.48 seconds, including static-link navigation, traversal rejection, and conventional wheel resource resolution. |
+| Full offline suite after follow-up fixes: `python -m pytest tests -m "not live_provider and not hyperframes_qa" -q --tb=short` | **1,797 passed, 6 skipped, 3 deselected, 1 passing subtest** in 735.03 seconds. |
+| Local Remotion render | Assetless preview rendered to `tmp/remotion-readiness-smoke.mp4`: H.264 1920×1080 at 30 fps, AAC audio, 3.050667 seconds, 226,860 bytes. Full FFmpeg decode passed; a rendered frame was inspected. SHA-256: `8cd091e516c96bca2dd9866cd14b36d971bcc9107e90ad6fa0055bf292689aad`. |
+| Installed-wheel render | Conventional venv installed the built wheel; isolated Python imported installed `VideoCompose`, loaded config/`screen-demo`/Remotion resources, and rendered a generated fixture from outside the checkout. Output: H.264 1920×1080 at 30 fps with AAC, 1.021333 seconds, 29,686 bytes; FFmpeg decode passed. SHA-256: `0dabfa8cc040d6d628ac97d0f7098704cc493bf2f3e060584c7c499f24cea063`. |
 | Whitespace validation | `git diff --check` passed. |
 
 Raw local logs are in `tmp/review-offline-tests.log`, `tmp/review-targeted-tests.log`, `tmp/review-isolated-slos.log`, `tmp/review-remotion-build.log`, `tmp/review-wheel-build.log`, and `tmp/review-wheel-install.log`. They are local review artifacts, not published release evidence. The installed FastAPI/Starlette test client emits an `httpx` deprecation warning; this review does not upgrade that dependency graph.
 
-Local Windows results are diagnostic. Supported Ubuntu/container CI has not run against this patch, and no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.
+Local Windows results are diagnostic. Supported Ubuntu/container CI has not run against the follow-up SHA, and no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.

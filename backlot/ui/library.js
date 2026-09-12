@@ -103,6 +103,7 @@ function projectPlaceholderLabel(project) {
 
 // ---- Project Card Component ---------------------------------------
 function renderProjectCard(p) {
+  const staticSuffix = new URLSearchParams(location.search).has("static") ? "?static=1" : "";
   const poster = el("div", { class: "lib-poster" });
   if (p.poster) {
     poster.append(el("img", { 
@@ -153,7 +154,7 @@ function renderProjectCard(p) {
 
   const cardLink = el("a", { 
     class: `studio-card${p.live ? " card-live" : ""}`, 
-    href: `/p/${p.project_id}`,
+    href: `/p/${p.project_id}${staticSuffix}`,
   },
     poster,
     progressRail,

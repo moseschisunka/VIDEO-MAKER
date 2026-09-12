@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import zipfile
@@ -122,6 +123,13 @@ def test_release_assets_are_present_in_built_wheel(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
     )
+    # Earlier browser/staging tests intentionally set these process-level
+    # overrides while importing their fixture module.  The installed-package
+    # contract must exercise the default conventional layout, so do not let a
+    # test-order leak change the child process under test.
+    probe_env = dict(os.environ)
+    probe_env.pop("OPENMONTAGE_PROJECTS_DIR", None)
+    probe_env.pop("OPENMONTAGE_RESOURCE_ROOT", None)
     probe = subprocess.run(
         [
             str(venv_python),
@@ -144,6 +152,7 @@ def test_release_assets_are_present_in_built_wheel(tmp_path: Path) -> None:
             ),
         ],
         cwd=tmp_path,
+        env=probe_env,
         check=True,
         capture_output=True,
         text=True,

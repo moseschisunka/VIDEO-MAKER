@@ -181,15 +181,15 @@ def test_static_navigation_invalid_route_and_active_takes(staged_backlot_server)
         page = browser.new_page(viewport={"width": 1560, "height": 1000})
         try:
             page.goto(staged_backlot_server + "/?static=1", wait_until="networkidle")
-            href = page.locator("a.lib-card").first.get_attribute("href")
+            href = page.locator("a.studio-card").first.get_attribute("href")
             assert href and "static=1" in href
 
             response = page.goto(
                 staged_backlot_server + "/p/..%2FAGENT_GUIDE.md?static=1",
                 wait_until="networkidle",
             )
-            assert response and response.status == 200
-            assert "PROJECT NOT FOUND" in page.locator("body").inner_text()
+            assert response and response.status == 400
+            assert "invalid project id" in page.locator("body").inner_text().lower()
 
             page.goto(staged_backlot_server + "/p/the-last-lighthouse?static=1", wait_until="networkidle")
             page.wait_for_timeout(300)
