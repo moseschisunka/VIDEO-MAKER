@@ -43,6 +43,41 @@ def client(projects_root, monkeypatch):
         yield c
 
 
+def test_voice_provider_catalog_reflects_setup_without_exposing_keys(client, monkeypatch):
+    test_client = client
+    monkeypatch.setenv("OPENMONTAGE_TTS_PROVIDER", "open-ai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-secret")
+    monkeypatch.setenv("OPENAI_TTS_VOICE", "coral")
+
+    response = test_client.get("/api/voice-providers")
+
+    assert response.status_code == 200
+    catalog = response.json()
+    assert catalog["default_provider"] == "openai"
+    assert catalog["configuration_warning"] is None
+    openai = next(provider for provider in catalog["providers"] if provider["id"] == "openai")
+    assert openai["available"] is True
+    assert openai["may_incur_cost"] is True
+    assert "usage charges" in openai["status_note"]
+    assert openai["voices"][0]["id"] == "coral"
+    assert "test-only-secret" not in response.text
+
+    voices = test_client.get("/api/voices", params={"provider": "openai"}).json()
+    assert voices == [{"id": "coral", "name": "coral (configured OpenAI voice)", "provider": "openai"}]
+
+
+def test_voice_catalog_does_not_substitute_unknown_configured_provider(client, monkeypatch):
+    test_client = client
+    monkeypatch.setenv("OPENMONTAGE_TTS_PROVIDER", "custom_tts")
+
+    catalog = test_client.get("/api/voice-providers").json()
+    voices = test_client.get("/api/voices", params={"provider": "custom_tts"}).json()
+
+    assert catalog["default_provider"] == "custom_tts"
+    assert "does not have a curated voice catalog" in catalog["configuration_warning"]
+    assert voices == []
+
+
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data), encoding="utf-8")

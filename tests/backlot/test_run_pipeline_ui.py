@@ -46,7 +46,8 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
     projects_dir = tmp_path / "projects"
     projects_dir.mkdir()
     worker_script = tmp_path / "fake_agent.py"
-    marker_path = tmp_path / "agent-handoff.json"
+    handoff_dir = tmp_path / "agent-handoffs"
+    handoff_dir.mkdir()
     worker_script.write_text(
         "import json, os\n"
         "from pathlib import Path\n"
@@ -57,9 +58,8 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
         "    'stage': os.environ['OPENMONTAGE_STAGE'],\n"
         "    'prompt': os.environ['OPENMONTAGE_AGENT_PROMPT'],\n"
         "}\n"
-        "Path(os.environ['OPENMONTAGE_AGENT_MARKER']).write_text(\n"
-        "    json.dumps(handoff), encoding='utf-8'\n"
-        ")\n",
+        "marker = Path(os.environ['OPENMONTAGE_AGENT_MARKER_DIR']) / f\"{handoff['run_id']}.json\"\n"
+        "marker.write_text(json.dumps(handoff), encoding='utf-8')\n",
         encoding="utf-8",
     )
     port = _free_port()
@@ -70,7 +70,10 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
             "OPENMONTAGE_PROJECTS_DIR": str(projects_dir),
             "OPENMONTAGE_AGENT_COMMAND": f'"{sys.executable}" "{worker_script}"',
             "OPENMONTAGE_AGENT_ID": "ui-smoke-agent",
-            "OPENMONTAGE_AGENT_MARKER": str(marker_path),
+            "OPENMONTAGE_AGENT_MARKER_DIR": str(handoff_dir),
+            "OPENMONTAGE_TTS_PROVIDER": "",
+            "OPENAI_API_KEY": "",
+            "OPENAI_TTS_VOICE": "coral",
         }
     )
     log_path = tmp_path / "backlot.log"
@@ -94,12 +97,18 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
             with urllib.request.urlopen(request, timeout=10) as response:
                 created = json.loads(response.read())
             project_id = created["project_id"]
+            project_config = json.loads(
+                (projects_dir / project_id / "artifacts" / "project_config.json").read_text(encoding="utf-8")
+            )
+            assert project_config["tts_provider"] == "edge_tts"
+            assert project_config["voice"] == "en-US-ChristopherNeural"
 
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True)
                 try:
                     page = browser.new_page(viewport={"width": 1280, "height": 900})
                     dialogs: list[str] = []
+                    browser_project_id = ""
 
                     def dismiss_dialog(dialog) -> None:
                         dialogs.append(dialog.message)
@@ -122,14 +131,66 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     assert run_payload["agent_launch"]["status"] == "started"
                     expect(run_button).to_contain_text("Agent started", timeout=1500)
                     assert not dialogs, dialogs
+
+                    page.goto(base_url, wait_until="networkidle")
+                    page.locator("#createVideoBtn").click()
+                    expect(page.locator("#voiceProviderSelect")).to_have_value("", timeout=5_000)
+                    expect(page.locator('#voiceProviderSelect option[value="openai"]')).to_be_disabled()
+                    expect(page.locator("#submitCreateBtn")).to_be_disabled()
+                    page.locator("#voiceProviderSelect").select_option("edge_tts")
+                    expect(page.locator("#voiceSelect")).to_have_value("en-US-ChristopherNeural")
+                    expect(page.locator("#voiceProviderHint")).to_contain_text("internet connection")
+                    expect(page.locator("#submitCreateBtn")).to_be_enabled()
+                    page.locator("#projectTitle").fill("Explicit narration provider")
+                    page.locator("#projectTopic").fill("Test that voice provider selection is persisted.")
+                    create_url = f"{base_url}/api/project/create"
+                    with page.expect_request(
+                        lambda request: request.url == create_url and request.method == "POST",
+                        timeout=10_000,
+                    ) as create_request_info:
+                        with page.expect_response(
+                            lambda response: response.url == create_url
+                            and response.request.method == "POST",
+                            timeout=10_000,
+                        ) as create_response_info:
+                            with page.expect_response(
+                                lambda response: response.url.startswith(f"{base_url}/api/project/")
+                                and response.url.endswith("/run")
+                                and response.request.method == "POST",
+                                timeout=10_000,
+                            ) as auto_run_info:
+                                page.locator("#submitCreateBtn").click()
+                    create_request_body = create_request_info.value.post_data_json
+                    assert create_request_body["voice_provider"] == "edge_tts"
+                    assert create_request_body["voice"] == "en-US-ChristopherNeural"
+                    assert create_response_info.value.status == 200
+                    auto_run_response = auto_run_info.value
+                    assert auto_run_response.status == 200
+                    assert auto_run_response.url.startswith(f"{base_url}/api/project/")
+                    page.wait_for_url(f"{base_url}/p/**", timeout=10_000)
+                    browser_project_id = page.url.split("/p/", 1)[1].split("?", 1)[0].rstrip("/")
+                    browser_project_config = json.loads(
+                        (projects_dir / browser_project_id / "artifacts" / "project_config.json").read_text(encoding="utf-8")
+                    )
+                    assert browser_project_config["tts_provider"] == "edge_tts"
+                    assert browser_project_config["voice"] == "en-US-ChristopherNeural"
                 finally:
                     browser.close()
 
             deadline = time.monotonic() + 5
-            while time.monotonic() < deadline and not marker_path.is_file():
+            expected_handoffs = [created["work_order"]["run_id"]]
+            if browser_project_id:
+                expected_handoffs.append(
+                    json.loads((projects_dir / browser_project_id / "work_order.json").read_text(encoding="utf-8"))["run_id"]
+                )
+            while time.monotonic() < deadline and not all(
+                (handoff_dir / f"{run_id}.json").is_file() for run_id in expected_handoffs
+            ):
                 time.sleep(0.02)
-            assert marker_path.is_file(), "the configured worker did not receive the browser-launched handoff"
-            handoff = json.loads(marker_path.read_text(encoding="utf-8"))
+            assert all((handoff_dir / f"{run_id}.json").is_file() for run_id in expected_handoffs), (
+                "the configured worker did not receive every browser-launched handoff"
+            )
+            handoff = json.loads((handoff_dir / f"{expected_handoffs[0]}.json").read_text(encoding="utf-8"))
             assert handoff["project_id"] == project_id
             assert handoff["project_dir"] == str((projects_dir / project_id).resolve())
             assert handoff["stage"] == "idea"
@@ -143,6 +204,12 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
             assert process_record["status"] == "started"
             assert process_record["agent_id"] == "ui-smoke-agent"
             assert process_record["run_id"] == handoff["run_id"]
+            if browser_project_id:
+                browser_handoff = json.loads(
+                    (handoff_dir / f"{expected_handoffs[1]}.json").read_text(encoding="utf-8")
+                )
+                assert browser_handoff["project_id"] == browser_project_id
+                assert browser_handoff["run_id"] == expected_handoffs[1]
         finally:
             server.terminate()
             try:

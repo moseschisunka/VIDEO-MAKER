@@ -158,6 +158,23 @@ def test_valid_create_persists_every_explicit_selection(client) -> None:
     assert work_order["selections"]["output_profile"] == "youtube_landscape"
 
 
+def test_create_uses_configured_provider_and_voice_when_client_omits_them(client, monkeypatch):
+    test_client, projects = client
+    monkeypatch.setenv("OPENMONTAGE_TTS_PROVIDER", "open-ai")
+    monkeypatch.setenv("OPENAI_TTS_VOICE", "coral")
+
+    response = test_client.post("/api/project/create", json={"title": "Configured narration"})
+
+    assert response.status_code == 200, response.text
+    project = projects / response.json()["project_id"]
+    proposal = json.loads((project / "artifacts" / "proposal_packet.json").read_text(encoding="utf-8"))
+    config = json.loads((project / "artifacts" / "project_config.json").read_text(encoding="utf-8"))
+    assert proposal["voice_provider"] == "openai"
+    assert proposal["voice"] == "coral"
+    assert config["tts_provider"] == "openai"
+    assert config["voice"] == "coral"
+
+
 def test_provider_aliases_do_not_create_a_false_conflict(client) -> None:
     test_client, projects = client
 

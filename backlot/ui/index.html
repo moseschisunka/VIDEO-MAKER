@@ -174,12 +174,22 @@
           <!-- Step 4: Voice Synthesis & Duration -->
           <div class="form-row">
             <div class="form-col">
-              <label class="form-label" for="voiceSelect">Narration Voice (Microsoft Neural)</label>
-              <select id="voiceSelect" class="form-select">
+              <label class="form-label" for="voiceProviderSelect">Narration Provider</label>
+              <select id="voiceProviderSelect" class="form-select" required>
                 <!-- Dynamically populated -->
               </select>
+              <div id="voiceProviderHint" class="field-hint" role="status" aria-live="polite">Choose a configured narration provider.</div>
             </div>
 
+            <div class="form-col">
+              <label class="form-label" for="voiceSelect">Narration Voice</label>
+              <select id="voiceSelect" class="form-select" required disabled>
+                <!-- Populated for the selected provider -->
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
             <div class="form-col">
               <label class="form-label" for="durationSelect">Planning Duration (not a maximum)</label>
               <select id="durationSelect" class="form-select">

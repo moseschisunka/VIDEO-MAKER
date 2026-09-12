@@ -11,6 +11,8 @@ let searchQuery = "";
 let availablePipelines = [];
 let availablePlaybooks = [];
 let availableVoices = [];
+let availableVoiceProviders = [];
+let configuredVoiceProvider = "";
 let releaseStatus = null;
 
 function updateReleaseBanner() {
@@ -244,7 +246,7 @@ function setWizardOptionsStatus(message, state) {
   wizardOptionsStatus.hidden = !message;
   wizardOptionsStatus.dataset.state = state;
   retryWizardOptionsBtn.hidden = state !== "error";
-  submitCreateBtn.disabled = state !== "ready";
+  syncCreateButton();
 }
 
 function normalizeWizardSelections() {
@@ -284,16 +286,21 @@ async function loadWizardOptions() {
   wizardOptionsRequest = Promise.all([
     getJSON("/api/pipelines"),
     getJSON("/api/playbooks"),
-    getJSON("/api/voices")
-  ]).then(([pipelines, playbooks, voices]) => {
+    getJSON("/api/voice-providers")
+  ]).then(([pipelines, playbooks, voiceCatalog]) => {
     const validPipelines = Array.isArray(pipelines)
       ? pipelines.filter((pipeline) => pipeline && typeof pipeline === "object" && typeof pipeline.id === "string")
       : [];
     const validPlaybooks = Array.isArray(playbooks)
       ? playbooks.filter((playbook) => playbook && typeof playbook === "object" && typeof playbook.id === "string")
       : [];
-    const validVoices = Array.isArray(voices)
-      ? voices.filter((voice) => voice && typeof voice === "object" && typeof voice.id === "string")
+    const validVoiceProviders = Array.isArray(voiceCatalog?.providers)
+      ? voiceCatalog.providers.filter((provider) => (
+        provider && typeof provider === "object"
+        && typeof provider.id === "string"
+        && typeof provider.label === "string"
+        && Array.isArray(provider.voices)
+      ))
       : [];
     if (!validPipelines.some((pipeline) => pipeline.creation_enabled === true)) {
       throw new Error("No launch-enabled production pipeline is available");
@@ -301,12 +308,15 @@ async function loadWizardOptions() {
     if (validPlaybooks.length === 0) {
       throw new Error("No visual style playbook is available");
     }
-    if (validVoices.length === 0) {
-      throw new Error("No narration voice is available");
+    if (validVoiceProviders.length === 0) {
+      throw new Error("No narration provider options are available");
     }
     availablePipelines = validPipelines;
     availablePlaybooks = validPlaybooks;
-    availableVoices = validVoices;
+    availableVoiceProviders = validVoiceProviders;
+    configuredVoiceProvider = typeof voiceCatalog.default_provider === "string"
+      ? voiceCatalog.default_provider
+      : "";
     normalizeWizardSelections();
     wizardOptionsState = "ready";
     setWizardOptionsStatus("", "ready");
@@ -315,6 +325,8 @@ async function loadWizardOptions() {
     availablePipelines = [];
     availablePlaybooks = [];
     availableVoices = [];
+    availableVoiceProviders = [];
+    configuredVoiceProvider = "";
     wizardOptionsState = "error";
     setWizardOptionsStatus("Current production options could not be loaded. Retry before creating a video.", "error");
     console.warn("Failed to load current production options:", error);
@@ -334,6 +346,7 @@ async function openWizard() {
 
   renderPipelineOptions();
   renderPlaybookOptions();
+  renderVoiceProviderOptions();
   renderVoiceOptions();
 }
 
@@ -445,19 +458,83 @@ function renderPlaybookOptions() {
 }
 
 function renderVoiceOptions() {
+  const providerSelect = document.getElementById("voiceProviderSelect");
   const select = document.getElementById("voiceSelect");
+  const hint = document.getElementById("voiceProviderHint");
   select.innerHTML = "";
-  const voices = availableVoices;
-  select.disabled = voices.length === 0;
-  if (voices.length === 0) {
-    select.append(el("option", { value: "" }, "No narration voices are available"));
+  const provider = availableVoiceProviders.find((item) => item.id === providerSelect.value);
+  availableVoices = Array.isArray(provider?.voices) ? provider.voices : [];
+  select.disabled = !provider || !provider.available || availableVoices.length === 0;
+  if (!provider) {
+    select.append(el("option", { value: "" }, "Choose a provider first"));
+    const configuredOption = availableVoiceProviders.find((item) => item.id === configuredVoiceProvider);
+    if (configuredOption) {
+      hint.textContent = `${configuredOption.label} is selected in configuration but needs setup: ${configuredOption.status_note}`;
+    } else if (configuredVoiceProvider) {
+      hint.textContent = `Configured provider "${configuredVoiceProvider}" has no Backlot voice catalog. Choose an available provider explicitly.`;
+    } else {
+      hint.textContent = "Choose a narration provider. OpenAI requires an API key and may incur charges; Microsoft Edge requires internet access.";
+    }
+    syncCreateButton();
+    return;
+  }
+  if (!provider.available) {
+    select.append(el("option", { value: "" }, "Provider setup required"));
+    hint.textContent = provider.status_note || "Complete provider setup before creating a project.";
+    syncCreateButton();
+    return;
+  }
+  if (availableVoices.length === 0) {
+    select.append(el("option", { value: "" }, "No voices are available for this provider"));
+    hint.textContent = provider.status_note || "This provider does not have a curated voice catalog in Backlot.";
+    syncCreateButton();
     return;
   }
 
-  for (const v of voices) {
+  for (const v of availableVoices) {
     const opt = el("option", { value: v.id }, v.name);
     select.append(opt);
   }
+  const configuredVoice = availableVoices[0]?.id || "";
+  select.value = configuredVoice;
+  hint.textContent = provider.status_note || "Voice selection is locked to the chosen provider for this project.";
+  syncCreateButton();
+}
+
+function renderVoiceProviderOptions() {
+  const select = document.getElementById("voiceProviderSelect");
+  const hint = document.getElementById("voiceProviderHint");
+  select.innerHTML = "";
+  select.append(el("option", { value: "" }, "Choose a configured provider"));
+  for (const provider of availableVoiceProviders) {
+    const option = el("option", { value: provider.id }, provider.label);
+    option.disabled = provider.available !== true;
+    select.append(option);
+  }
+  const defaultProvider = availableVoiceProviders.find((provider) => (
+    provider.id === configuredVoiceProvider && provider.available === true
+  ));
+  select.value = defaultProvider?.id || "";
+  if (!select.value) {
+    const configuredOption = availableVoiceProviders.find((provider) => provider.id === configuredVoiceProvider);
+    hint.textContent = configuredOption
+      ? `${configuredOption.label} is selected in configuration but needs setup: ${configuredOption.status_note}`
+      : (availableVoiceProviders.length
+        ? "Choose a narration provider. OpenAI requires an API key and may incur charges; Microsoft Edge requires internet access."
+        : "No narration provider is available. Configure OpenAI TTS or install edge-tts.");
+  }
+  renderVoiceOptions();
+}
+
+function syncCreateButton() {
+  const providerSelect = document.getElementById("voiceProviderSelect");
+  const voiceSelect = document.getElementById("voiceSelect");
+  const provider = availableVoiceProviders.find((item) => item.id === providerSelect?.value);
+  const voiceAvailable = Array.isArray(provider?.voices)
+    && provider.voices.some((voice) => voice.id === voiceSelect?.value);
+  submitCreateBtn.disabled = wizardOptionsState !== "ready"
+    || provider?.available !== true
+    || !voiceAvailable;
 }
 
 async function handleCreateProject(e) {
@@ -465,7 +542,11 @@ async function handleCreateProject(e) {
   const title = (document.getElementById("projectTitle")?.value || "").trim();
   const topic = (document.getElementById("projectTopic")?.value || "").trim();
   const voiceSelect = document.getElementById("voiceSelect");
-  const voice = voiceSelect?.value || "en-US-ChristopherNeural";
+  const voiceProvider = document.getElementById("voiceProviderSelect")?.value || "";
+  const selectedProvider = availableVoiceProviders.find((provider) => (
+    provider.id === voiceProvider && provider.available === true
+  ));
+  const voice = voiceSelect?.value || "";
   const durationSelect = document.getElementById("durationSelect");
   const duration = parseInt(durationSelect?.value || "30", 10);
 
@@ -490,6 +571,11 @@ async function handleCreateProject(e) {
     alert("Current production options are not ready. Retry loading them before creating a video.");
     return;
   }
+  if (!selectedProvider || !selectedProvider.voices.some((item) => item.id === voice)) {
+    alert("Choose an available narration provider and one of its voices before creating a video.");
+    document.getElementById("voiceProviderSelect")?.focus();
+    return;
+  }
 
   submitCreateBtn.disabled = true;
   submitCreateBtn.innerHTML = `<span>Creating internal preview...</span>`;
@@ -504,6 +590,7 @@ async function handleCreateProject(e) {
         pipeline_type: selectedPipeline || "animated-explainer",
         playbook: selectedPlaybook || "premium-minimalist",
         voice: voice,
+        voice_provider: voiceProvider,
         target_duration_seconds: duration
       })
     });
@@ -558,8 +645,11 @@ retryWizardOptionsBtn.addEventListener("click", async () => {
   await loadWizardOptions();
   renderPipelineOptions();
   renderPlaybookOptions();
+  renderVoiceProviderOptions();
   renderVoiceOptions();
 });
+document.getElementById("voiceProviderSelect").addEventListener("change", renderVoiceOptions);
+document.getElementById("voiceSelect").addEventListener("change", syncCreateButton);
 createProjectForm.addEventListener("submit", handleCreateProject);
 submitCreateBtn.addEventListener("click", (e) => {
   if (createProjectForm.checkValidity && !createProjectForm.checkValidity()) {

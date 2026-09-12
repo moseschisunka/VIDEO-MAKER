@@ -85,8 +85,8 @@ class CreateProjectRequest(BaseModel):
     # implicit workflow until its provider/runtime gates pass.
     pipeline_type: str = 'screen-demo'
     playbook: str = 'premium-minimalist'
-    voice: str = 'en-US-ChristopherNeural'
-    voice_provider: str = 'edge_tts'
+    voice: str | None = None
+    voice_provider: str | None = None
     tts_provider: str | None = None
     render_runtime: str = 'remotion'
     output_profile: str = 'youtube_landscape'
@@ -447,10 +447,18 @@ def _normalise_create_request(request: CreateProjectRequest) -> dict:
         requested_provider = canonical_voice_provider(requested_provider)
     if alias_provider:
         alias_provider = canonical_voice_provider(alias_provider)
+    configured_provider = str(_os.environ.get("OPENMONTAGE_TTS_PROVIDER") or "").strip().lower()
+    if configured_provider:
+        configured_provider = canonical_voice_provider(configured_provider)
     # ``tts_provider`` was the name used by the original Backlot client while
     # ``voice_provider`` is the public request name.  Accept either, but do
     # not silently choose one when a caller sends conflicting selections.
-    voice_provider = alias_provider or requested_provider
+    # Older API clients may omit both fields, so retain the historical Edge
+    # default only for that compatibility path. The UI now requires an
+    # explicit provider choice unless the operator configured a default.
+    voice_provider = alias_provider or requested_provider or configured_provider or "edge_tts"
+    if not voice:
+        voice = _default_voice_for_provider(voice_provider)
     render_runtime = str(request.render_runtime or "").strip().lower()
     requested_profile = str(request.output_profile or "").strip().lower()
     alias_profile = str(request.profile or "").strip().lower()
@@ -615,7 +623,15 @@ def _validate_create_request(request: CreateProjectRequest) -> tuple[dict, dict,
         raise HTTPException(status_code=400, detail="; ".join(errors))
     return normalized, record, manifest
 
-def _load_voices_data() -> list[dict]:
+def _default_voice_for_provider(provider: str) -> str:
+    if provider == "openai":
+        return str(_os.environ.get("OPENAI_TTS_VOICE") or "alloy").strip()
+    if provider == "edge_tts":
+        return "en-US-ChristopherNeural"
+    return ""
+
+
+def _edge_voice_catalog() -> list[dict]:
     return [
         {"id": "en-US-ChristopherNeural", "name": "Christopher (US Male - Authoritative & Warm)", "gender": "Male", "locale": "en-US", "tone": "Expert Explainer"},
         {"id": "en-US-AriaNeural", "name": "Aria (US Female - Clear & Dynamic)", "gender": "Female", "locale": "en-US", "tone": "Narrative & Commercial"},
@@ -626,6 +642,81 @@ def _load_voices_data() -> list[dict]:
         {"id": "en-GB-RyanNeural", "name": "Ryan (UK Male - Polished British)", "gender": "Male", "locale": "en-GB", "tone": "Documentary & Tech"},
         {"id": "en-GB-SoniaNeural", "name": "Sonia (UK Female - Professional British)", "gender": "Female", "locale": "en-GB", "tone": "Corporate & Insight"},
     ]
+
+
+def _load_voice_provider_options() -> dict:
+    """Describe the two providers with curated voices in the Backlot wizard.
+
+    Availability here means local setup is present. Edge still needs network
+    access at generation time, and OpenAI key presence does not validate the
+    key or make a provider call.
+    """
+    configured_provider = str(_os.environ.get("OPENMONTAGE_TTS_PROVIDER") or "").strip().lower()
+    if configured_provider:
+        configured_provider = canonical_voice_provider(configured_provider)
+
+    try:
+        import edge_tts  # noqa: F401
+        edge_installed = True
+    except ImportError:
+        edge_installed = False
+
+    openai_configured = bool(_os.environ.get("OPENAI_API_KEY"))
+    providers = [
+        {
+            "id": "openai",
+            "label": "OpenAI TTS",
+            "available": openai_configured,
+            "status_note": (
+                "OpenAI API key is configured; validity is checked when used and narration requests may incur usage charges."
+                if openai_configured
+                else "Requires OPENAI_API_KEY. Narration requests may incur usage charges."
+            ),
+            "network_required": True,
+            "may_incur_cost": True,
+            "voices": _load_voices_data("openai"),
+        },
+        {
+            "id": "edge_tts",
+            "label": "Microsoft Edge TTS",
+            "available": edge_installed,
+            "status_note": (
+                "No API key is required; an internet connection is required when narration is generated."
+                if edge_installed
+                else "Install the edge-tts package, then provide internet access when narration is generated."
+            ),
+            "network_required": True,
+            "may_incur_cost": None,
+            "voices": _load_voices_data("edge_tts"),
+        },
+    ]
+    known_providers = {provider["id"] for provider in providers}
+    warning = None
+    if configured_provider and configured_provider not in known_providers:
+        warning = (
+            f"OPENMONTAGE_TTS_PROVIDER is set to {configured_provider!r}, but the Backlot wizard "
+            "does not have a curated voice catalog for that provider."
+        )
+    return {
+        "default_provider": configured_provider or None,
+        "configuration_warning": warning,
+        "providers": providers,
+    }
+
+
+def _load_voices_data(provider: str | None = None) -> list[dict]:
+    selected_provider = str(
+        provider or _os.environ.get("OPENMONTAGE_TTS_PROVIDER") or "edge_tts"
+    ).strip().lower()
+    selected_provider = canonical_voice_provider(selected_provider)
+    if selected_provider == "openai":
+        voice_id = str(_os.environ.get("OPENAI_TTS_VOICE") or "alloy").strip()
+        voices = [{"id": voice_id, "name": f"{voice_id} (configured OpenAI voice)"}]
+    elif selected_provider == "edge_tts":
+        voices = _edge_voice_catalog()
+    else:
+        return []
+    return [{**voice, "provider": selected_provider} for voice in voices]
 
 
 def _generate_production_config(
@@ -1061,9 +1152,13 @@ def create_app() -> FastAPI:
     async def pipelines_endpoint() -> list:
         return await asyncio.to_thread(_load_pipelines_data)
 
+    @app.get("/api/voice-providers")
+    async def voice_providers_endpoint() -> dict:
+        return await asyncio.to_thread(_load_voice_provider_options)
+
     @app.get("/api/voices")
-    async def voices_endpoint() -> list:
-        return _load_voices_data()
+    async def voices_endpoint(provider: str | None = None) -> list:
+        return await asyncio.to_thread(_load_voices_data, provider)
 
     @app.post("/api/project/create")
     async def create_project_endpoint(request: CreateProjectRequest) -> dict:
