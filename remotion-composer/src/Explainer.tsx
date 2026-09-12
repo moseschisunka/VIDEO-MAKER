@@ -677,6 +677,7 @@ const SceneRenderer: React.FC<{
         data={cut.chartData} title={cut.title} colors={cut.chartColors || theme.chartColors}
         animationStyle={(cut.chartAnimation as any) || "grow-up"}
         showGrid={cut.showGrid} showValues={cut.showValues} backgroundColor={bgColor}
+        textColor={textColor}
       />
     );
   }
@@ -687,6 +688,7 @@ const SceneRenderer: React.FC<{
         animationStyle={(cut.chartAnimation as any) || "draw"}
         showGrid={cut.showGrid} showMarkers={cut.showMarkers} showLegend={cut.showLegend}
         xLabel={cut.xLabel} yLabel={cut.yLabel} backgroundColor={bgColor}
+        textColor={textColor}
       />
     );
   }
@@ -696,7 +698,7 @@ const SceneRenderer: React.FC<{
         data={cut.chartData} title={cut.title} colors={cut.chartColors || theme.chartColors}
         animationStyle={(cut.chartAnimation as any) || "expand"}
         donut={cut.donut} centerLabel={cut.centerLabel} centerValue={cut.centerValue}
-        showLegend={cut.showLegend} backgroundColor={bgColor}
+        showLegend={cut.showLegend} backgroundColor={bgColor} textColor={textColor}
       />
     );
   }
@@ -705,7 +707,7 @@ const SceneRenderer: React.FC<{
       <KPIGrid
         metrics={cut.chartData} title={cut.title} columns={cut.columns}
         colors={cut.chartColors || theme.chartColors} animationStyle={(cut.chartAnimation as any) || "count-up"}
-        backgroundColor={bgColor}
+        backgroundColor={bgColor} textColor={textColor}
       />
     );
   }

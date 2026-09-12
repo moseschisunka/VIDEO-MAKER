@@ -174,6 +174,7 @@ const OverlayContent: React.FC<{ overlay: TalkingHeadOverlay }> = ({
         animationStyle={(overlay.chartAnimation as any) || "grow-up"}
         showValues={overlay.showValues}
         backgroundColor={bgColor}
+        textColor={overlay.color || "#F8FAFC"}
       />
     );
   }
@@ -188,6 +189,7 @@ const OverlayContent: React.FC<{ overlay: TalkingHeadOverlay }> = ({
         showMarkers={overlay.showMarkers}
         showLegend={overlay.showLegend}
         backgroundColor={bgColor}
+        textColor={overlay.color || "#F8FAFC"}
       />
     );
   }
@@ -203,6 +205,7 @@ const OverlayContent: React.FC<{ overlay: TalkingHeadOverlay }> = ({
         centerValue={overlay.centerValue}
         showLegend={overlay.showLegend}
         backgroundColor={bgColor}
+        textColor={overlay.color || "#F8FAFC"}
       />
     );
   }
@@ -215,6 +218,7 @@ const OverlayContent: React.FC<{ overlay: TalkingHeadOverlay }> = ({
         colors={overlay.chartColors}
         animationStyle={(overlay.chartAnimation as any) || "count-up"}
         backgroundColor={bgColor}
+        textColor={overlay.color || "#F8FAFC"}
       />
     );
   }
