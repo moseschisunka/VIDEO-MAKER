@@ -101,7 +101,7 @@ def test_release_assets_are_present_in_built_wheel(tmp_path: Path) -> None:
     # verify the runtime resolver finds both config and Remotion resources.
     venv_dir = tmp_path / "venv"
     subprocess.run(
-        [sys.executable, "-m", "venv", "--system-site-packages", str(venv_dir)],
+        [sys.executable, "-m", "venv", str(venv_dir)],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
@@ -130,13 +130,22 @@ def test_release_assets_are_present_in_built_wheel(tmp_path: Path) -> None:
     probe_env = dict(os.environ)
     probe_env.pop("OPENMONTAGE_PROJECTS_DIR", None)
     probe_env.pop("OPENMONTAGE_RESOURCE_ROOT", None)
+    # The nested venv must stay isolated so its ``lib`` package comes from the
+    # wheel under test.  Reuse only the outer test environment's dependency
+    # directories because the wheel install above deliberately uses --no-deps.
+    probe_dependency_paths = [
+        entry
+        for entry in sys.path
+        if Path(entry).name.lower() in {"site-packages", "dist-packages"}
+    ]
     probe = subprocess.run(
         [
             str(venv_python),
             "-I",
             "-c",
             (
-                "import json; from pathlib import Path; "
+                "import json, sys; from pathlib import Path; "
+                f"sys.path.extend({json.dumps(probe_dependency_paths)}); "
                 "from lib.config_model import OpenMontageConfig; "
                 "from lib.paths import PROJECTS_DIR, resource_path; "
                 "cfg=OpenMontageConfig.load(); "
@@ -153,9 +162,13 @@ def test_release_assets_are_present_in_built_wheel(tmp_path: Path) -> None:
         ],
         cwd=tmp_path,
         env=probe_env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
+    )
+    assert probe.returncode == 0, (
+        f"installed-wheel probe failed ({probe.returncode}):\n"
+        f"stdout:\n{probe.stdout}\nstderr:\n{probe.stderr}"
     )
     probe_payload = json.loads(probe.stdout)
     assert probe_payload["config"] is True
