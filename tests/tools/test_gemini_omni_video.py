@@ -7,9 +7,9 @@ import json
 import sys
 import types
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 from tools.base_tool import ToolStatus
 
@@ -261,10 +261,15 @@ def test_gemini_omni_edit_without_source_is_rejected(gemini_env):
 
 
 def test_gemini_omni_image_to_video_sends_typed_parts(monkeypatch, tmp_path, gemini_env):
+    from PIL import Image
+
     from tools.video.gemini_omni_video import GeminiOmniVideo
 
-    ref = tmp_path / "cat.png"
-    ref.write_bytes(b"png bytes")
+    project_dir = tmp_path / "project"
+    ref = project_dir / "assets" / "cat.png"
+    ref.parent.mkdir(parents=True)
+    Image.new("RGB", (4, 4), color="orange").save(ref)
+    monkeypatch.setenv("OPENMONTAGE_PROJECT_DIR", str(project_dir))
     inline = base64.b64encode(b"cat mp4").decode("ascii")
     calls = _install_fake_requests(
         monkeypatch,
@@ -277,6 +282,7 @@ def test_gemini_omni_image_to_video_sends_typed_parts(monkeypatch, tmp_path, gem
             "prompt": "A cat <IMAGE_REF_0> playfully batting at yarn.",
             "operation": "image_to_video",
             "reference_image_path": str(ref),
+            "provider_approved": True,
             "transport": "rest",
             "output_path": str(tmp_path / "cat.mp4"),
         }
@@ -286,7 +292,7 @@ def test_gemini_omni_image_to_video_sends_typed_parts(monkeypatch, tmp_path, gem
     parts = calls["post"][0]["json"]["input"]
     assert parts[0]["type"] == "image"
     assert parts[0]["mime_type"] == "image/png"
-    assert parts[0]["data"] == base64.b64encode(b"png bytes").decode("ascii")
+    assert parts[0]["data"] == base64.b64encode(ref.read_bytes()).decode("ascii")
     assert parts[-1] == {"type": "text", "text": "A cat <IMAGE_REF_0> playfully batting at yarn."}
 
 

@@ -16,7 +16,13 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.video._shared import COGVIDEO_VARIANTS, estimate_local_runtime, generate_local_video, local_generation_status, local_install_instructions
+from tools.video._shared import (
+    COGVIDEO_VARIANTS,
+    estimate_local_runtime,
+    generate_local_video,
+    local_generation_status,
+    local_install_instructions,
+)
 
 
 class CogVideoVideo(BaseTool):
@@ -56,8 +62,7 @@ class CogVideoVideo(BaseTool):
             "prompt": {"type": "string"},
             "operation": {"type": "string", "enum": ["text_to_video", "image_to_video"], "default": "text_to_video"},
             "model_variant": {"type": "string", "enum": sorted(COGVIDEO_VARIANTS), "default": "cogvideo-5b"},
-            "reference_image_url": {"type": "string"},
-            "reference_image_path": {"type": "string"},
+            "reference_image_path": {"type": "string", "description": "Image in the current project's assets/ or renders/ directory"},
             "width": {"type": "integer"},
             "height": {"type": "integer"},
             "num_frames": {"type": "integer"},
@@ -135,4 +140,3 @@ class CogVideoVideo(BaseTool):
             return ToolResult(success=False, error=f"CogVideo generation failed: {exc}")
         result.duration_seconds = round(time.time() - start, 2)
         return result
-

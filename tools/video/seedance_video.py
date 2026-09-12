@@ -211,20 +211,51 @@ class SeedanceVideo(BaseTool):
         if inputs.get("seed") is not None:
             payload["seed"] = inputs["seed"]
 
+        local_image_paths = (
+            list(inputs.get("reference_image_paths") or [])
+            if operation == "reference_to_video"
+            else []
+        )
+        if operation == "image_to_video" and inputs.get("image_path"):
+            local_image_paths.append(inputs["image_path"])
+        if local_image_paths and inputs.get("provider_approved") is not True:
+            return ToolResult(
+                success=False,
+                error="sending local reference images to Seedance requires explicit provider approval",
+            )
+
         if operation == "image_to_video":
             if inputs.get("image_url"):
                 payload["image_url"] = inputs["image_url"]
             elif inputs.get("image_path"):
                 from tools.video._shared import upload_image_fal
-                payload["image_url"] = upload_image_fal(inputs["image_path"])
+                payload["image_url"] = upload_image_fal(
+                    inputs["image_path"],
+                    approved=inputs.get("provider_approved") is True,
+                    project_dir=inputs.get("project_dir"),
+                )
             if inputs.get("end_image_url"):
                 payload["end_image_url"] = inputs["end_image_url"]
 
         if operation == "reference_to_video":
             ref_image_urls = list(inputs.get("reference_image_urls") or [])
+            if len(ref_image_urls) + len(local_image_paths) > 9:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        "Seedance 2.0 reference_to_video accepts at most 9 reference "
+                        f"images; got {len(ref_image_urls) + len(local_image_paths)}"
+                    ),
+                )
             for local_path in inputs.get("reference_image_paths") or []:
                 from tools.video._shared import upload_image_fal
-                ref_image_urls.append(upload_image_fal(local_path))
+                ref_image_urls.append(
+                    upload_image_fal(
+                        local_path,
+                        approved=inputs.get("provider_approved") is True,
+                        project_dir=inputs.get("project_dir"),
+                    )
+                )
             # Seedance 2.0 reference-to-video ceilings: 9 images + 3 video + 3 audio.
             if len(ref_image_urls) > 9:
                 return ToolResult(

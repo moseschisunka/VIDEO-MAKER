@@ -12,9 +12,9 @@ import inspect
 import json
 import os
 import platform
+import shutil
 import signal
 import subprocess
-import shutil
 import tempfile
 import time
 from abc import ABC, abstractmethod
@@ -23,9 +23,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from lib.secrets import redact_text
 from lib.observability import metrics
 from lib.paths import runtime_root
+from lib.secrets import redact_text
 
 
 def _load_dotenv() -> None:
@@ -233,13 +233,20 @@ def _instrument_execute(fn: Callable) -> Callable:
         except Exception:
             pass
         try:
-            # Identity-bearing provider calls are automatically routed through
-            # the common kernel.  Selectors call the bridge explicitly, while
-            # a direct provider invocation in a production project/run cannot
-            # silently bypass timeout, idempotency, cost, and artifact policy.
+            # Identity-bearing calls and API calls carrying local user media
+            # are routed through the common kernel. Selectors call the bridge
+            # explicitly; this also prevents direct provider tools from
+            # bypassing approval before local media leaves the machine.
             # The bridge adds ``_provider_executor_bypass`` only for its
             # implementation callback, so provider code itself is not
             # recursively wrapped.
+            media_transfer_lane = False
+            if isinstance(inputs, dict) and getattr(self, "provider", "") not in {
+                "", "openmontage", "selector"
+            }:
+                from lib.providers.bridge import requires_external_media_approval
+
+                media_transfer_lane = requires_external_media_approval(self, inputs)
             kernel_lane = (
                 isinstance(inputs, dict)
                 and getattr(self, "provider", "") not in {"", "openmontage", "selector"}
@@ -248,6 +255,7 @@ def _instrument_execute(fn: Callable) -> Callable:
                     inputs.get("provider_kernel") is True
                     or inputs.get("project_dir")
                     or inputs.get("run_id")
+                    or media_transfer_lane
                 )
             )
             if kernel_lane:

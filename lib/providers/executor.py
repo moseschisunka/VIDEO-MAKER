@@ -16,25 +16,31 @@ import tempfile
 import threading
 import time
 from collections import defaultdict, deque
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from lib.observability import (
+    correlation_fields,
+    event_id,
+    metrics,
+    structured_log,
+    trace_id,
+)
 from lib.providers.contracts import (
+    FallbackClass,
     ProviderArtifact,
     ProviderContractError,
     ProviderError,
     ProviderErrorKind,
-    FallbackClass,
     ProviderRequest,
     ProviderResult,
     ProviderResultStatus,
     provider_artifact_from_path,
 )
-from lib.observability import correlation_fields, event_id, metrics, structured_log, trace_id
 from lib.secrets import redact_mapping, redact_text
-
 
 _logger = logging.getLogger("openmontage.providers")
 
@@ -206,6 +212,22 @@ class ProviderExecutor:
             cached.metadata = {**cached.metadata, "cache_hit": True}
             self._emit(request, "cache_hit", {"attempt_count": cached.attempt_count})
             return cached
+
+        if request.metadata.get("requires_external_media_approval") is True and not request.approved:
+            result = self._blocked(
+                request,
+                ProviderError(
+                    code="external_media_approval_required",
+                    message=(
+                        "sending local media to an external provider requires "
+                        "explicit provider approval"
+                    ),
+                    kind=ProviderErrorKind.APPROVAL_REQUIRED,
+                    retryable=False,
+                ),
+            )
+            self._emit(request, "blocked", {"error": result.error.to_dict() if result.error else None})
+            return result
 
         if request.estimated_cost_usd > 0 and not request.approved:
             result = self._blocked(

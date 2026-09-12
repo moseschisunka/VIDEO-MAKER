@@ -12,8 +12,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-import requests
-
+from tools._comfyui.client import ComfyUIClient, ComfyUIError
+from tools._comfyui.metadata import (
+    BUNDLED_MODEL_STACKS,
+    COMFYUI_SETUP_OFFER,
+    missing_models_payload,
+    model_stack,
+    workflow_hash,
+)
 from tools.base_tool import (
     BaseTool,
     Determinism,
@@ -25,14 +31,6 @@ from tools.base_tool import (
     ToolStability,
     ToolStatus,
     ToolTier,
-)
-from tools._comfyui.client import ComfyUIClient, ComfyUIError
-from tools._comfyui.metadata import (
-    BUNDLED_MODEL_STACKS,
-    COMFYUI_SETUP_OFFER,
-    missing_models_payload,
-    model_stack,
-    workflow_hash,
 )
 
 _WORKFLOWS = Path(__file__).resolve().parent.parent / "_comfyui" / "workflows"
@@ -146,11 +144,7 @@ class ComfyUIVideo(BaseTool):
             },
             "reference_image_path": {
                 "type": "string",
-                "description": "Local path to reference image (for image_to_video)",
-            },
-            "reference_image_url": {
-                "type": "string",
-                "description": "URL of reference image (for image_to_video, downloaded first)",
+                "description": "Image in the current project's assets/ or renders/ directory (for image_to_video)",
             },
             "width": {"type": "integer", "default": 832, "description": "T2V default 832, I2V default 640"},
             "height": {"type": "integer", "default": 480, "description": "T2V default 480, I2V default 640"},
@@ -410,24 +404,24 @@ class ComfyUIVideo(BaseTool):
 
         # Resolve reference image
         ref_path = inputs.get("reference_image_path")
-        ref_url = inputs.get("reference_image_url")
-
-        if ref_url and not ref_path:
-            # Download to a temp location
-            resp = requests.get(ref_url, timeout=60)
-            resp.raise_for_status()
-            ref_path = str(output_path.with_suffix(".ref.png"))
-            Path(ref_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(ref_path).write_bytes(resp.content)
-
         if not ref_path:
             raise ComfyUIError(
-                "image_to_video requires reference_image_path or reference_image_url"
+                "Local ComfyUI image_to_video requires reference_image_path; "
+                "remote image URLs are supported only by cloud providers"
             )
+
+        from tools.video._shared import validate_reference_image_path
+
+        try:
+            ref_path = validate_reference_image_path(
+                ref_path, project_dir=inputs.get("project_dir")
+            )
+        except ValueError as exc:
+            raise ComfyUIError(f"Invalid reference image: {exc}") from exc
 
         # Upload to ComfyUI
         upload_name = f"om_{output_path.stem}.png"
-        server_name = self._client.upload_image(Path(ref_path), upload_name)
+        server_name = self._client.upload_image(ref_path, upload_name)
 
         workflow = ComfyUIClient.load_workflow(_WORKFLOWS / "wan22-i2v-4step.json")
         workflow = ComfyUIClient.patch_workflow(workflow, {

@@ -442,6 +442,7 @@ def test_advanced_lip_sync_execute_downloads_video(monkeypatch, tmp_path):
             "session_id": "session-a",
             "face_id": "face-a",
             "audio_path": str(audio_path),
+            "provider_approved": True,
             "sound_start_time": 0,
             "sound_end_time": 4000,
             "sound_insert_time": 0,

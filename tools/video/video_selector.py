@@ -7,10 +7,17 @@ the tool file in tools/video/; no changes to this selector are needed.
 
 from __future__ import annotations
 
-from dataclasses import replace
 import os
+from dataclasses import replace
 
-from tools.base_tool import BaseTool, ToolResult, ToolRuntime, ToolStability, ToolStatus, ToolTier
+from tools.base_tool import (
+    BaseTool,
+    ToolResult,
+    ToolRuntime,
+    ToolStability,
+    ToolStatus,
+    ToolTier,
+)
 
 
 class VideoSelector(BaseTool):
@@ -304,8 +311,8 @@ class VideoSelector(BaseTool):
         return tool.estimate_runtime(inputs) if tool else 0.0
 
     def execute(self, inputs: dict[str, object]) -> ToolResult:
-        from lib.scoring import rank_providers
         from lib.media_contracts import MediaContractError, strict_bool
+        from lib.scoring import rank_providers
 
         allowed_operations = {"text_to_video", "image_to_video", "reference_to_video", "rank"}
         raw_operation = inputs.get("operation", "text_to_video")
@@ -400,7 +407,12 @@ class VideoSelector(BaseTool):
             return ToolResult(success=False, error="No video generation provider available.")
 
         from lib.media_contracts import AssetRequest, build_asset_request
-        from lib.media_generation import build_generation_plan, collect_output_paths, require_sample_approval, validate_generation_output
+        from lib.media_generation import (
+            build_generation_plan,
+            collect_output_paths,
+            require_sample_approval,
+            validate_generation_output,
+        )
 
         operation = raw_operation
         raw_request = inputs.get("asset_request")
@@ -477,22 +489,53 @@ class VideoSelector(BaseTool):
         ):
             adapted.pop(control_key, None)
 
-        # Auto-resolve reference_image_path to a URL for providers that need it
-        if adapted.get("operation") == "image_to_video" and adapted.get("reference_image_path"):
-            tool_props = getattr(tool, "input_schema", {}).get("properties", {})
-            # If the provider uses image_url (not reference_image_path), upload and convert
-            if "image_url" in tool_props and "image_url" not in adapted:
-                try:
-                    from tools.video._shared import upload_image_fal
-                    adapted["image_url"] = upload_image_fal(adapted["reference_image_path"])
-                except Exception as e:
-                    return ToolResult(success=False, error=f"Failed to upload reference image: {e}")
+        # Delay any required Fal upload until ProviderExecutor has approved the
+        # external media transfer. The selector must not upload user files while
+        # it is still preparing a provider request.
+        tool_props = getattr(tool, "input_schema", {}).get("properties", {})
+        upload_reference_image = bool(
+            adapted.get("operation") == "image_to_video"
+            and adapted.get("reference_image_path")
+            and "image_url" in tool_props
+            and "image_url" not in adapted
+        )
 
         from lib.providers.bridge import execute_with_provider_executor
 
         # All selector executions are kernel-governed; production callers with
         # run identity must explicitly approve paid provider execution.
-        result = execute_with_provider_executor(tool, adapted)
+        implementation = None
+        if upload_reference_image:
+            uploaded_url: str | None = None
+            upload_error: Exception | None = None
+            upload_attempted = False
+
+            def execute_after_upload_approval(provider_inputs: dict[str, object]):
+                nonlocal uploaded_url, upload_error, upload_attempted
+                execution_inputs = dict(provider_inputs)
+                if upload_error is not None:
+                    raise upload_error
+                if not upload_attempted:
+                    upload_attempted = True
+                    try:
+                        from tools.video._shared import upload_image_fal
+
+                        uploaded_url = upload_image_fal(
+                            str(execution_inputs["reference_image_path"]),
+                            approved=execution_inputs.get("provider_approved") is True,
+                            project_dir=execution_inputs.get("project_dir"),
+                        )
+                    except Exception as exc:
+                        upload_error = exc
+                        raise
+                execution_inputs["image_url"] = uploaded_url
+                return tool.execute(execution_inputs)
+
+            implementation = execute_after_upload_approval
+
+        result = execute_with_provider_executor(
+            tool, adapted, implementation=implementation
+        )
         if result.success:
             # A motion-required brief must never be satisfied by an image-only
             # downgrade, even if a provider reports success.
@@ -557,7 +600,7 @@ class VideoSelector(BaseTool):
         Respects preferred_provider and environment hints as tie-breakers,
         but the scoring engine drives the primary selection.
         """
-        from lib.scoring import rank_providers, ProviderScore
+        from lib.scoring import ProviderScore, rank_providers
 
         preferred = inputs.get("preferred_provider", "auto")
         allowed = set(inputs.get("allowed_providers") or [])
@@ -681,7 +724,38 @@ class VideoSelector(BaseTool):
             props = getattr(tool, "input_schema", {}).get("properties", {})
 
             if operation == "image_to_video":
-                if supports.get("image_to_video") or "image_url" in props or "reference_image_url" in props:
+                capabilities = getattr(tool, "capabilities", ())
+                declares_image_to_video = (
+                    supports.get("image_to_video")
+                    or "image_to_video" in capabilities
+                )
+                accepts_reference_path = (
+                    "reference_image_path" in props or "image_url" in props
+                )
+                accepts_reference_url = (
+                    "image_url" in props or "reference_image_url" in props
+                )
+                has_reference_path = bool(inputs.get("reference_image_path"))
+                has_reference_url = bool(
+                    inputs.get("reference_image_url") or inputs.get("image_url")
+                )
+
+                if has_reference_url and not has_reference_path:
+                    accepts_requested_input = accepts_reference_url
+                elif has_reference_path and not has_reference_url:
+                    accepts_requested_input = accepts_reference_path
+                elif has_reference_path and has_reference_url:
+                    accepts_requested_input = (
+                        accepts_reference_path or accepts_reference_url
+                    )
+                else:
+                    accepts_requested_input = (
+                        declares_image_to_video
+                        or accepts_reference_path
+                        or accepts_reference_url
+                    )
+
+                if accepts_requested_input:
                     matched_operation = True
                     if self._operation_ready(tool, "image_to_video"):
                         filtered.append(tool)
@@ -697,6 +771,11 @@ class VideoSelector(BaseTool):
             if self._operation_ready(tool, str(operation)):
                 filtered.append(tool)
 
+        if operation == "image_to_video":
+            # Never fall back to providers that cannot consume the supplied
+            # path/URL representation; that would route into a predictable
+            # validation failure (or revive unsafe URL fetching in a local tool).
+            return filtered
         return filtered if matched_operation else candidates
 
     @staticmethod

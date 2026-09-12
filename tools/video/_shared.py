@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lib.paths import PROJECTS_DIR
 from tools.base_tool import ToolResult, ToolStatus
-
 
 HEYGEN_PROVIDERS = {
     "veo_3_1": {"name": "Google VEO 3.1", "quality": "highest", "speed": "slow"},
@@ -273,28 +273,118 @@ def load_diffusers_pipeline(pipeline_class: str, model_id: str, enable_offload: 
     return pipeline
 
 
+MAX_REFERENCE_IMAGE_BYTES = 25 * 1024 * 1024
+MAX_REFERENCE_IMAGE_PIXELS = 40_000_000
+
+
 def load_reference_image(inputs: dict[str, Any], width: int, height: int):
-    from io import BytesIO
-
-    import requests
-    from PIL import Image
-
     ref_path = inputs.get("reference_image_path")
-    ref_url = inputs.get("reference_image_url")
-
-    if ref_path:
-        image = Image.open(ref_path).convert("RGB")
-    elif ref_url:
-        response = requests.get(ref_url, timeout=60)
-        response.raise_for_status()
-        image = Image.open(BytesIO(response.content)).convert("RGB")
-    else:
+    if not ref_path:
         return ToolResult(
             success=False,
-            error="image_to_video requires reference_image_url or reference_image_path",
+            error=(
+                "Local image_to_video requires reference_image_path. "
+                "Remote image URLs are supported only by cloud providers."
+            ),
         )
 
+    from PIL import Image
+
+    try:
+        if type(width) is not int or type(height) is not int:
+            raise ValueError("requested image dimensions must be integers")
+        if width < 1 or height < 1 or width * height > MAX_REFERENCE_IMAGE_PIXELS:
+            raise ValueError(
+                f"requested dimensions must be positive and at most "
+                f"{MAX_REFERENCE_IMAGE_PIXELS:,} pixels"
+            )
+        path = validate_reference_image_path(
+            ref_path, project_dir=inputs.get("project_dir")
+        )
+        with Image.open(path) as source:
+            image = source.convert("RGB")
+    except (OSError, ValueError) as exc:
+        return ToolResult(success=False, error=f"Invalid reference image: {exc}")
+
     return image.resize((width, height), Image.LANCZOS)
+
+
+def validate_reference_image_path(
+    path: str | Path, *, project_dir: str | Path | None = None
+) -> Path:
+    """Require project media and bound the image before decoding or upload."""
+    try:
+        image_path = Path(path).expanduser()
+        resolved_path = image_path.resolve(strict=True)
+    except TypeError as exc:
+        raise ValueError("path must be a file path") from exc
+    except FileNotFoundError as exc:
+        raise ValueError("reference image file not found") from exc
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("file cannot be resolved") from exc
+
+    if not resolved_path.is_file():
+        raise ValueError("path is not a regular file")
+
+    project_dir_value = project_dir or os.environ.get("OPENMONTAGE_PROJECT_DIR")
+    if project_dir_value:
+        project_dir = Path(project_dir_value).expanduser()
+        if project_dir.is_symlink():
+            raise ValueError("project directory must not be a symlink")
+        try:
+            project_root = project_dir.resolve(strict=True)
+            relative_path = resolved_path.relative_to(project_root)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValueError("reference image must be inside project assets/ or renders/") from exc
+    else:
+        projects_root = PROJECTS_DIR.resolve()
+        try:
+            relative_path = resolved_path.relative_to(projects_root)
+        except ValueError as exc:
+            raise ValueError("reference image must be inside project assets/ or renders/") from exc
+        if len(relative_path.parts) < 3 or relative_path.parts[1] not in {"assets", "renders"}:
+            raise ValueError("reference image must be inside project assets/ or renders/")
+        project_dir = projects_root / relative_path.parts[0]
+        if project_dir.is_symlink():
+            raise ValueError("project directory must not be a symlink")
+        try:
+            project_root = project_dir.resolve(strict=True)
+            relative_path = resolved_path.relative_to(project_root)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValueError("reference image must be inside project assets/ or renders/") from exc
+
+    if not relative_path.parts or relative_path.parts[0] not in {"assets", "renders"}:
+        raise ValueError("reference image must be inside project assets/ or renders/")
+    media_root = project_root / relative_path.parts[0]
+    if media_root.is_symlink():
+        raise ValueError("project media directory must not be a symlink")
+    try:
+        resolved_path.relative_to(media_root.resolve(strict=True))
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError("reference image must be inside project assets/ or renders/") from exc
+
+    file_size = resolved_path.stat().st_size
+
+    if file_size > MAX_REFERENCE_IMAGE_BYTES:
+        raise ValueError(
+            f"file exceeds the {MAX_REFERENCE_IMAGE_BYTES // (1024 * 1024)} MiB limit"
+        )
+
+    from PIL import Image
+
+    try:
+        with Image.open(resolved_path) as image:
+            if image.width * image.height > MAX_REFERENCE_IMAGE_PIXELS:
+                raise ValueError(
+                    f"image exceeds the {MAX_REFERENCE_IMAGE_PIXELS:,}-pixel limit"
+                )
+            image.verify()
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("file is not a supported image") from exc
+
+    return resolved_path
 
 
 def generate_local_video(
@@ -330,6 +420,12 @@ def generate_local_video(
     height = inputs.get("height", meta["default_height"])
     num_frames = inputs.get("num_frames", meta["default_num_frames"])
     fps = meta["fps"]
+    reference_image = None
+    if operation == "image_to_video":
+        reference_image = load_reference_image(inputs, width, height)
+        if isinstance(reference_image, ToolResult):
+            return reference_image
+
     model_id = meta.get("hf_i2v_id") if operation == "image_to_video" and meta.get("hf_i2v_id") else meta["hf_id"]
     pipeline = load_diffusers_pipeline(meta["pipeline_class"], model_id, enable_offload)
 
@@ -342,11 +438,8 @@ def generate_local_video(
     }
     if seed is not None:
         generation_args["generator"] = torch.Generator(device="cpu").manual_seed(seed)
-    if operation == "image_to_video":
-        image = load_reference_image(inputs, width, height)
-        if isinstance(image, ToolResult):
-            return image
-        generation_args["image"] = image
+    if reference_image is not None:
+        generation_args["image"] = reference_image
     if meta["pipeline_class"] == "CogVideoXPipeline":
         generation_args["negative_prompt"] = "worst quality, low quality, blurry, distorted, watermark"
 
@@ -415,17 +508,22 @@ def poll_heygen(execution_id: str, api_key: str, timeout: int = 600) -> str:
     raise TimeoutError(f"HeyGen execution {execution_id} timed out after {timeout}s")
 
 
-def upload_image_fal(image_path: str) -> str:
+def upload_image_fal(
+    image_path: str | Path,
+    *,
+    approved: bool = False,
+    project_dir: str | Path | None = None,
+) -> str:
     """Upload a local image to fal.ai storage and return a public URL."""
+    if approved is not True:
+        raise PermissionError("sending a local image to fal.ai requires explicit provider approval")
+
+    path = validate_reference_image_path(image_path, project_dir=project_dir)
     import requests
 
     api_key = os.environ.get("FAL_KEY") or os.environ.get("FAL_AI_API_KEY")
     if not api_key:
         raise RuntimeError("FAL_KEY or FAL_AI_API_KEY required for image upload")
-
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Image not found: {image_path}")
 
     suffix = path.suffix.lower()
     content_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(
@@ -454,16 +552,22 @@ def upload_image_fal(image_path: str) -> str:
     return data["file_url"]
 
 
-def upload_image_heygen(image_path: str, api_key: str) -> str:
+def upload_image_heygen(
+    image_path: str | Path,
+    api_key: str,
+    *,
+    approved: bool = False,
+    project_dir: str | Path | None = None,
+) -> str:
     """Upload a local image to HeyGen and return a public URL.
 
     Tries the v2 presigned-upload endpoint first, falls back to fal.ai storage.
     """
-    import requests
+    if approved is not True:
+        raise PermissionError("sending a local image to HeyGen requires explicit provider approval")
 
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Image not found: {image_path}")
+    path = validate_reference_image_path(image_path, project_dir=project_dir)
+    import requests
 
     # Try HeyGen v2 presigned upload
     try:
@@ -490,7 +594,7 @@ def upload_image_heygen(image_path: str, api_key: str) -> str:
         pass
 
     # Fallback to fal.ai storage upload
-    return upload_image_fal(image_path)
+    return upload_image_fal(path, approved=approved, project_dir=project_dir)
 
 
 def generate_heygen_video(inputs: dict[str, Any]) -> ToolResult:
@@ -519,7 +623,17 @@ def generate_heygen_video(inputs: dict[str, Any]) -> ToolResult:
         ref_url = inputs.get("reference_image_url")
         ref_path = inputs.get("reference_image_path")
         if ref_path and not ref_url:
-            ref_url = upload_image_heygen(ref_path, api_key)
+            if inputs.get("provider_approved") is not True:
+                return ToolResult(
+                    success=False,
+                    error="sending a local reference image to HeyGen requires explicit provider approval",
+                )
+            ref_url = upload_image_heygen(
+                ref_path,
+                api_key,
+                approved=inputs.get("provider_approved") is True,
+                project_dir=inputs.get("project_dir"),
+            )
         if not ref_url:
             return ToolResult(
                 success=False,
@@ -608,7 +722,10 @@ def generate_ltx_modal_video(inputs: dict[str, Any]) -> ToolResult:
         ref_path = inputs.get("reference_image_path")
         ref_url = inputs.get("reference_image_url")
         if ref_path:
-            payload["input_image"] = base64.b64encode(Path(ref_path).read_bytes()).decode()
+            path = validate_reference_image_path(
+                ref_path, project_dir=inputs.get("project_dir")
+            )
+            payload["input_image"] = base64.b64encode(path.read_bytes()).decode()
         elif ref_url:
             payload["input_image_url"] = ref_url
         else:

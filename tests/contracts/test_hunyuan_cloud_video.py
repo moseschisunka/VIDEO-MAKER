@@ -14,6 +14,7 @@ import types
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from tools.base_tool import (
     BaseTool,
@@ -24,7 +25,6 @@ from tools.base_tool import (
     ToolTier,
 )
 from tools.video.hunyuan_cloud_video import HunyuanCloudVideo
-
 
 # ------------------------------------------------------------------
 # Fake HTTP infrastructure (used by execute-path tests)
@@ -383,14 +383,18 @@ class TestToolSpecific:
         assert not result.success
         assert expected in (result.error or "")
 
-    def test_i2v_both_url_and_path_fails(self, hunyuan_env, tmp_path):
-        img = tmp_path / "ref.jpg"
-        img.write_bytes(b"fake-jpeg")
+    def test_i2v_both_url_and_path_fails(self, hunyuan_env, tmp_path, monkeypatch):
+        project_dir = tmp_path / "project"
+        img = project_dir / "assets" / "ref.jpg"
+        img.parent.mkdir(parents=True)
+        Image.new("RGB", (4, 4), color="red").save(img, format="JPEG")
+        monkeypatch.setenv("OPENMONTAGE_PROJECT_DIR", str(project_dir))
         result = HunyuanCloudVideo().execute({
             "prompt": "test",
             "operation": "image_to_video",
             "image_url": "https://example.com/img.jpg",
             "image_path": str(img),
+            "provider_approved": True,
         })
         assert result.success is False
         assert "not both" in result.error.lower()
@@ -578,8 +582,11 @@ class TestExecuteWithMocks:
 
     def test_i2v_with_local_image_path(self, hunyuan_env, tmp_path, monkeypatch):
         """Full I2V flow with a local image path -> base64 encoding."""
-        img = tmp_path / "frame.jpg"
-        img.write_bytes(b"\xff\xd8\xff\xe0test-jpeg-image-data")
+        project_dir = tmp_path / "project"
+        img = project_dir / "assets" / "frame.jpg"
+        img.parent.mkdir(parents=True)
+        Image.new("RGB", (4, 4), color="blue").save(img, format="JPEG")
+        monkeypatch.setenv("OPENMONTAGE_PROJECT_DIR", str(project_dir))
 
         task_id = "i2v-local-task"
         _install_fake_requests(
@@ -606,6 +613,7 @@ class TestExecuteWithMocks:
             "prompt": "animate this frame",
             "operation": "image_to_video",
             "image_path": str(img),
+            "provider_approved": True,
             "output_path": str(output_path),
         })
 

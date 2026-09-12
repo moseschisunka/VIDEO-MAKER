@@ -43,6 +43,12 @@ def build_ranked_plan(
     selected = next((item for item in candidates if item.get("available_for_execution")), None)
     alternatives = [item for item in candidates if not selected or item.get("tool") != selected.get("tool")]
     selected_cost = float((selected or {}).get("estimated_cost_usd") or 0)
+    selected_tool = provider_by_tool.get(str((selected or {}).get("tool") or ""))
+    from .bridge import requires_external_media_approval
+
+    external_media_approval_required = bool(
+        selected_tool is not None and requires_external_media_approval(selected_tool, inputs)
+    )
     approval_error: str | None = None
     if "provider_approved" in inputs:
         approval_field = "provider_approved"
@@ -62,7 +68,10 @@ def build_ranked_plan(
         approved = False
         approval_error = str(exc)
 
-    approval_required = bool(approval_error or (selected_cost > 0 and not approved))
+    approval_required = bool(
+        approval_error
+        or ((selected_cost > 0 or external_media_approval_required) and not approved)
+    )
     if selected is None:
         execution = "blocked_unavailable"
     elif approval_error:
@@ -94,6 +103,7 @@ def build_ranked_plan(
         "candidates": candidates,
         "approval_required": approval_required,
         "approval_error": approval_error,
+        "external_media_approval_required": external_media_approval_required,
         "execution": execution,
     }
 

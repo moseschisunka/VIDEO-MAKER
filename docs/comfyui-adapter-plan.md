@@ -245,7 +245,8 @@ lower resolutions as needed.
 prompt:               string    # required
 operation:            string    # "text_to_video" | "image_to_video" (default: t2v)
 reference_image_path: string    # local path (for i2v)
-reference_image_url:  string    # URL (for i2v, downloaded first)
+# URLs are intentionally not accepted by local ComfyUI; use a cloud provider
+# for URL references. Local paths must be bounded image files before upload.
 width:                integer   # default 640
 height:               integer   # default 640
 num_frames:           integer   # default 81 (5s at 16fps)

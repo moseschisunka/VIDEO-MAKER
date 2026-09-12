@@ -17,7 +17,13 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.video._shared import HUNYUAN_VARIANTS, estimate_local_runtime, generate_local_video, local_generation_status, local_install_instructions
+from tools.video._shared import (
+    HUNYUAN_VARIANTS,
+    estimate_local_runtime,
+    generate_local_video,
+    local_generation_status,
+    local_install_instructions,
+)
 
 
 class HunyuanVideo(BaseTool):
@@ -57,8 +63,7 @@ class HunyuanVideo(BaseTool):
             "prompt": {"type": "string"},
             "operation": {"type": "string", "enum": ["text_to_video", "image_to_video"], "default": "text_to_video"},
             "model_variant": {"type": "string", "enum": ["hunyuan-1.5"], "default": "hunyuan-1.5"},
-            "reference_image_url": {"type": "string"},
-            "reference_image_path": {"type": "string"},
+            "reference_image_path": {"type": "string", "description": "Image in the current project's assets/ or renders/ directory"},
             "width": {"type": "integer"},
             "height": {"type": "integer"},
             "num_frames": {"type": "integer"},

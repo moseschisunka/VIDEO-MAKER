@@ -16,7 +16,13 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
-from tools.video._shared import LTX_LOCAL_VARIANTS, estimate_local_runtime, generate_local_video, local_generation_status, local_install_instructions
+from tools.video._shared import (
+    LTX_LOCAL_VARIANTS,
+    estimate_local_runtime,
+    generate_local_video,
+    local_generation_status,
+    local_install_instructions,
+)
 
 
 class LTXVideoLocal(BaseTool):
@@ -56,8 +62,7 @@ class LTXVideoLocal(BaseTool):
             "prompt": {"type": "string"},
             "operation": {"type": "string", "enum": ["text_to_video", "image_to_video"], "default": "text_to_video"},
             "model_variant": {"type": "string", "enum": ["ltx2-local"], "default": "ltx2-local"},
-            "reference_image_url": {"type": "string"},
-            "reference_image_path": {"type": "string"},
+            "reference_image_path": {"type": "string", "description": "Image in the current project's assets/ or renders/ directory"},
             "width": {"type": "integer"},
             "height": {"type": "integer"},
             "num_frames": {"type": "integer"},
@@ -93,4 +98,3 @@ class LTXVideoLocal(BaseTool):
             return ToolResult(success=False, error=f"Local LTX video generation failed: {exc}")
         result.duration_seconds = round(time.time() - start, 2)
         return result
-

@@ -4,13 +4,13 @@ Tests the new tools (TTS, music gen), pipeline manifests, style playbooks,
 stage director skills, meta skills, and the animated-explainer pipeline.
 """
 
-import sys
-import builtins
 import base64
+import builtins
 import os
 import shutil
-from types import SimpleNamespace
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,37 +18,37 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from lib.pipeline_loader import (
-    load_pipeline,
-    get_stage_order,
-    get_required_tools,
-    get_stage_skill,
-    get_stage_review_focus,
-    list_pipelines,
-)
 from lib.checkpoint import STAGES
+from lib.pipeline_loader import (
+    get_required_tools,
+    get_stage_order,
+    get_stage_review_focus,
+    get_stage_skill,
+    list_pipelines,
+    load_pipeline,
+)
 from schemas.artifacts import list_schemas
-from styles.playbook_loader import load_playbook, list_playbooks, validate_playbook
-from tools.base_tool import ToolTier, ToolStatus
-from tools.audio.music_gen import MusicGen
-from tools.tool_registry import ToolRegistry
+from styles.playbook_loader import list_playbooks, load_playbook, validate_playbook
 from tools.audio.elevenlabs_tts import ElevenLabsTTS
+from tools.audio.google_music import GoogleMusic
+from tools.audio.google_tts import GoogleTTS
+from tools.audio.music_gen import MusicGen
 from tools.audio.openai_tts import OpenAITTS
 from tools.audio.piper_tts import PiperTTS
 from tools.audio.tts_selector import TTSSelector
-from tools.audio.google_tts import GoogleTTS
+from tools.base_tool import ToolStatus, ToolTier
 from tools.graphics.google_imagen import GoogleImagen
-from tools.audio.google_music import GoogleMusic
+from tools.tool_registry import ToolRegistry
 from tools.video.veo_video import VeoVideo
-
 
 # ---- Google Credentials ----
 
 
 class TestGoogleCredentials:
     def test_get_genai_client_with_google_api_key(self):
-        from tools.google_credentials import get_genai_client
         from google.genai import types
+
+        from tools.google_credentials import get_genai_client
 
         mock_client = MagicMock()
         with (
@@ -323,6 +323,7 @@ class TestGoogleMusic:
             inputs = {
                 "prompt": "music inspired by image",
                 "image_path": str(local_image),
+                "provider_approved": True,
                 "output_path": str(tmp_path / "out1.mp3"),
             }
             res = tool.execute(inputs)
@@ -419,6 +420,7 @@ class TestGoogleMusic:
             inputs = {
                 "prompt": "music with missing image",
                 "image_path": str(tmp_path / "does_not_exist.png"),
+                "provider_approved": True,
                 "output_path": str(tmp_path / "out.mp3"),
             }
             res = tool.execute(inputs)
@@ -517,7 +519,7 @@ class TestVeoVideo:
     @patch("os.path.exists")
     @patch("requests.get")
     def test_operations_mapping(
-        self, mock_req_get, mock_exists, mock_img_open, mock_probe
+        self, mock_req_get, mock_exists, mock_img_open, mock_probe, tmp_path
     ):
         tool = VeoVideo()
         mock_probe.return_value = {"width": 1920, "height": 1080, "duration": 8.0}
@@ -525,6 +527,9 @@ class TestVeoVideo:
 
         mock_img = MagicMock()
         mock_img.format = "PNG"
+        mock_img.width = 4
+        mock_img.height = 4
+        mock_img.__enter__.return_value = mock_img
         mock_img_open.return_value = mock_img
 
         mock_resp = MagicMock()
@@ -542,7 +547,10 @@ class TestVeoVideo:
         mock_client.models.generate_videos.return_value = mock_operation
 
         with (
-            patch.dict(os.environ, {"GEMINI_API_KEY": "test_key"}),
+            patch.dict(os.environ, {
+                "GEMINI_API_KEY": "test_key",
+                "OPENMONTAGE_PROJECT_DIR": str(tmp_path / "project"),
+            }),
             patch("google.genai.Client", return_value=mock_client),
         ):
             # text_to_video
@@ -559,11 +567,15 @@ class TestVeoVideo:
             assert called_kwargs["image"] is None
 
             # image_to_video
+            project_image = tmp_path / "project" / "assets" / "local_img.png"
+            project_image.parent.mkdir(parents=True, exist_ok=True)
+            project_image.write_bytes(b"fake_image_bytes")
             inputs = {
                 "prompt": "Test image to video",
                 "backend": "google",
                 "operation": "image_to_video",
-                "image_path": "local_img.png",
+                "image_path": str(project_image),
+                "provider_approved": True,
                 "duration": "8s",
             }
             res = tool.execute(inputs)
@@ -613,10 +625,11 @@ class TestVeoVideo:
                 "backend": "google",
                 "operation": "image_to_video",
                 "image_path": "non_existent_file_path_12345.png",
+                "provider_approved": True,
             }
             res = tool.execute(inputs)
             assert res.success is False
-            assert "Local input image not found" in res.error
+            assert "reference image file not found" in res.error
 
     def test_missing_reference_image_paths(self):
         tool = VeoVideo()
@@ -629,10 +642,11 @@ class TestVeoVideo:
                 "backend": "google",
                 "operation": "reference_to_video",
                 "reference_image_paths": ["non_existent_reference_12345.png"],
+                "provider_approved": True,
             }
             res = tool.execute(inputs)
             assert res.success is False
-            assert "Local reference image not found" in res.error
+            assert "reference image file not found" in res.error
 
 
 class TestNewToolsRegistry:
@@ -929,6 +943,7 @@ class TestRemotionScaffold:
 class TestVideoComposeOperations:
     def test_render_operation_exists(self):
         from typing import Any
+
         from tools.video.video_compose import VideoCompose
 
         tool = VideoCompose()

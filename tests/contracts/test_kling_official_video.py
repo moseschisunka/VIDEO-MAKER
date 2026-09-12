@@ -6,6 +6,8 @@ import base64
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -356,8 +358,11 @@ def test_video_selector_prefers_official_provider_without_fal_upload(
     monkeypatch, tmp_path, isolated_tool_registry
 ):
     monkeypatch.setenv("KLING_API_KEY", "test-key")
-    image_path = tmp_path / "ref.png"
-    image_path.write_bytes(b"fake")
+    project_dir = tmp_path / "project"
+    image_path = project_dir / "assets" / "ref.png"
+    image_path.parent.mkdir(parents=True)
+    Image.new("RGB", (4, 4), color="red").save(image_path)
+    monkeypatch.setenv("OPENMONTAGE_PROJECT_DIR", str(project_dir))
     isolated_tool_registry.discover("tools")
 
     seen = {}
@@ -380,6 +385,7 @@ def test_video_selector_prefers_official_provider_without_fal_upload(
             "preferred_provider": "kling_official",
             "allowed_providers": ["kling_official"],
             "reference_image_path": str(image_path),
+            "provider_approved": True,
         }
     )
     assert result.success

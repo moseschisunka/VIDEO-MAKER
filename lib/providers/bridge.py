@@ -20,11 +20,10 @@ from .contracts import (
     ProviderRequest,
     ProviderResult,
     ProviderResultStatus,
-    strict_bool,
     stable_idempotency_key,
+    strict_bool,
 )
 from .executor import ProviderExecutor
-
 
 _CONTROL_KEYS = {
     "provider_kernel",
@@ -39,6 +38,93 @@ _CONTROL_KEYS = {
     "provider_max_retries",
     "fallback_class",
 }
+
+_LOCAL_MEDIA_PATH_FIELDS = frozenset({
+    "audio_path",
+    "audio_paths",
+    "end_image_path",
+    "face_image_path",
+    "image_path",
+    "image_paths",
+    "input_audio_path",
+    "input_image_path",
+    "input_reference_path",
+    "input_video_path",
+    "reference_audio_path",
+    "reference_audio_paths",
+    "reference_image_path",
+    "reference_image_paths",
+    "reference_tail_image_path",
+    "reference_video_path",
+    "reference_video_paths",
+    "video_path",
+    "video_paths",
+})
+
+
+def _is_local_path_value(value: Any) -> bool:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return bool(normalized) and not normalized.startswith(("http://", "https://", "data:"))
+    if isinstance(value, Path):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(_is_local_path_value(item) for item in value)
+    return False
+
+
+def has_local_media_reference(value: Any) -> bool:
+    """Return whether inputs contain a local image, video, or audio path."""
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if str(key).lower() in _LOCAL_MEDIA_PATH_FIELDS and _is_local_path_value(item):
+                return True
+            if has_local_media_reference(item):
+                return True
+    elif isinstance(value, (list, tuple)):
+        return any(has_local_media_reference(item) for item in value)
+    return False
+
+
+def requires_external_media_approval(tool: BaseTool, inputs: Mapping[str, Any]) -> bool:
+    """Gate local user media before an API provider can receive it."""
+    runtime = getattr(tool, "runtime", None)
+    runtime_name = str(getattr(runtime, "value", runtime) or "").lower()
+    return runtime_name == "api" and has_local_media_reference(inputs)
+
+
+def _validate_video_reference_images(inputs: Mapping[str, Any]) -> None:
+    """Constrain local images sent to video APIs to bounded project media."""
+    image_fields = {
+        "end_image_path",
+        "image_path",
+        "image_paths",
+        "input_image_path",
+        "input_reference_path",
+        "reference_image_path",
+        "reference_image_paths",
+        "reference_tail_image_path",
+    }
+
+    def paths(value: Any):
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                if str(key).lower() in image_fields:
+                    if isinstance(item, str) or isinstance(item, Path):
+                        if _is_local_path_value(item):
+                            yield item
+                    elif isinstance(item, (list, tuple)):
+                        yield from (part for part in item if _is_local_path_value(part))
+                else:
+                    yield from paths(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                yield from paths(item)
+
+    from tools.video._shared import validate_reference_image_path
+
+    for image_path in paths(inputs):
+        validate_reference_image_path(image_path, project_dir=inputs.get("project_dir"))
 
 
 def _payload(inputs: Mapping[str, Any]) -> dict[str, Any]:
@@ -107,6 +193,7 @@ def build_provider_request(tool: BaseTool, inputs: Mapping[str, Any], *, operati
     run_id = raw.get("run_id")
     attempt = raw.get("attempt")
     production_context = bool(raw.get("provider_kernel") is True or raw.get("project_dir") or raw.get("run_id"))
+    media_transfer_approval_required = requires_external_media_approval(tool, raw)
     # ProviderRequest requires the complete identity tuple.  A partial caller
     # value is ignored here and left visible in payload metadata for diagnosis;
     # it must not create a misleading provenance record.
@@ -117,17 +204,19 @@ def build_provider_request(tool: BaseTool, inputs: Mapping[str, Any], *, operati
         )
     if not all(value is not None for value in identity_values):
         project_id = pipeline_type = run_id = attempt = None
+    # Approval values are trusted orchestration controls, not model-authored
+    # tool inputs. Keep them out of model-visible schemas until a human
+    # approval flow can bind a decision to this provider request.
     # Existing direct unit callers predate the kernel and do not carry run
     # identity.  They remain backward-compatible while every production
-    # identity-bearing call (or explicit ``provider_kernel`` call) requires an
-    # approval bit.  A production caller must therefore opt in explicitly;
-    # ``provider_approved=False`` is always authoritative.
+    # identity-bearing call, or any API call that sends local user media,
+    # requires an approval bit. ``provider_approved=False`` is authoritative.
     if "provider_approved" in raw:
         approved_value = strict_bool(raw["provider_approved"], "provider_approved")
     elif "approved" in raw:
         approved_value = strict_bool(raw["approved"], "approved")
     else:
-        approved_value = not production_context
+        approved_value = not (production_context or media_transfer_approval_required)
     return ProviderRequest(
         capability=capability,
         operation=operation_name,
@@ -149,6 +238,7 @@ def build_provider_request(tool: BaseTool, inputs: Mapping[str, Any], *, operati
             "tool": tool.name,
             "runtime": getattr(getattr(tool, "runtime", None), "value", str(getattr(tool, "runtime", ""))),
             "kernel": "provider_executor_v1",
+            "requires_external_media_approval": media_transfer_approval_required,
         },
     )
 
@@ -202,6 +292,10 @@ def execute_with_provider_executor(
     provider_inputs["_provider_executor_bypass"] = True
 
     def invoke(_request: ProviderRequest) -> Any:
+        if _request.metadata.get("requires_external_media_approval") is True and str(
+            getattr(tool, "capability", "")
+        ) == "video_generation":
+            _validate_video_reference_images(provider_inputs)
         return call(provider_inputs)
 
     result = runner.execute(
@@ -250,5 +344,7 @@ def should_use_provider_kernel(inputs: Mapping[str, Any]) -> bool:
 __all__ = [
     "build_provider_request",
     "execute_with_provider_executor",
+    "has_local_media_reference",
+    "requires_external_media_approval",
     "should_use_provider_kernel",
 ]
