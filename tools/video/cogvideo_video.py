@@ -20,7 +20,6 @@ from tools.video._shared import (
     COGVIDEO_VARIANTS,
     estimate_local_runtime,
     generate_local_video,
-    local_generation_status,
     local_install_instructions,
 )
 
@@ -35,6 +34,11 @@ class CogVideoVideo(BaseTool):
     execution_mode = ExecutionMode.SYNC
     determinism = Determinism.STOCHASTIC
     runtime = ToolRuntime.LOCAL_GPU
+    dependencies = [
+        "env-enabled:VIDEO_GEN_LOCAL_ENABLED",
+        "python:diffusers",
+        "python:torch",
+    ]
 
     install_instructions = local_install_instructions()
     fallback = "wan_video"
@@ -78,9 +82,6 @@ class CogVideoVideo(BaseTool):
     idempotency_key_fields = ["prompt", "model_variant", "operation", "seed"]
     side_effects = ["writes video file to output_path", "may download model weights"]
     user_visible_verification = ["Watch generated clip for motion coherence and artifacts"]
-
-    def get_status(self) -> ToolStatus:
-        return local_generation_status()
 
     DEFAULT_VARIANT = "cogvideo-5b"
 

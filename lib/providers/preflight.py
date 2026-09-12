@@ -100,6 +100,15 @@ def _tool_iter(registry_or_tools: Any) -> list[Any]:
 
 def _dependency_check(dependency: Any) -> DependencyCheck:
     raw = str(dependency or "").strip()
+    if raw.startswith("env-enabled:"):
+        name = raw[len("env-enabled:"):]
+        enabled = os.environ.get(name, "").strip().lower() in {"true", "1", "yes"}
+        return DependencyCheck(
+            raw,
+            enabled,
+            "env",
+            f"{name} is {'enabled' if enabled else 'not enabled'}",
+        )
     if raw.startswith("env:"):
         name = raw[4:]
         present = bool(os.environ.get(name))
@@ -160,6 +169,19 @@ def _record_for_tool(tool: Any, *, live_probe: bool = False, timeout_seconds: fl
             runtime,
             PreflightStatus.UNTESTED,
             ("service/client readiness requires an explicit live probe",),
+            dependencies,
+            False,
+            _now_iso(),
+        )
+
+    if runtime == ToolRuntime.LOCAL_GPU.value and not dependencies:
+        return PreflightRecord(
+            name,
+            provider,
+            capability,
+            runtime,
+            PreflightStatus.UNTESTED,
+            ("GPU/model readiness has no static dependency declaration",),
             dependencies,
             False,
             _now_iso(),

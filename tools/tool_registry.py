@@ -256,7 +256,7 @@ class ToolRegistry:
         {
             "video_generation": {
                 "available": [{"name": ..., "provider": ..., "best_for": ...}],
-                "unavailable": [{"name": ..., "provider": ..., "install_instructions": ...}],
+                "unavailable": [{"name": ..., "provider": ..., "status": ...}],
                 "total": 12,
                 "configured": 2,
             },
@@ -350,7 +350,9 @@ class ToolRegistry:
           "capabilities": [
             {"capability": "video_generation", "configured": 10, "total": 16,
              "available_providers": ["fal", "heygen", ...],
-             "unavailable_providers": ["openai", ...]},
+             "unverified_providers": ["comfyui", ...],
+             "live_probe_required_providers": ["openai", ...],
+             "unavailable_providers": ["missing-local-model", ...]},
             ...
           ],
           "setup_offers": [
@@ -395,17 +397,36 @@ class ToolRegistry:
         # When a provider has multiple tools (e.g. seedance-fal and
         # seedance-replicate both reporting provider="seedance"), a
         # naive set-split shows the provider in BOTH available and
-        # unavailable — confusing for users. Dedupe: if the provider has
-        # any available tool, do NOT list it as unavailable.
+        # unavailable — confusing for users. Keep untested tools separate
+        # from dependencies that are known to be missing.
         capabilities: list[dict[str, Any]] = []
         for cap, bucket in menu.items():
+            all_entries = bucket.get("available", []) + bucket.get("unavailable", [])
             available_providers = {
-                e.get("provider") for e in bucket.get("available", [])
+                e.get("provider")
+                for e in all_entries
+                if e.get("status") in {"available", "available_local"}
             } - {None}
+            live_probe_required_providers = {
+                e.get("provider")
+                for e in all_entries
+                if e.get("status") in {"configured", "requires_live_probe"}
+            } - {None} - available_providers
+            unverified_providers = {
+                e.get("provider")
+                for e in all_entries
+                if e.get("status") == "untested"
+            } - {None} - available_providers - live_probe_required_providers
             unavailable_providers = (
-                {e.get("provider") for e in bucket.get("unavailable", [])}
+                {
+                    e.get("provider")
+                    for e in bucket.get("unavailable", [])
+                    if e.get("status") in {"unavailable", "degraded"}
+                }
                 - {None}
                 - available_providers  # provider with any available tool wins
+                - live_probe_required_providers
+                - unverified_providers
             )
             capabilities.append(
                 {
@@ -413,6 +434,10 @@ class ToolRegistry:
                     "configured": bucket.get("configured", 0),
                     "total": bucket.get("total", 0),
                     "available_providers": sorted(available_providers),
+                    "unverified_providers": sorted(unverified_providers),
+                    "live_probe_required_providers": sorted(
+                        live_probe_required_providers
+                    ),
                     "unavailable_providers": sorted(unavailable_providers),
                 }
             )

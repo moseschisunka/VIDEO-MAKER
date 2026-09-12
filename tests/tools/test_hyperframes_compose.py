@@ -164,6 +164,35 @@ def test_provider_menu_summary_deduplicates_providers_across_buckets():
         )
 
 
+def test_provider_menu_summary_separates_unverified_and_live_probe_providers(monkeypatch):
+    from tools.tool_registry import registry
+
+    registry.discover()
+    fixture_menu = {
+        "video_generation": {
+            "available": [
+                {"provider": "ready", "status": "available_local"},
+                {"provider": "remote", "status": "requires_live_probe"},
+            ],
+            "unavailable": [
+                {"provider": "uncertain", "status": "untested"},
+                {"provider": "missing", "status": "unavailable"},
+                {"provider": "remote", "status": "unavailable"},
+            ],
+            "configured": 2,
+            "total": 5,
+        }
+    }
+    monkeypatch.setattr(registry, "provider_menu", lambda **_kwargs: fixture_menu)
+
+    capability = registry.provider_menu_summary()["capabilities"][0]
+
+    assert capability["available_providers"] == ["ready"]
+    assert capability["live_probe_required_providers"] == ["remote"]
+    assert capability["unverified_providers"] == ["uncertain"]
+    assert capability["unavailable_providers"] == ["missing"]
+
+
 def test_provider_menu_summary_is_cp1252_safe():
     """Regression: on Windows cp1252 stdout, printing any string with an
     em-dash crashes with UnicodeEncodeError (or renders as `?` / mojibake).
@@ -360,6 +389,8 @@ def test_provider_menu_summary_returns_expected_shape():
             "configured",
             "total",
             "available_providers",
+            "unverified_providers",
+            "live_probe_required_providers",
             "unavailable_providers",
         }
         assert entry["configured"] <= entry["total"]

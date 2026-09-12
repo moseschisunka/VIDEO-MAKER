@@ -9,7 +9,7 @@ an actual output video. All other stages use synthetic data.
 No API keys needed -- uses ffmpeg-generated fixtures throughout.
 """
 
-import sys, os, json, subprocess, shutil, uuid
+import sys, os, json, subprocess, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,16 +32,18 @@ from tools.cost_tracker import CostTracker, BudgetMode
 from schemas.artifacts import validate_artifact, list_schemas
 from styles.playbook_loader import load_playbook, validate_accessibility
 
-OUT = os.path.join(os.path.dirname(__file__), "output")
+QA_OUTPUT_ROOT = os.environ.get(
+    "OPENMONTAGE_QA_OUTPUT_DIR",
+    os.path.join(os.path.dirname(__file__), "output"),
+)
+OUT = os.path.join(QA_OUTPUT_ROOT, f"e2e_{uuid.uuid4().hex}")
 PIPELINE_DIR = Path(OUT) / "e2e_pipeline"
 PROJECT_ID = "qa_e2e_test"
 ASSETS_DIR = Path(OUT) / "e2e_assets"
 
-# Clean previous run
-if PIPELINE_DIR.exists():
-    shutil.rmtree(PIPELINE_DIR)
-if ASSETS_DIR.exists():
-    shutil.rmtree(ASSETS_DIR)
+# Each invocation owns a fresh output tree; rerunning QA never deletes older
+# artifacts that may still be under inspection.
+PIPELINE_DIR.mkdir(parents=True, exist_ok=True)
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 PASS = 0
@@ -736,3 +738,6 @@ print(f"{'='*60}")
 if os.path.exists(final_video):
     print(f"\nFinal video: {final_video}")
     print("INSPECT: Open in VLC/media player to verify A/V sync, transitions, and content.")
+
+if FAIL:
+    raise SystemExit(1)

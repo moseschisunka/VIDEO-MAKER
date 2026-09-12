@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.paths import PROJECTS_DIR
-from tools.base_tool import ToolResult, ToolStatus
+from tools.base_tool import ToolResult
 
 HEYGEN_PROVIDERS = {
     "veo_3_1": {"name": "Google VEO 3.1", "quality": "highest", "speed": "slow"},
@@ -178,21 +178,6 @@ def get_torch_device() -> str:
     except Exception:
         pass
     return "cpu"
-
-
-def local_generation_enabled() -> bool:
-    return os.environ.get("VIDEO_GEN_LOCAL_ENABLED", "").lower() in {"true", "1", "yes"}
-
-
-def local_generation_status() -> ToolStatus:
-    if not local_generation_enabled():
-        return ToolStatus.UNAVAILABLE
-    try:
-        import diffusers  # noqa: F401
-        import torch  # noqa: F401
-    except ImportError:
-        return ToolStatus.UNAVAILABLE
-    return ToolStatus.AVAILABLE
 
 
 def local_install_instructions() -> str:

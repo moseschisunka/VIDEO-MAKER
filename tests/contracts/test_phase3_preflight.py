@@ -39,6 +39,28 @@ class _ApiTool(BaseTool):
         return ToolResult(success=True, data=dict(inputs))
 
 
+class _UndeclaredGpuTool(BaseTool):
+    name = "undeclared_gpu_fixture"
+    provider = "fixture-gpu"
+    capability = "video_generation"
+    runtime = ToolRuntime.LOCAL_GPU
+    dependencies = []
+
+    def execute(self, inputs):
+        return ToolResult(success=True, data=dict(inputs))
+
+
+class _EnabledGpuTool(BaseTool):
+    name = "enabled_gpu_fixture"
+    provider = "fixture-enabled-gpu"
+    capability = "video_generation"
+    runtime = ToolRuntime.LOCAL_GPU
+    dependencies = ["env-enabled:PHASE3_GPU_ENABLED", "python:json"]
+
+    def execute(self, inputs):
+        return ToolResult(success=True, data=dict(inputs))
+
+
 class _HangingTool(BaseTool):
     name = "hanging_fixture"
     provider = "fixture-api"
@@ -84,6 +106,35 @@ def test_fast_preflight_invalidates_when_configuration_changes(tmp_path: Path, m
     assert first["cached"] is False
     assert second["cached"] is False
     assert second["records"][0]["status"] == PreflightStatus.REQUIRES_LIVE_PROBE.value
+
+
+def test_gpu_preflight_requires_declared_dependencies(tmp_path: Path) -> None:
+    report = fast_preflight(
+        [_UndeclaredGpuTool()],
+        cache_path=tmp_path / "preflight.json",
+    )
+
+    record = report["records"][0]
+    assert record["status"] == PreflightStatus.UNTESTED.value
+    assert "readiness has no static dependency declaration" in record["reasons"][0]
+
+
+def test_enabled_local_gpu_preflight_matches_execution_status(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tool = _EnabledGpuTool()
+    cache = tmp_path / "preflight.json"
+
+    monkeypatch.setenv("PHASE3_GPU_ENABLED", "false")
+    disabled = fast_preflight([tool], cache_path=cache)
+    assert disabled["records"][0]["status"] == PreflightStatus.UNAVAILABLE.value
+    assert tool.get_status() == ToolStatus.UNAVAILABLE
+
+    monkeypatch.setenv("PHASE3_GPU_ENABLED", "YeS")
+    enabled = fast_preflight([tool], cache_path=cache)
+    assert enabled["records"][0]["status"] == PreflightStatus.AVAILABLE_LOCAL.value
+    assert tool.get_status() == ToolStatus.AVAILABLE
 
 
 def test_deep_preflight_timeout_is_bounded_and_explicit() -> None:

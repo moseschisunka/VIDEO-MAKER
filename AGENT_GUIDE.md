@@ -276,7 +276,7 @@ print(json.dumps(registry.provider_menu_summary(), indent=2))
 The summary returns four fields the agent should translate into plain language:
 
 - `composition_runtimes` — booleans for `ffmpeg`, `remotion`, `hyperframes`. This is the source of truth for the "Present Both Composition Runtimes (HARD RULE)" check.
-- `capabilities[]` — one entry per capability family with `configured / total` counts and provider lists. Ready-made for the "N of M configured" menu.
+- `capabilities[]` — one entry per capability family with `configured / total` counts and separate `available_providers`, `unverified_providers`, `live_probe_required_providers`, and `unavailable_providers` lists. `configured` reflects detectable credentials and dependencies, not proven reachability. `available_providers` means local dependencies passed fast preflight; it does not prove model loading, provider connectivity, or output quality. Do not promise an end-to-end result until a sample render is validated.
 - `setup_offers[]` — unavailable tools whose install is a 1-minute env-var fix. Lead with these when offering upgrades.
 - `runtime_warnings[]` — specific signals like "hyperframes: npm package not resolvable". Surface these to the user verbatim — they're the kind of silent-failure bugs that break the governance contract.
 
@@ -313,11 +313,11 @@ YOUR CAPABILITIES
   Music Generation:  1/1 configured
   Composition:       3/3 configured (FFmpeg, video_stitch, video_trimmer)
 
-  You can produce videos now with images + TTS + FFmpeg.
+  Next: validate a sample render before making a delivery promise.
   Quick upgrades available — see below.
 ```
 
-For EACH capability with unavailable providers, read the `install_instructions` field from the menu output and present setup options grouped by effort:
+For EACH capability, present ready providers and clearly distinguish unverified tools, providers that need a live probe, and unavailable providers. Read each unavailable tool's `install_instructions` from the menu output before offering setup options. A configured credential or installed dependency is not proof that a remote service or local model is ready:
 
 ```
 QUICK SETUP OPTIONS (1-minute each — set an env var in .env)

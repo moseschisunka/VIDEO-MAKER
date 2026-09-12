@@ -60,6 +60,12 @@ python tests/qa/test_07_playbook_intelligence.py
 python tests/qa/test_08_end_to_end.py
 ```
 
+Each run creates a unique subdirectory under `OPENMONTAGE_QA_OUTPUT_DIR` (or
+`tests/qa/output` when unset) and retains its render for inspection. Existing
+QA outputs are never removed. Set `OPENMONTAGE_QA_OUTPUT_DIR` first when you
+want artifacts in a different location. The script exits nonzero if any
+recorded check fails.
+
 ## Success Criteria
 
 - [ ] All 3 TTS samples: clear speech, correct content, no artifacts, ≥44.1kHz

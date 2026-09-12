@@ -431,9 +431,25 @@ class BaseTool(ABC):
             return ToolStatus.UNAVAILABLE
 
     def check_dependencies(self) -> None:
-        """Verify all dependencies are installed. Raises DependencyError if not."""
+        """Check declared command, environment, and Python dependencies.
+
+        Supported prefixes are ``cmd:``, ``binary:``, ``env:``,
+        ``env-enabled:``, and ``python:``.
+        """
         for dep in self.dependencies:
-            if dep.startswith(("cmd:", "binary:")):
+            if dep.startswith("env-enabled:"):
+                env_name = dep[len("env-enabled:"):]
+                enabled = os.environ.get(env_name, "").strip().lower() in {
+                    "true",
+                    "1",
+                    "yes",
+                }
+                if not enabled:
+                    raise DependencyError(
+                        f"Environment variable {env_name!r} must be enabled "
+                        f"(true, 1, or yes). {self.install_instructions}"
+                    )
+            elif dep.startswith(("cmd:", "binary:")):
                 prefix = "cmd:" if dep.startswith("cmd:") else "binary:"
                 cmd_name = dep[len(prefix):]
                 if shutil.which(cmd_name) is None:

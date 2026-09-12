@@ -31,7 +31,7 @@ class LocalDiffusion(BaseTool):
     determinism = Determinism.SEEDED
     runtime = ToolRuntime.LOCAL_GPU
 
-    dependencies = []  # checked dynamically
+    dependencies = ["python:diffusers", "python:torch"]
     install_instructions = (
         "Install diffusers for local Stable Diffusion:\n"
         "  pip install diffusers transformers accelerate torch"
@@ -81,13 +81,6 @@ class LocalDiffusion(BaseTool):
     idempotency_key_fields = ["prompt", "width", "height", "seed", "model"]
     side_effects = ["writes image file to output_path", "may download model weights on first run"]
     user_visible_verification = ["Inspect generated image for relevance and quality"]
-
-    def get_status(self) -> ToolStatus:
-        try:
-            import diffusers  # noqa: F401
-            return ToolStatus.AVAILABLE
-        except ImportError:
-            return ToolStatus.UNAVAILABLE
 
     def estimate_cost(self, inputs: dict[str, Any]) -> float:
         return 0.0
