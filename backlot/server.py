@@ -1494,6 +1494,7 @@ def create_app() -> FastAPI:
                 project_dir,
                 requested_agent_id,
                 lease_seconds=DEFAULT_LEASE_SECONDS,
+                renew_live_claim=False,
             )
         except WorkOrderConflictError as exc:
             # A second caller must observe the already-running run instead of

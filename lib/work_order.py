@@ -546,6 +546,7 @@ def claim_work_order(
     agent_id: str,
     *,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    renew_live_claim: bool = True,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Atomically claim one queued/resumable work order for an agent.
@@ -553,7 +554,8 @@ def claim_work_order(
     A live lease owned by another agent is a conflict.  An expired lease may
     be reclaimed, incrementing ``claim.lease_version`` so observers can detect
     ownership changes.  Repeating a claim by the same live agent is idempotent
-    and simply renews the lease.
+    and renews the lease unless ``renew_live_claim`` is false. A start action
+    can disable renewal so only one concurrent request wins the claim.
     """
     project_path = Path(project_dir)
     if not project_path.is_dir():
@@ -574,6 +576,10 @@ def claim_work_order(
         if owner and owner != agent and not expired:
             raise WorkOrderConflictError(
                 f"work order is leased by another live agent: {owner!r}"
+            )
+        if owner == agent and not expired and not renew_live_claim:
+            raise WorkOrderConflictError(
+                "work order already has a live lease for this agent"
             )
 
         # A repeated claim by the same live owner is an idempotent lease

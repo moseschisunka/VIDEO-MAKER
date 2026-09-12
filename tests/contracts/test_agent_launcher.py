@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier, Lock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -101,6 +103,67 @@ def test_configured_agent_is_launched_and_receives_run_identity(client, monkeypa
     assert replay.json()["idempotent_replay"] is True
     assert replay.json()["work_order"]["claim"] == payload["work_order"]["claim"]
     assert replay.json()["agent_launch"]["status"] == "already_running"
+    assert launches == [created.json()["work_order"]["run_id"]]
+
+
+def test_concurrent_run_requests_launch_one_agent(client, monkeypatch) -> None:
+    test_client, _projects = client
+    monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
+    monkeypatch.setenv("OPENMONTAGE_AGENT_ID", "race-agent")
+    created = test_client.post("/api/project/create", json={"title": "Concurrent run requests"})
+    assert created.status_code == 200, created.text
+    project_id = created.json()["project_id"]
+
+    original_load = server_mod.load_manifest_stage_context
+    initial_loads = Barrier(2)
+    load_count = 0
+    load_count_lock = Lock()
+
+    def synchronized_load(project_dir):
+        nonlocal load_count
+        context = original_load(project_dir)
+        with load_count_lock:
+            load_count += 1
+            is_initial_read = load_count <= 2
+        if is_initial_read:
+            initial_loads.wait(timeout=5)
+        return context
+
+    monkeypatch.setattr(server_mod, "load_manifest_stage_context", synchronized_load)
+    launches = []
+    launch_lock = Lock()
+
+    def fake_launch(project_dir, order, *, agent_id, backlot_url):
+        with launch_lock:
+            launches.append(str(order["run_id"]))
+        return AgentLaunch(
+            pid=7314,
+            agent_id=agent_id,
+            run_id=str(order["run_id"]),
+            started_at="2026-09-12T00:00:00+00:00",
+            log_path="agent.log",
+            command=("python", "-m", "my_agent"),
+            cwd=str(project_dir),
+        )
+
+    monkeypatch.setattr(server_mod, "launch_agent", fake_launch)
+    run_url = f"/api/project/{project_id}/run"
+    with TestClient(server_mod.create_app()) as second_client:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first = executor.submit(test_client.post, run_url)
+            second = executor.submit(second_client.post, run_url)
+            responses = [first.result(timeout=10), second.result(timeout=10)]
+
+    assert [response.status_code for response in responses] == [200, 200]
+    payloads = [response.json() for response in responses]
+    assert sorted(payload["idempotent_replay"] for payload in payloads) == [False, True]
+    assert {payload["agent_launch"]["status"] for payload in payloads} == {
+        "started",
+        "already_running",
+    }
+    assert {payload["work_order"]["run_id"] for payload in payloads} == {
+        created.json()["work_order"]["run_id"]
+    }
     assert launches == [created.json()["work_order"]["run_id"]]
 
 
