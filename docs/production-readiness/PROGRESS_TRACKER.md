@@ -14,12 +14,12 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None — `v1.0.0-rc2` is an experimental prerelease; candidate identity is not frozen across branch |
 | Production decision | Not eligible / Production locked |
-| Latest supported CI run | `34689946142` (`54dfe6b`) — **1,328 passed** release-blocker contracts, **1,789 passed** offline regression tests, clean install, container/Remotion render, Phase 10 SLO/load evidence, and HyperFrames QA all passed. Live-provider checks were intentionally skipped. Real environment-owned operational proofs remain required. |
-| Latest local code checkpoint | `54dfe6b` — provider-specific wizard catalog contract and full-tree compile lint (including root-level Python files); **49 focused API, browser, launcher, and wizard tests passed**, plus JavaScript syntax and compile-all checks. |
-| Latest local release-blocker diagnostic | `4677660` — **1,324 passed, 5 skipped, 1 deselected, 4 failed** before the stale provider-catalog assertion was updated in `b5c97ce`; the remaining 3 failures were local Windows SLO p95 measurements (`PERF-01`, `PERF-04`, `PERF-06`). Supported Ubuntu CI passed the corrected checkpoint. |
-| Latest local offline regression | `15d15b8` — **1,772 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed**. Supported Ubuntu CI remains authoritative. |
+| Latest supported CI run | `34698345849` (`9de5dc4`) — **1,333 passed** release-blocker contracts, **1,792 passed** offline regression tests, clean install, container/Remotion render, and Phase 10 SLO/load evidence all passed. Live-provider and HyperFrames jobs were intentionally skipped. Exact evidence: [`PR-10G-9de5dc4-ci.md`](evidence/PR-10G-9de5dc4-ci.md). Real environment-owned operational proofs remain required. |
+| Latest local code checkpoint | `9de5dc4` — external local-media approval gate, constrained local video references, and operator-gated Manim execution; **423 changed-surface tests** passed, plus browser handoff and conventional-wheel regressions (**4 passed**). |
+| Latest local SLO diagnostic | `9de5dc4` — combined Windows SLO run had three marginal p95 misses (`PERF-01` 2.0013s/2.0s, `PERF-04` 0.5156s/0.5s, `PERF-06` 2.0025s/2.0s); each failed case passed when run alone. The supported Linux SLO/load job passed on this checkpoint. |
+| Latest supported offline regression | `34698345849` (`9de5dc4`) — **1,792 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed** in 249.90s. |
 | Latest HyperFrames CI run | `34689946142` (`54dfe6b`) — opt-in QA passed (**2 passed, 2 skipped**) with a retained CI artifact. |
-| Last tracker update | 2026-09-12: provider selection is explicit and tied to the provider's own voice catalog; supported CI run `34689946142` passes on `54dfe6b`. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
+| Last tracker update | 2026-09-12: supported CI run `34698345849` passes on `9de5dc4`, including the media-transfer and local-code-execution hardening. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
 
 ## Status rules
 
