@@ -91,6 +91,8 @@ The package-data contract now builds and installs the wheel into a conventional 
 
 The first broad rerun exposed a test-order leak: importing the browser screenshot fixture sets `OPENMONTAGE_PROJECTS_DIR` at module scope. The installed-wheel probe now clears the fixture's project/resource-root overrides in its child environment, so it verifies the conventional virtualenv defaults independently.
 
+The first supported Ubuntu run then exposed a second test-environment mismatch: a nested venv did not inherit dependencies installed in the repository's `.venv`. The wheel probe now keeps its venv isolated and adds only the outer test environment's `site-packages`/`dist-packages` for the wheel's `--no-deps` runtime dependencies. Failed child probes also report their captured output.
+
 The browser regression also used the removed `a.lib-card` selector and assumed encoded traversal should render a not-found page. It now targets the current `a.studio-card` UI, verifies `?static=1` remains on project links, and expects HTTP 400 for the encoded path traversal rejected by the existing security contract. The UI now preserves static mode when opening a project from a static library capture.
 
 ## Remaining findings and next moves
@@ -103,9 +105,9 @@ Acceptance: the process recorded in `agent_process.json` is the real agent, the 
 
 ### 2. Publish and validate one coherent candidate
 
-Preserve the ten unpublished commits and this review's patch together. The reviewed candidate is on `codex/pr-10g-evidence-hardening`; run supported Ubuntu CI against the final follow-up SHA before freezing it. Do not cite an older successful run for a newer tree. Do not mechanically merge upstream or reset the customized fork.
+Preserve the ten unpublished commits and this review's patch together. The reviewed code candidate is on `codex/pr-10g-evidence-hardening`; supported Ubuntu CI passed on code SHA `2e535e3` in run [34685680478](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34685680478). Do not cite that result for a later code SHA. Keep deployment proofs as follow-up gates. Do not mechanically merge upstream or reset the customized fork.
 
-Acceptance: one candidate SHA is shared by the branch, CI results, image digest, test outputs, and release record. CI and deployment proofs remain follow-up gates.
+Acceptance: one candidate SHA is shared by the branch, CI results, image digest, test outputs, and release record. Code CI is green on `2e535e3`; deployment proofs remain follow-up gates.
 
 ### 3. Prove the two workflows produce useful videos
 
@@ -132,7 +134,7 @@ The resource lookup defect is repaired. A 2026-09-12 smoke built and installed a
 | `config.yaml` | Missing | Present |
 | `remotion-composer/package.json` | Missing | Present |
 
-The conventional-install regression and actual FFmpeg render now pass locally. The wheel does not bundle `node_modules`; Remotion rendering from an installed wheel still depends on the deployment's Node dependency provisioning, while source-checkout Remotion rendering passed separately. Supported Ubuntu/container CI has not yet exercised the wheel render.
+The conventional-install regression passes locally and in the supported Ubuntu package-data contract. The actual wheel-based FFmpeg render passes locally. The wheel does not bundle `node_modules`; Remotion rendering from an installed wheel still depends on the deployment's Node dependency provisioning, while source-checkout Remotion rendering and the container's in-image Remotion still render passed in CI. Supported CI has not yet exercised the full `VideoCompose` wheel render.
 
 Acceptance: repeat the wheel render on the supported Ubuntu/container deployment and exercise the installed Remotion path if that deployment promises it. Keep writable project/cache directories separate from installed resources. Add reproducible Python constraints for the supported deployment environment before release, without gratuitously upgrading providers.
 
@@ -165,8 +167,10 @@ Acceptance: repeat the wheel render on the supported Ubuntu/container deployment
 | Full offline suite after follow-up fixes: `python -m pytest tests -m "not live_provider and not hyperframes_qa" -q --tb=short` | **1,797 passed, 6 skipped, 3 deselected, 1 passing subtest** in 735.03 seconds. |
 | Local Remotion render | Assetless preview rendered to `tmp/remotion-readiness-smoke.mp4`: H.264 1920×1080 at 30 fps, AAC audio, 3.050667 seconds, 226,860 bytes. Full FFmpeg decode passed; a rendered frame was inspected. SHA-256: `8cd091e516c96bca2dd9866cd14b36d971bcc9107e90ad6fa0055bf292689aad`. |
 | Installed-wheel render | Conventional venv installed the built wheel; isolated Python imported installed `VideoCompose`, loaded config/`screen-demo`/Remotion resources, and rendered a generated fixture from outside the checkout. Output: H.264 1920×1080 at 30 fps with AAC, 1.021333 seconds, 29,686 bytes; FFmpeg decode passed. SHA-256: `0dabfa8cc040d6d628ac97d0f7098704cc493bf2f3e060584c7c499f24cea063`. |
+| Supported Ubuntu CI, run [34685680478](https://github.com/moseschisunka/VIDEO-MAKER/actions/runs/34685680478), code SHA `2e535e3ec1b4b57d1fae0844c82a3c3f9a4f4886` | **Success**: **1,785 passed, 6 skipped, 3 deselected, 1 warning, 1 subtest passed** in 257.59 seconds; release-blocking contracts, clean-install smoke, container health and in-image still render, and Phase 10 SLO/load/operations jobs all passed. Live-provider and HyperFrames QA jobs were intentionally skipped. |
+| Focused Windows launcher contract | **7 passed** in 13.14 seconds, including missing-command fail-closed behavior, configured launch metadata, and a real short-lived local process receiving project/run/stage identity. |
 | Whitespace validation | `git diff --check` passed. |
 
 Raw local logs are in `tmp/review-offline-tests.log`, `tmp/review-targeted-tests.log`, `tmp/review-isolated-slos.log`, `tmp/review-remotion-build.log`, `tmp/review-wheel-build.log`, and `tmp/review-wheel-install.log`. They are local review artifacts, not published release evidence. The installed FastAPI/Starlette test client emits an `httpx` deprecation warning; this review does not upgrade that dependency graph.
 
-Local Windows results are diagnostic. Supported Ubuntu/container CI has not run against the follow-up SHA, and no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.
+Local Windows results are diagnostic. Supported CI completed successfully on code SHA `2e535e3`; no external infrastructure change or production certification was performed. A real external agent workflow remains to be exercised after `OPENMONTAGE_AGENT_COMMAND` is configured.
