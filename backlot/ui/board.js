@@ -19,6 +19,34 @@ let selectedStage = null;   // stage drawer open for this stage name
 let activeRender = 0;
 let replay = null;          // {t0, t1, t, playing} — replay mode when non-null
 let firstPaint = true;
+let runButtonFeedback = null;
+let runButtonFeedbackTimer = null;
+
+function applyRunButtonFeedback(button) {
+  const feedback = runButtonFeedback;
+  button.disabled = Boolean(feedback?.disabled);
+  button.innerHTML = `<span>${feedback?.label || "▶ Run Pipeline"}</span>`;
+}
+
+function setRunButtonFeedback(label, disabled, resetAfterMs = null) {
+  if (runButtonFeedbackTimer !== null) {
+    clearTimeout(runButtonFeedbackTimer);
+    runButtonFeedbackTimer = null;
+  }
+  runButtonFeedback = label ? { label, disabled } : null;
+  document
+    .querySelectorAll('button[title="Run automated video production"]')
+    .forEach(applyRunButtonFeedback);
+  if (label && resetAfterMs !== null) {
+    runButtonFeedbackTimer = window.setTimeout(() => {
+      runButtonFeedback = null;
+      runButtonFeedbackTimer = null;
+      document
+        .querySelectorAll('button[title="Run automated video production"]')
+        .forEach(applyRunButtonFeedback);
+    }, resetAfterMs);
+  }
+}
 
 function applyTheme(theme) {
   currentTheme = theme === "light" ? "light" : "dark";
@@ -160,8 +188,7 @@ function renderSlate(s) {
     class: "btn btn-secondary",
     title: "Run automated video production",
     onclick: async () => {
-      runBtn.disabled = true;
-      runBtn.innerHTML = "<span>▶ Launching...</span>";
+      setRunButtonFeedback("▶ Launching...", true);
       try {
         const response = await fetch(`/api/project/${encodedProjectId}/run`, { method: "POST" });
         const data = await response.json().catch(() => ({}));
@@ -174,24 +201,22 @@ function renderSlate(s) {
         const launchStatus = data.agent_launch?.status
           || (data.execution_mode === "internal_demo" ? "started" : null);
         if (launchStatus === "started") {
-          runBtn.innerHTML = "<span>✓ Agent started</span>";
+          setRunButtonFeedback("✓ Agent started", true, 3000);
         } else if (launchStatus === "already_running") {
-          runBtn.innerHTML = "<span>✓ Agent already running</span>";
+          setRunButtonFeedback("✓ Agent already running", true, 3000);
         } else if (launchStatus === "handoff") {
-          runBtn.innerHTML = "<span>✓ Handoff returned</span>";
+          setRunButtonFeedback("✓ Handoff returned", true, 3000);
         } else {
           throw new Error("Run Pipeline returned no agent launch status.");
         }
       } catch (e) {
         console.error("Run pipeline failed:", e);
         alert(`Run pipeline failed: ${String(e.message || e).slice(0, 300)}`);
+        setRunButtonFeedback("⚠ Run failed", false, 3000);
       }
-      setTimeout(() => {
-        runBtn.disabled = false;
-        runBtn.innerHTML = "<span>▶ Run Pipeline</span>";
-      }, 3000);
     }
   }, "▶ Run Pipeline");
+  applyRunButtonFeedback(runBtn);
   actionsGroup.append(runBtn);
 
   return el("header", { class: "slate" },
