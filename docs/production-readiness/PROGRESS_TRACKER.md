@@ -14,12 +14,12 @@ Do not mark a task complete because code exists. Link current test and review ev
 | Current task owner | OpenMontage execution agent |
 | Frozen release candidate | None — `v1.0.0-rc2` is an experimental prerelease; candidate identity is not frozen across branch |
 | Production decision | Not eligible / Production locked |
-| Latest supported CI run | `34698345849` (`9de5dc4`) — **1,333 passed** release-blocker contracts, **1,792 passed** offline regression tests, clean install, container/Remotion render, and Phase 10 SLO/load evidence all passed. Live-provider and HyperFrames jobs were intentionally skipped. Exact evidence: [`PR-10G-9de5dc4-ci.md`](evidence/PR-10G-9de5dc4-ci.md). Real environment-owned operational proofs remain required. |
-| Latest local code checkpoint | `9de5dc4` — external local-media approval gate, constrained local video references, and operator-gated Manim execution; **423 changed-surface tests** passed, plus browser handoff and conventional-wheel regressions (**4 passed**). |
+| Latest supported CI run | `34700726327` (`166758c`) — all enabled release-blocker, offline regression, clean-install, container/Remotion, and Phase 10 SLO/load jobs passed. Live-provider and HyperFrames jobs were intentionally skipped. Exact evidence: [`PR-10G-166758c-ci.md`](evidence/PR-10G-166758c-ci.md). Real environment-owned operational proofs remain required. |
+| Latest local code checkpoint | `166758c` — chart text now inherits the selected theme in Explainer and TalkingHead; browser handoff and conventional-wheel regressions passed (**4 passed**), Remotion type-check passed, and a full 22-second H.264 render was visually inspected. |
 | Latest local SLO diagnostic | `9de5dc4` — combined Windows SLO run had three marginal p95 misses (`PERF-01` 2.0013s/2.0s, `PERF-04` 0.5156s/0.5s, `PERF-06` 2.0025s/2.0s); each failed case passed when run alone. The supported Linux SLO/load job passed on this checkpoint. |
-| Latest supported offline regression | `34698345849` (`9de5dc4`) — **1,792 passed, 7 skipped, 3 deselected, 1 warning, 1 subtest passed** in 249.90s. |
+| Latest supported offline regression | `34700726327` (`166758c`) — release-blocker and offline regression jobs both completed successfully; run details are linked in [`PR-10G-166758c-ci.md`](evidence/PR-10G-166758c-ci.md). |
 | Latest HyperFrames CI run | `34689946142` (`54dfe6b`) — opt-in QA passed (**2 passed, 2 skipped**) with a retained CI artifact. |
-| Last tracker update | 2026-09-12: supported CI run `34698345849` passes on `9de5dc4`, including the media-transfer and local-code-execution hardening. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
+| Last tracker update | 2026-09-12: supported CI run `34700726327` passes on `166758c`, including the chart contrast fix. This does not change production status: `PR-10G` remains `BLOCKED` on external proofs, Phase 11 remains locked, and live-provider checks were skipped. |
 
 ## Status rules
 
