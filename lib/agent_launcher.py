@@ -24,12 +24,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from lib.paths import REPO_ROOT, runtime_root
+from lib.paths import REPO_ROOT, resource_path, runtime_root
 from lib.secrets import redact_text
 from lib.local_director import (
     LocalDirectorError,
+    director_launcher_command,
+    director_environment,
     director_from_command,
     find_director_executable,
+    normalize_director,
 )
 
 AGENT_COMMAND_ENV = "OPENMONTAGE_AGENT_COMMAND"
@@ -98,8 +101,27 @@ def configured_agent_command() -> tuple[str, ...] | None:
     return argv
 
 
-def agent_command_status() -> dict[str, Any]:
-    """Return a safe configuration summary for diagnostics and API errors."""
+def agent_command_status(director: str | None = None) -> dict[str, Any]:
+    """Return a safe summary for the configured or explicitly selected agent."""
+    if director is not None:
+        try:
+            normalized = normalize_director(director)
+            argv = director_launcher_command(normalized)
+        except LocalDirectorError as exc:
+            return {
+                "configured": True,
+                "valid": False,
+                "director": str(director).strip().lower(),
+                "error": str(exc),
+            }
+        return {
+            "configured": True,
+            "valid": True,
+            "agent_id": f"openmontage-{normalized}",
+            "director": normalized,
+            "command": [redact_text(part) for part in argv],
+        }
+
     try:
         argv = configured_agent_command()
     except AgentConfigurationError as exc:
@@ -178,12 +200,133 @@ def _write_process_record(project_dir: Path, payload: Mapping[str, Any]) -> None
                 pass
 
 
+def _atomic_write_text(destination: Path, content: str) -> None:
+    """Replace a handoff file atomically without following an old file link."""
+    temporary_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_name = handle.name
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, destination)
+        temporary_name = None
+    finally:
+        if temporary_name:
+            try:
+                Path(temporary_name).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _read_instruction_resource(relative_path: str) -> str:
+    """Read a tracked instruction file using a safe repository-relative path."""
+    relative = Path(relative_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise AgentLaunchError(f"invalid instruction resource path: {relative_path!r}")
+    source = resource_path(relative)
+    if not source.is_file():
+        raise AgentLaunchError(f"required instruction resource is missing: {relative_path}")
+    try:
+        return source.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise AgentLaunchError(f"could not read instruction resource {relative_path}: {exc}") from exc
+
+
+def _read_stage_director_skill(skill_id: str) -> str:
+    """Resolve the manifest's short skill id to its packaged Markdown file."""
+    relative = Path(skill_id)
+    if relative.parts and relative.parts[0] == "pipelines":
+        relative = Path("skills") / relative
+    if not relative.suffix:
+        relative = relative.with_suffix(".md")
+    return _read_instruction_resource(str(relative))
+
+
+def _write_agent_handoff(
+    project_path: Path,
+    order: Mapping[str, Any],
+    execution_context: Any | None,
+) -> str:
+    """Copy the manifest-derived instructions into the isolated project workspace."""
+    bundle_dir = project_path / ".openmontage"
+    if bundle_dir.is_symlink():
+        raise AgentLaunchError("project .openmontage handoff directory must not be a symlink")
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    if not bundle_dir.resolve().is_relative_to(project_path.resolve()):
+        raise AgentLaunchError("project handoff directory escapes the project workspace")
+
+    _atomic_write_text(
+        bundle_dir / "AGENT_GUIDE.md",
+        _read_instruction_resource("AGENT_GUIDE.md"),
+    )
+    _atomic_write_text(
+        bundle_dir / "PROJECT_CONTEXT.md",
+        _read_instruction_resource("PROJECT_CONTEXT.md"),
+    )
+
+    execution: dict[str, Any] = {}
+    manifest: dict[str, Any] = {}
+    if isinstance(execution_context, Mapping):
+        execution = dict(execution_context.get("execution") or {})
+        manifest_value = execution_context.get("manifest")
+        if isinstance(manifest_value, Mapping):
+            manifest = dict(manifest_value)
+    elif execution_context is not None:
+        as_dict = getattr(execution_context, "as_dict", None)
+        if callable(as_dict):
+            execution = dict(as_dict())
+        manifest_value = getattr(execution_context, "manifest", None)
+        if isinstance(manifest_value, Mapping):
+            manifest = dict(manifest_value)
+
+    skill_path = str(execution.get("director_skill") or "").strip()
+    stage_skill = (
+        _read_stage_director_skill(skill_path)
+        if skill_path
+        else "No stage-specific skill is required for this handoff.\n"
+    )
+    _atomic_write_text(bundle_dir / "stage_director.md", stage_skill)
+    _atomic_write_text(
+        bundle_dir / "pipeline_manifest.json",
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+    )
+    handoff = {
+        "project_id": order.get("project_id") or project_path.name,
+        "run_id": order.get("run_id"),
+        "stage": execution.get("next_stage") or order.get("next_stage"),
+        "execution": execution,
+        "manifest": manifest,
+        "instructions": {
+            "agent_guide": ".openmontage/AGENT_GUIDE.md",
+            "project_context": ".openmontage/PROJECT_CONTEXT.md",
+            "pipeline_manifest": ".openmontage/pipeline_manifest.json",
+            "stage_director": ".openmontage/stage_director.md",
+        },
+    }
+    _atomic_write_text(
+        bundle_dir / "agent_handoff.json",
+        json.dumps(handoff, indent=2, ensure_ascii=False, default=str) + "\n",
+    )
+    return ".openmontage/agent_handoff.json"
+
+
 def launch_agent(
     project_dir: Path | str,
     order: Mapping[str, Any],
     *,
     agent_id: str,
     backlot_url: str = "",
+    director: str | None = None,
+    execution_context: Any | None = None,
 ) -> AgentLaunch:
     """Start the configured agent for one claimed work order.
 
@@ -191,7 +334,14 @@ def launch_agent(
     setup fails, ``AgentLaunchError`` is raised and no success metadata is
     written, allowing the API to release the lease safely.
     """
-    argv = configured_agent_command()
+    try:
+        argv = (
+            director_launcher_command(director)
+            if director is not None
+            else configured_agent_command()
+        )
+    except LocalDirectorError as exc:
+        raise AgentConfigurationError(str(exc)) from exc
     if argv is None:
         raise AgentConfigurationError(
             f"{AGENT_COMMAND_ENV} is not configured; set it to the trusted agent command"
@@ -206,8 +356,16 @@ def launch_agent(
     if not project_path.is_dir():
         raise AgentLaunchError(f"project directory does not exist: {project_path}")
 
+    handoff_relative_path = _write_agent_handoff(
+        project_path,
+        order,
+        execution_context,
+    )
     log_path = project_path / PROCESS_LOG_NAME
-    env = dict(os.environ)
+    # External directors are untrusted with respect to production provider
+    # credentials. Keep their run context, but never inherit credential-like
+    # environment values from Backlot or the operator shell.
+    env = director_environment(os.environ)
     env.update(
         {
             "OPENMONTAGE_PROJECT_ID": str(order.get("project_id") or project_path.name),
@@ -216,12 +374,16 @@ def launch_agent(
             "OPENMONTAGE_AGENT_ID": clean_agent_id,
             "OPENMONTAGE_STAGE": str(order.get("next_stage") or ""),
             "OPENMONTAGE_BACKLOT_URL": str(backlot_url or ""),
+            "OPENMONTAGE_AGENT_HANDOFF": str(project_path / handoff_relative_path),
         }
     )
     env["OPENMONTAGE_AGENT_PROMPT"] = (
         "Drive the OpenMontage production in "
-        f"{env['OPENMONTAGE_PROJECT_DIR']}. Read AGENT_GUIDE.md, follow the "
-        f"manifest, and begin at stage {env['OPENMONTAGE_STAGE']!r} for run "
+        f"{env['OPENMONTAGE_PROJECT_DIR']}. Read "
+        ".openmontage/AGENT_GUIDE.md, .openmontage/PROJECT_CONTEXT.md, "
+        ".openmontage/pipeline_manifest.json, and "
+        ".openmontage/stage_director.md from the bundled handoff; begin at "
+        f"stage {env['OPENMONTAGE_STAGE']!r} for run "
         f"{run_id!r}. Use agent id {clean_agent_id!r} for Backlot heartbeats "
         "and checkpoints, and pause for required human approvals."
     )

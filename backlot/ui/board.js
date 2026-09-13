@@ -13,8 +13,10 @@ const modal = document.getElementById("modal");
 const player = document.getElementById("player");
 
 const THEME_KEY = "backlot.theme";
+const DIRECTOR_SELECTION_KEY = "backlot.localDirector";
 let currentTheme = localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
 let state = null;
+let localDirectorCatalog = null;
 let selectedStage = null;   // stage drawer open for this stage name
 let activeRender = 0;
 let replay = null;          // {t0, t1, t, playing} — replay mode when non-null
@@ -26,6 +28,50 @@ function applyRunButtonFeedback(button) {
   const feedback = runButtonFeedback;
   button.disabled = Boolean(feedback?.disabled);
   button.innerHTML = `<span>${feedback?.label || "▶ Run Pipeline"}</span>`;
+}
+
+function renderDirectorSelect() {
+  const select = el("select", {
+    class: "variant-select",
+    title: "Choose which locally signed-in agent directs this production",
+    "aria-label": "Local production director",
+    onchange: () => {
+      if (select.value && select.value !== "configured") {
+        localStorage.setItem(DIRECTOR_SELECTION_KEY, select.value);
+      } else {
+        localStorage.removeItem(DIRECTOR_SELECTION_KEY);
+      }
+    },
+  });
+  const configuredRunner = localDirectorCatalog?.configured_runner === true;
+  select.append(el("option", {
+    value: "",
+    disabled: configuredRunner,
+  }, configuredRunner ? "Choose director" : "Choose local director"));
+  if (configuredRunner) {
+    select.append(el("option", { value: "configured" }, "Configured agent"));
+  }
+  for (const director of localDirectorCatalog?.directors || []) {
+    const selectable = director.installed === true && director.ready !== false;
+    const option = el("option", {
+      value: director.id,
+      disabled: !selectable,
+      title: String(director.status_note || ""),
+    }, `${director.label}${director.installed !== true ? " · not installed" : selectable ? "" : " · sign-in needed"}`);
+    select.append(option);
+  }
+  const preferred = localStorage.getItem(DIRECTOR_SELECTION_KEY) || "";
+  const defaultLocal = (localDirectorCatalog?.directors || []).find(
+    (director) => director.installed === true && director.ready === true,
+  );
+  if (preferred && [...select.options].some((option) => option.value === preferred && !option.disabled)) {
+    select.value = preferred;
+  } else if (defaultLocal) {
+    select.value = defaultLocal.id;
+  } else {
+    select.value = configuredRunner ? "configured" : "";
+  }
+  return select;
 }
 
 function setRunButtonFeedback(label, disabled, resetAfterMs = null) {
@@ -184,13 +230,22 @@ function renderSlate(s) {
   }, "✦ Create Variant");
   actionsGroup.append(variantSelect, variantBtn);
 
+  const directorSelect = renderDirectorSelect();
+  actionsGroup.append(directorSelect);
+
   const runBtn = el("button", {
     class: "btn btn-secondary",
     title: "Run automated video production",
     onclick: async () => {
       setRunButtonFeedback("▶ Launching...", true);
       try {
-        const response = await fetch(`/api/project/${encodedProjectId}/run`, { method: "POST" });
+        const directorQuery = directorSelect.value && directorSelect.value !== "configured"
+          ? `?director=${encodeURIComponent(directorSelect.value)}`
+          : "";
+        const response = await fetch(
+          `/api/project/${encodedProjectId}/run${directorQuery}`,
+          { method: "POST" },
+        );
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.ok !== true) {
           const detail = typeof data.detail === "string"
@@ -1551,12 +1606,23 @@ async function refresh() {
   render();
 }
 
+async function refreshLocalDirectorCatalog() {
+  try {
+    localDirectorCatalog = await getJSON("/api/local-directors");
+  } catch (error) {
+    localDirectorCatalog = { directors: [], configured_runner: false };
+    console.warn("Could not load local director options:", error);
+  }
+  render();
+}
+
 refresh().catch((err) => {
   app.innerHTML = "";
   app.append(el("div", { class: "empty", style: "margin-top:80px" },
     el("div", { class: "big" }, "PROJECT NOT FOUND"),
     el("div", {}, String(err))));
 });
+refreshLocalDirectorCatalog().catch(console.error);
 // ?static=1 disables the live feed (screenshots, static exports).
 if (!new URLSearchParams(location.search).has("static")) {
   subscribe(`/api/project/${encodeURIComponent(projectId)}/events`, () => refresh().catch(console.error));

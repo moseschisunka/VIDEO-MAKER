@@ -72,6 +72,28 @@ def test_missing_local_director_cli_does_not_claim_a_run(client, monkeypatch) ->
     assert order["stages"][0]["status"] == "ready"
 
 
+def test_local_directors_endpoint_reports_choices_without_credentials(client, monkeypatch) -> None:
+    test_client, _projects = client
+    monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-be-returned")
+    monkeypatch.setattr(
+        server_mod,
+        "local_director_catalog",
+        lambda: [
+            {"id": "codex", "label": "Codex", "installed": True, "ready": True},
+            {"id": "claude", "label": "Claude Code", "installed": False, "ready": False},
+        ],
+    )
+
+    response = test_client.get("/api/local-directors")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["configured_runner"] is True
+    assert [item["id"] for item in payload["directors"]] == ["codex", "claude"]
+    assert "must-not-be-returned" not in response.text
+
+
 def test_configured_agent_is_launched_and_receives_run_identity(client, monkeypatch) -> None:
     test_client, projects = client
     monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
@@ -83,7 +105,7 @@ def test_configured_agent_is_launched_and_receives_run_identity(client, monkeypa
     captured = {}
     launches = []
 
-    def fake_launch(project_dir, order, *, agent_id, backlot_url):
+    def fake_launch(project_dir, order, *, agent_id, backlot_url, execution_context=None):
         launches.append(str(order["run_id"]))
         captured.update(
             {
@@ -125,6 +147,104 @@ def test_configured_agent_is_launched_and_receives_run_identity(client, monkeypa
     assert launches == [created.json()["work_order"]["run_id"]]
 
 
+def test_selected_local_director_launches_without_command_env(client, monkeypatch) -> None:
+    test_client, projects = client
+    monkeypatch.delenv("OPENMONTAGE_AGENT_COMMAND", raising=False)
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda command: "C:/tools/agy.exe" if command in {"agy.exe", "agy"} else None,
+    )
+    created = test_client.post("/api/project/create", json={"title": "Choose a director"})
+    assert created.status_code == 200, created.text
+    project_id = created.json()["project_id"]
+    captured = {}
+
+    def fake_launch(
+        project_dir, order, *, agent_id, backlot_url, director=None, execution_context=None
+    ):
+        captured.update(
+            project_dir=project_dir,
+            agent_id=agent_id,
+            backlot_url=backlot_url,
+            director=director,
+            run_id=order["run_id"],
+        )
+        return AgentLaunch(
+            pid=8831,
+            agent_id=agent_id,
+            run_id=str(order["run_id"]),
+            started_at="2026-09-13T00:00:00+00:00",
+            log_path="agent.log",
+            command=(sys.executable, "-m", "lib.local_director", "antigravity"),
+            cwd=str(projects / project_id),
+        )
+
+    monkeypatch.setattr(server_mod, "launch_agent", fake_launch)
+    response = test_client.post(f"/api/project/{project_id}/run?director=antigravity")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["agent_id"] == "openmontage-antigravity"
+    assert payload["agent_launch"]["status"] == "started"
+    assert captured["director"] == "antigravity"
+    assert captured["agent_id"] == "openmontage-antigravity"
+    assert captured["run_id"] == created.json()["work_order"]["run_id"]
+    order = json.loads((projects / project_id / "work_order.json").read_text(encoding="utf-8"))
+    assert order["claim"]["claimed_by"] == "openmontage-antigravity"
+
+
+def test_codex_director_rejects_api_key_sign_in(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda command: "C:/tools/codex.exe" if command in {"codex.exe", "codex"} else None,
+    )
+    monkeypatch.setattr(local_director, "_codex_auth_status", lambda _path: "api_key")
+
+    status = agent_launcher.agent_command_status("codex")
+
+    assert status["configured"] is True
+    assert status["valid"] is False
+    assert "API key" in status["error"]
+    assert "ChatGPT sign-in" in status["error"]
+
+
+def test_codex_director_requires_confirmed_chatgpt_sign_in(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda command: "C:/tools/codex.exe" if command in {"codex.exe", "codex"} else None,
+    )
+    monkeypatch.setattr(local_director, "_codex_auth_status", lambda _path: "unknown")
+
+    status = agent_launcher.agent_command_status("codex")
+    catalog_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "codex"
+    )
+
+    assert status["configured"] is True
+    assert status["valid"] is False
+    assert "Could not confirm" in status["error"]
+    assert catalog_entry["ready"] is False
+    assert "ChatGPT sign-in" in catalog_entry["status_note"]
+
+
+def test_codex_director_allows_confirmed_chatgpt_sign_in(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda command: "C:/tools/codex.exe" if command in {"codex.exe", "codex"} else None,
+    )
+    monkeypatch.setattr(local_director, "_codex_auth_status", lambda _path: "chatgpt")
+
+    status = agent_launcher.agent_command_status("codex")
+
+    assert status["configured"] is True
+    assert status["valid"] is True
+    assert status["director"] == "codex"
+
+
 def test_concurrent_run_requests_launch_one_agent(client, monkeypatch) -> None:
     test_client, _projects = client
     monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
@@ -152,7 +272,7 @@ def test_concurrent_run_requests_launch_one_agent(client, monkeypatch) -> None:
     launches = []
     launch_lock = Lock()
 
-    def fake_launch(project_dir, order, *, agent_id, backlot_url):
+    def fake_launch(project_dir, order, *, agent_id, backlot_url, execution_context=None):
         with launch_lock:
             launches.append(str(order["run_id"]))
         return AgentLaunch(
@@ -225,6 +345,11 @@ def test_agent_command_is_parsed_without_shell() -> None:
 
 def test_launcher_uses_shell_free_argv_and_persists_record(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
+    monkeypatch.setenv("OPENAI_API_KEY", "production-openai-key")
+    monkeypatch.setenv("FAL_KEY", "production-fal-key")
+    monkeypatch.setenv("AZURE_SPEECH_KEY", "production-speech-key")
+    monkeypatch.setenv("BACKLOT_AUTH_TOKEN", "global-backlot-token")
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "C:/secrets/provider.json")
     captured = {}
 
     class FakeProcess:
@@ -250,10 +375,82 @@ def test_launcher_uses_shell_free_argv_and_persists_record(tmp_path: Path, monke
     assert captured["kwargs"]["env"]["OPENMONTAGE_RUN_ID"] == order["run_id"]
     assert "OPENMONTAGE_AGENT_PROMPT" in captured["kwargs"]["env"]
     assert "begin at stage 'idea'" in captured["kwargs"]["env"]["OPENMONTAGE_AGENT_PROMPT"]
+    for secret_name in (
+        "OPENAI_API_KEY",
+        "FAL_KEY",
+        "AZURE_SPEECH_KEY",
+        "BACKLOT_AUTH_TOKEN",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+    ):
+        assert secret_name not in captured["kwargs"]["env"]
     assert launch.pid == 7711
     record = json.loads((tmp_path / "agent_process.json").read_text(encoding="utf-8"))
     assert record["status"] == "started"
     assert record["command"] == ["python", "-m", "my_agent"]
+
+
+def test_launcher_bundles_manifest_and_stage_instructions_for_local_director(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
+
+    class FakeProcess:
+        pid = 7722
+
+    monkeypatch.setattr(agent_launcher.subprocess, "Popen", lambda *_args, **_kwargs: FakeProcess())
+
+    class ExecutionContext:
+        manifest = {"id": "explainer", "stages": [{"name": "idea"}]}
+
+        @staticmethod
+        def as_dict():
+            return {
+                "pipeline_type": "explainer",
+                "next_stage": "idea",
+                "director_skill": "skills/pipelines/explainer/idea-director.md",
+            }
+
+    order = {
+        "project_id": "handoff-test",
+        "run_id": "8f6b4b7b-2c1f-4c1d-9d3e-7d6b6f6c8e1a",
+        "next_stage": "idea",
+    }
+    agent_launcher.launch_agent(
+        tmp_path,
+        order,
+        agent_id="agent-a",
+        execution_context=ExecutionContext(),
+    )
+
+    handoff_dir = tmp_path / ".openmontage"
+    handoff = json.loads((handoff_dir / "agent_handoff.json").read_text(encoding="utf-8"))
+    assert handoff["manifest"]["id"] == "explainer"
+    assert handoff["execution"]["next_stage"] == "idea"
+    assert (handoff_dir / "AGENT_GUIDE.md").is_file()
+    assert (handoff_dir / "PROJECT_CONTEXT.md").is_file()
+    assert "idea" in (handoff_dir / "stage_director.md").read_text(encoding="utf-8").lower()
+
+
+def test_launcher_rejects_symlinked_handoff_directory(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m my_agent")
+    target = tmp_path / "outside"
+    target.mkdir()
+    try:
+        (tmp_path / ".openmontage").symlink_to(target, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlinks unavailable: {exc}")
+    monkeypatch.setattr(
+        agent_launcher.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail("must reject the symlink before launch"),
+    )
+
+    with pytest.raises(AgentLaunchError, match="must not be a symlink"):
+        agent_launcher.launch_agent(
+            tmp_path,
+            {"project_id": "symlink", "run_id": "8f6b4b7b-2c1f-4c1d-9d3e-7d6b6f6c8e1a"},
+            agent_id="agent-a",
+        )
 
 
 def test_local_director_command_status_rejects_missing_cli(monkeypatch) -> None:
@@ -266,6 +463,40 @@ def test_local_director_command_status_rejects_missing_cli(monkeypatch) -> None:
     assert status["valid"] is False
     assert status["director"] == "claude"
     assert "claude" in status["error"]
+
+
+def test_local_director_can_start_a_powershell_cli_shim(monkeypatch) -> None:
+    monkeypatch.setattr(local_director.os, "name", "nt")
+
+    def fake_which(command: str) -> str | None:
+        return {
+            "codex": "C:/tools/codex.cmd",
+            "codex.ps1": "C:/tools/codex.ps1",
+            "powershell.exe": "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+        }.get(command)
+
+    monkeypatch.setattr(local_director.shutil, "which", fake_which)
+
+    executable = local_director.find_director_executable("codex")
+    argv, stdin_prompt = local_director.command_for_director(
+        "codex",
+        executable,
+        "make a local edit",
+        working_directory="C:/project",
+    )
+
+    assert argv[:7] == [
+        "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:/tools/codex.ps1",
+    ]
+    assert argv[7:11] == ["exec", "--sandbox", "workspace-write", "--cd"]
+    assert argv[11:] == ["C:/project", "-"]
+    assert stdin_prompt == "make a local edit"
 
 
 @pytest.mark.parametrize(
@@ -281,6 +512,7 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
     expected_executable: str,
     expected_args: list[str],
     prompt_on_stdin: bool,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = {}
@@ -303,11 +535,15 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
     monkeypatch.setattr(local_director.subprocess, "run", fake_run)
     source_env = {
         "OPENMONTAGE_AGENT_PROMPT": "produce the requested local video",
+        "OPENMONTAGE_PROJECT_DIR": str(tmp_path),
         "OPENAI_API_KEY": "openai-production-key",
         "ANTHROPIC_API_KEY": "anthropic-production-key",
         "ANTHROPIC_AUTH_TOKEN": "anthropic-api-token",
         "GEMINI_API_KEY": "gemini-production-key",
         "GOOGLE_API_KEY": "google-production-key",
+        "FAL_KEY": "fal-production-key",
+        "AZURE_SPEECH_KEY": "speech-production-key",
+        "GOOGLE_APPLICATION_CREDENTIALS": "C:/secrets/google.json",
         "BACKLOT_AUTH_TOKEN": "backlot-runtime-token",
     }
 
@@ -317,7 +553,7 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
     assert captured["argv"][0].endswith(expected_executable)
     if director == "codex":
         assert captured["argv"][1:5] == expected_args
-        assert captured["argv"][5] == str(Path.cwd().resolve())
+        assert captured["argv"][5] == str(tmp_path.resolve())
         assert captured["argv"][6] == "-"
     else:
         assert captured["argv"][1:2] == expected_args
@@ -326,10 +562,40 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
         source_env["OPENMONTAGE_AGENT_PROMPT"] if prompt_on_stdin else None
     )
     assert captured["kwargs"]["shell"] is False
-    for credential in local_director.MODEL_API_CREDENTIALS:
+    assert captured["kwargs"]["cwd"] == str(tmp_path.resolve())
+    for credential in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "FAL_KEY",
+        "AZURE_SPEECH_KEY",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "BACKLOT_AUTH_TOKEN",
+    ):
         assert credential not in captured["kwargs"]["env"]
-    assert captured["kwargs"]["env"]["BACKLOT_AUTH_TOKEN"] == "backlot-runtime-token"
     assert source_env["OPENAI_API_KEY"] == "openai-production-key"
+
+
+def test_local_director_requires_project_workspace(monkeypatch) -> None:
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda command: "C:/tools/codex.exe" if command in {"codex", "codex.exe"} else None,
+    )
+    monkeypatch.setattr(
+        local_director.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("director must not start without a project"),
+    )
+
+    result = local_director.run_local_director(
+        "codex",
+        env={"OPENMONTAGE_AGENT_PROMPT": "work", "OPENAI_API_KEY": "production-key"},
+    )
+
+    assert result == 2
 
 
 def test_launcher_can_start_a_real_short_lived_process(tmp_path: Path, monkeypatch) -> None:

@@ -14,6 +14,10 @@ let availableVoices = [];
 let availableVoiceProviders = [];
 let configuredVoiceProvider = "";
 let releaseStatus = null;
+let availableLocalDirectors = [];
+let configuredRunnerAvailable = false;
+let configuredRunnerLabel = "Configured agent";
+let localDirectorOptionsRequest = null;
 
 function updateReleaseBanner() {
   const banner = document.getElementById("releaseBanner");
@@ -235,6 +239,9 @@ const createProjectForm = document.getElementById("createProjectForm");
 const submitCreateBtn = document.getElementById("submitCreateBtn");
 const wizardOptionsStatus = document.getElementById("wizardOptionsStatus");
 const retryWizardOptionsBtn = document.getElementById("retryWizardOptionsBtn");
+const localDirectorSelect = document.getElementById("localDirectorSelect");
+const localDirectorHint = document.getElementById("localDirectorHint");
+const LOCAL_DIRECTOR_SELECTION_KEY = "backlot.localDirector";
 
 let selectedPipeline = "screen-demo";
 let selectedPlaybook = "premium-minimalist";
@@ -337,12 +344,90 @@ async function loadWizardOptions() {
   return wizardOptionsRequest;
 }
 
+function renderLocalDirectorOptions() {
+  if (!localDirectorSelect) return;
+  localDirectorSelect.innerHTML = "";
+  localDirectorSelect.append(el("option", { value: "" }, "Choose a local director"));
+  if (configuredRunnerAvailable) {
+    localDirectorSelect.append(el("option", { value: "configured" }, configuredRunnerLabel));
+  }
+  for (const director of availableLocalDirectors) {
+    const selectable = director.installed === true && director.ready !== false;
+    localDirectorSelect.append(el("option", {
+      value: director.id,
+      disabled: !selectable,
+      title: String(director.status_note || ""),
+    }, `${director.label}${director.installed !== true ? " · not installed" : selectable ? "" : " · sign-in needed"}`));
+  }
+
+  const preferred = localStorage.getItem(LOCAL_DIRECTOR_SELECTION_KEY) || "";
+  const availableValues = new Set([...localDirectorSelect.options]
+    .filter((option) => !option.disabled)
+    .map((option) => option.value));
+  const defaultLocal = availableLocalDirectors.find(
+    (director) => director.installed === true && director.ready === true,
+  );
+  localDirectorSelect.value = preferred && availableValues.has(preferred)
+    ? preferred
+    : defaultLocal?.id || (configuredRunnerAvailable ? "configured" : "");
+  updateLocalDirectorHint();
+}
+
+function updateLocalDirectorHint() {
+  if (!localDirectorHint) return;
+  const selected = localDirectorSelect?.value || "";
+  const director = availableLocalDirectors.find((item) => item.id === selected);
+  if (director?.installed) {
+    const status = String(director.status_note || "Sign in through this CLI's own account first.");
+    localDirectorHint.textContent = `${director.label}: ${status} Backlot strips credential-like environment variables, but the CLI still runs as your Windows user.`;
+  } else if (selected === "configured") {
+    localDirectorHint.textContent = `Runs through ${configuredRunnerLabel}. Local director account use and production media API calls remain separate.`;
+  } else if (localDirectorOptionsRequest) {
+    localDirectorHint.textContent = "Checking installed local directors…";
+  } else if (availableLocalDirectors.some((item) => item.installed && item.ready === false)) {
+    const notReady = availableLocalDirectors.find((item) => item.installed && item.ready === false);
+    const selectable = availableLocalDirectors.some((item) => item.installed && item.ready !== false);
+    localDirectorHint.textContent = `${notReady.status_note}${selectable ? " Choose another installed director or sign in to this one." : ""}`;
+  } else if (!availableLocalDirectors.some((item) => item.installed) && !configuredRunnerAvailable) {
+    localDirectorHint.textContent = "Install and sign in to Codex, Claude Code, or Antigravity to run a local director. Production media tools use OpenMontage's configured API credentials.";
+  } else {
+    localDirectorHint.textContent = "Choose a locally installed director. Sign in with that CLI's own account; production media tools use OpenMontage's configured API credentials.";
+  }
+}
+
+async function loadLocalDirectorOptions() {
+  if (localDirectorOptionsRequest) return localDirectorOptionsRequest;
+  localDirectorOptionsRequest = getJSON("/api/local-directors")
+    .then((catalog) => {
+      availableLocalDirectors = Array.isArray(catalog?.directors)
+        ? catalog.directors.filter((item) => item && typeof item.id === "string")
+        : [];
+      configuredRunnerAvailable = catalog?.configured_runner === true;
+      configuredRunnerLabel = configuredRunnerAvailable
+        ? `Configured agent (${String(catalog.configured_runner_label || "custom")})`
+        : "Configured agent";
+      renderLocalDirectorOptions();
+      return true;
+    })
+    .catch((error) => {
+      availableLocalDirectors = [];
+      configuredRunnerAvailable = false;
+      localDirectorHint.textContent = "Local director options could not be loaded. You can still retry from the project board.";
+      console.warn("Failed to load local director options:", error);
+      return false;
+    })
+    .finally(() => {
+      localDirectorOptionsRequest = null;
+    });
+  return localDirectorOptionsRequest;
+}
+
 async function openWizard() {
   wizardModal.style.display = "flex";
   wizardModal.setAttribute("aria-hidden", "false");
   document.getElementById("projectTitle").focus();
 
-  await loadWizardOptions();
+  await Promise.all([loadWizardOptions(), loadLocalDirectorOptions()]);
 
   renderPipelineOptions();
   renderPlaybookOptions();
@@ -543,6 +628,7 @@ async function handleCreateProject(e) {
   const topic = (document.getElementById("projectTopic")?.value || "").trim();
   const voiceSelect = document.getElementById("voiceSelect");
   const voiceProvider = document.getElementById("voiceProviderSelect")?.value || "";
+  const selectedDirector = localDirectorSelect?.value || "";
   const selectedProvider = availableVoiceProviders.find((provider) => (
     provider.id === voiceProvider && provider.available === true
   ));
@@ -579,6 +665,11 @@ async function handleCreateProject(e) {
 
   submitCreateBtn.disabled = true;
   submitCreateBtn.innerHTML = `<span>Creating internal preview...</span>`;
+  if (selectedDirector && selectedDirector !== "configured") {
+    localStorage.setItem(LOCAL_DIRECTOR_SELECTION_KEY, selectedDirector);
+  } else {
+    localStorage.removeItem(LOCAL_DIRECTOR_SELECTION_KEY);
+  }
 
   try {
     const res = await fetch("/api/project/create", {
@@ -599,7 +690,13 @@ async function handleCreateProject(e) {
       // Trigger background pipeline run immediately
       let runError = null;
       try {
-        const runResponse = await fetch(`/api/project/${data.project_id}/run`, { method: "POST" });
+        const directorQuery = selectedDirector && selectedDirector !== "configured"
+          ? `?director=${encodeURIComponent(selectedDirector)}`
+          : "";
+        const runResponse = await fetch(
+          `/api/project/${data.project_id}/run${directorQuery}`,
+          { method: "POST" },
+        );
         const runData = await runResponse.json().catch(() => ({}));
         if (!runResponse.ok || runData.ok !== true) {
           const detail = typeof runData.detail === "string"
@@ -642,11 +739,20 @@ if (emptyCreateBtn) emptyCreateBtn.addEventListener("click", openWizard);
 closeWizardBtn.addEventListener("click", closeWizard);
 cancelWizardBtn.addEventListener("click", closeWizard);
 retryWizardOptionsBtn.addEventListener("click", async () => {
-  await loadWizardOptions();
+  await Promise.all([loadWizardOptions(), loadLocalDirectorOptions()]);
   renderPipelineOptions();
   renderPlaybookOptions();
   renderVoiceProviderOptions();
   renderVoiceOptions();
+});
+localDirectorSelect.addEventListener("change", () => {
+  const value = localDirectorSelect.value;
+  if (value && value !== "configured") {
+    localStorage.setItem(LOCAL_DIRECTOR_SELECTION_KEY, value);
+  } else {
+    localStorage.removeItem(LOCAL_DIRECTOR_SELECTION_KEY);
+  }
+  updateLocalDirectorHint();
 });
 document.getElementById("voiceProviderSelect").addEventListener("change", renderVoiceOptions);
 document.getElementById("voiceSelect").addEventListener("change", syncCreateButton);

@@ -36,6 +36,7 @@ from lib.agent_launcher import (
     launch_agent,
     read_agent_process,
 )
+from lib.local_director import LocalDirectorError, local_director_catalog, normalize_director
 from lib.approval_contracts import ApprovalValidationError
 from lib.checkpoint import CheckpointValidationError, init_project, read_checkpoint, write_checkpoint
 from lib.demo_runner import RUNNER_KIND, is_internal_demo_project
@@ -1156,6 +1157,22 @@ def create_app() -> FastAPI:
     async def voice_providers_endpoint() -> dict:
         return await asyncio.to_thread(_load_voice_provider_options)
 
+    @app.get("/api/local-directors")
+    async def local_directors_endpoint() -> dict[str, Any]:
+        """Report local CLI readiness without exposing account details or credentials."""
+        configured = agent_command_status()
+        return {
+            "directors": local_director_catalog(),
+            "configured_runner": bool(
+                configured.get("configured") and configured.get("valid")
+            ),
+            "configured_runner_label": (
+                str(configured.get("director") or "Configured agent")
+                if configured.get("configured") and configured.get("valid")
+                else "Configured agent"
+            ),
+        }
+
     @app.get("/api/voices")
     async def voices_endpoint(provider: str | None = None) -> list:
         return await asyncio.to_thread(_load_voices_data, provider)
@@ -1337,6 +1354,7 @@ def create_app() -> FastAPI:
         project_id: str,
         request: Request,
         agent_id: str | None = None,
+        director: str | None = None,
     ) -> dict:
         import subprocess, sys
         project_dir = _safe_project_dir(project_id)
@@ -1374,9 +1392,29 @@ def create_app() -> FastAPI:
         # to launch the operator-configured agent process instead of claiming
         # work and silently dropping the handoff on the browser floor.
         explicit_agent_id = str(agent_id or "").strip()
+        if explicit_agent_id and director:
+            raise HTTPException(
+                status_code=400,
+                detail="Choose either an existing agent handoff or a local director, not both.",
+            )
+        selected_director: str | None = None
+        if director and not explicit_agent_id:
+            try:
+                selected_director = normalize_director(director)
+            except LocalDirectorError:
+                # Preserve the request for a useful pre-claim validation error.
+                selected_director = str(director).strip().lower()
         auto_launch = not explicit_agent_id
-        requested_agent_id = explicit_agent_id or configured_agent_id()
-        launch_configuration = agent_command_status() if auto_launch else None
+        launch_configuration = (
+            agent_command_status(selected_director)
+            if auto_launch and selected_director is not None
+            else agent_command_status() if auto_launch else None
+        )
+        requested_agent_id = (
+            explicit_agent_id
+            or (str(launch_configuration.get("agent_id")) if selected_director and launch_configuration else "")
+            or configured_agent_id()
+        )
         try:
             context = await asyncio.to_thread(load_manifest_stage_context, project_dir)
         except ManifestExecutionError as exc:
@@ -1405,9 +1443,8 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "The configured external agent command is invalid. "
-                    f"Fix {launch_configuration.get('error') or 'OPENMONTAGE_AGENT_COMMAND'} "
-                    "before running this project."
+                    "The selected or configured director is unavailable. "
+                    f"{launch_configuration.get('error') or 'Check the local director setup'}"
                 ),
             )
         claim = context.order.get("claim") or {}
@@ -1435,9 +1472,8 @@ def create_app() -> FastAPI:
                 raise HTTPException(
                     status_code=503,
                     detail=(
-                        "No production agent is configured for Run Pipeline. "
-                        "Set OPENMONTAGE_AGENT_COMMAND to the trusted agent command "
-                        "(and optionally OPENMONTAGE_AGENT_ID), then retry."
+                        "No valid director is available for Run Pipeline. Choose an installed "
+                        "local director or set OPENMONTAGE_AGENT_COMMAND to a trusted agent command."
                     ),
                 )
 
@@ -1535,12 +1571,18 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if auto_launch:
             try:
+                launch_kwargs = {
+                    "agent_id": requested_agent_id,
+                    "backlot_url": str(request.base_url).rstrip("/"),
+                    "execution_context": context,
+                }
+                if selected_director is not None:
+                    launch_kwargs["director"] = selected_director
                 launch = await asyncio.to_thread(
                     launch_agent,
                     project_dir,
                     order,
-                    agent_id=requested_agent_id,
-                    backlot_url=str(request.base_url).rstrip("/"),
+                    **launch_kwargs,
                 )
             except (AgentConfigurationError, AgentLaunchError) as exc:
                 # A claimed-but-unlaunched run is worse than a visible setup
