@@ -145,10 +145,39 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                         dialog.accept()
 
                     page.on("dialog", dismiss_dialog)
+                    page.route(
+                        "**/api/local-directors",
+                        lambda route: route.fulfill(
+                            status=200,
+                            content_type="application/json",
+                            body=json.dumps(
+                                {
+                                    "configured_runner": True,
+                                    "configured_runner_label": "test configured agent",
+                                    "directors": [
+                                        {
+                                            "id": "antigravity",
+                                            "label": "Antigravity",
+                                            "installed": True,
+                                            "ready": True,
+                                            "auth_status": "unknown",
+                                            "status_note": "Authentication could not be verified.",
+                                        }
+                                    ],
+                                }
+                            ),
+                        ),
+                    )
                     page.goto(f"{base_url}/p/{project_id}", wait_until="networkidle")
                     activity_panel = page.locator("aside .panel").filter(has_text="Activity")
                     expect(activity_panel.locator(".status")).to_have_text("created")
                     expect(activity_panel.locator(".status.run")).to_have_count(0)
+                    expect(
+                        page.locator('select[aria-label="Local production director"] option[value="antigravity"]')
+                    ).to_be_enabled()
+                    expect(page.locator('select[aria-label="Local production director"]')).to_have_value(
+                        "configured"
+                    )
                     run_button = page.get_by_title("Run automated video production")
                     expect(run_button).to_contain_text("Run Pipeline")
                     run_url = f"{base_url}/api/project/{project_id}/run"
@@ -167,6 +196,8 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
 
                     page.goto(base_url, wait_until="networkidle")
                     page.locator("#createVideoBtn").click()
+                    expect(page.locator('#localDirectorSelect option[value="antigravity"]')).to_be_enabled()
+                    expect(page.locator("#localDirectorSelect")).to_have_value("configured")
                     openai_provider_option = page.locator(
                         '#voiceProviderSelect option[value="openai"]'
                     )

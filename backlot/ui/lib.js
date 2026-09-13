@@ -12,6 +12,7 @@ export function el(tag, attrs = {}, ...children) {
     if (v == null) continue;
     if (k === "class") node.className = v;
     else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (typeof v === "boolean" && k in node) node[k] = v;
     else node.setAttribute(k, v);
   }
   for (const child of children.flat()) {

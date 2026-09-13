@@ -365,7 +365,9 @@ function renderLocalDirectorOptions() {
     .filter((option) => !option.disabled)
     .map((option) => option.value));
   const defaultLocal = availableLocalDirectors.find(
-    (director) => director.installed === true && director.ready === true,
+    (director) => director.installed === true
+      && director.ready === true
+      && director.auth_status === "chatgpt",
   );
   localDirectorSelect.value = preferred && availableValues.has(preferred)
     ? preferred

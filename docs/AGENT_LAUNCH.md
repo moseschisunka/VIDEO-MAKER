@@ -5,8 +5,9 @@ turn the old demo runner into a production executor. Choose **Codex**,
 **Claude Code**, or **Antigravity** in the Local Director selector; the choice
 applies to that run and does not require editing `.env` or restarting Backlot.
 The library wizard remembers the selected local director in this browser.
-When a ready local CLI is available, the board and wizard prefer it over the
-optional configured custom runner.
+The board and wizard default to a local CLI only when it confirms ChatGPT
+sign-in; a CLI whose account status is unverified stays available for explicit
+selection and does not silently become the director.
 
 The supported local CLI must be installed and signed in to its own account.
 Codex, Claude Code, and Antigravity are separate directors; the current Codex

@@ -2,7 +2,7 @@
 
 **Status: BLOCKED for production certification**
 **Reviewed:** 2026-09-13
-**Base revision:** `3bf80e9424df47388aace5276942e1f6d8c8364d` (`feat(backlot): support local director CLIs`)
+**Base revision:** `e36a6e9` (`feat(backlot): launch selected local directors`)
 **Scope:** Codex CLI, Claude Code CLI, and Antigravity CLI started by Backlot on the local Windows device.
 
 ## Intended use
@@ -17,8 +17,9 @@ spawned by Backlot; the local option is Codex CLI.
 - The project board and creation wizard have a per-run director selector for
   Codex, Claude Code, and Antigravity. The selection is saved in browser
   storage; it no longer requires editing `.env` or restarting Backlot. When a
-  ready local CLI is available, the UI prefers it over the optional configured
-  custom runner.
+  director reports confirmed ChatGPT sign-in, the UI can default to it. A
+  director with unverified account status remains manually selectable and
+  does not silently replace the configured runner.
 - Backlot validates a selected director before claiming work, then launches
   its installed CLI in that project's directory. Codex API-key sign-in is
   rejected; Codex only launches after `codex login status` confirms ChatGPT
@@ -108,3 +109,39 @@ blocked.
    combinations.
 
 **Reviewer:** Codex code and test review. No production API request occurred.
+
+## Follow-up verification (2026-09-13)
+
+The local catalog was rechecked on the current Windows host:
+
+- Codex CLI is installed but signed out (`not_signed_in`).
+- Claude Code CLI is not installed (`unavailable`).
+- Antigravity `agy` is installed, but its authentication remains unverified
+  (`unknown`).
+
+No CLI model session or production provider request was started. The browser
+regression fixture sets Antigravity to installed/ready with unknown auth and a
+configured runner present; both the project board and creation wizard keep the
+configured runner selected by default.
+
+```text
+python -m pytest tests/contracts/test_agent_launcher.py tests/contracts/test_phase10_security.py tests/backlot/test_run_pipeline_ui.py -q
+39 passed in 19.48s
+
+python -m pytest tests -m "not live_provider and not hyperframes_qa" -q
+1824 passed, 6 skipped, 3 deselected, 1 subtests passed in 561.80s
+
+node --check backlot/ui/lib.js
+node --check backlot/ui/board.js
+node --check backlot/ui/library.js
+git diff --check
+all exited 0
+```
+
+The broad suite excludes live-provider and HyperFrames QA coverage. Its final
+run includes the explicit `auth_status == "chatgpt"` default allowlist and the
+shared DOM boolean fix. The browser fixture confirms that an unknown-auth CLI
+remains manually selectable while the configured runner stays selected by
+default. These results verify the offline code baseline only; they do not
+satisfy the environment-owned operational, production-secret isolation, or
+human AV release gates above.

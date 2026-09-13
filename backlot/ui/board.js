@@ -62,7 +62,9 @@ function renderDirectorSelect() {
   }
   const preferred = localStorage.getItem(DIRECTOR_SELECTION_KEY) || "";
   const defaultLocal = (localDirectorCatalog?.directors || []).find(
-    (director) => director.installed === true && director.ready === true,
+    (director) => director.installed === true
+      && director.ready === true
+      && director.auth_status === "chatgpt",
   );
   if (preferred && [...select.options].some((option) => option.value === preferred && !option.disabled)) {
     select.value = preferred;
