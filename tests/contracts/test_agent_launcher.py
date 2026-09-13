@@ -54,10 +54,14 @@ def test_missing_agent_command_does_not_claim_or_fake_a_run(client, monkeypatch)
     assert order["stages"][0]["status"] == "ready"
 
 
-def test_missing_local_director_cli_does_not_claim_a_run(client, monkeypatch) -> None:
+def test_claude_subscription_cli_does_not_claim_a_run(client, monkeypatch) -> None:
     test_client, projects = client
     monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m lib.local_director claude")
-    monkeypatch.setattr(local_director.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda name: "C:/tools/claude.exe" if name in {"claude", "claude.exe"} else None,
+    )
     created = test_client.post("/api/project/create", json={"title": "Local director setup"})
     assert created.status_code == 200, created.text
     project_id = created.json()["project_id"]
@@ -65,7 +69,8 @@ def test_missing_local_director_cli_does_not_claim_a_run(client, monkeypatch) ->
     response = test_client.post(f"/api/project/{project_id}/run")
 
     assert response.status_code == 503
-    assert "claude" in response.json()["detail"]
+    assert "interactive" in response.json()["detail"].lower()
+    assert "subscription" in response.json()["detail"].lower()
     order = json.loads((projects / project_id / "work_order.json").read_text(encoding="utf-8"))
     assert order["status"] == "queued"
     assert order["claim"]["claimed_by"] is None
@@ -81,7 +86,13 @@ def test_local_directors_endpoint_reports_choices_without_credentials(client, mo
         "local_director_catalog",
         lambda: [
             {"id": "codex", "label": "Codex", "installed": True, "ready": True},
-            {"id": "claude", "label": "Claude Code", "installed": False, "ready": False},
+            {
+                "id": "claude",
+                "label": "Claude Code",
+                "installed": True,
+                "ready": False,
+                "mode": "interactive_only",
+            },
         ],
     )
 
@@ -453,16 +464,21 @@ def test_launcher_rejects_symlinked_handoff_directory(tmp_path: Path, monkeypatc
         )
 
 
-def test_local_director_command_status_rejects_missing_cli(monkeypatch) -> None:
+def test_local_director_command_status_blocks_claude_subscription_dispatch(monkeypatch) -> None:
     monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m lib.local_director claude")
-    monkeypatch.setattr(local_director.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda name: "C:/tools/claude.exe" if name in {"claude", "claude.exe"} else None,
+    )
 
     status = agent_launcher.agent_command_status()
 
     assert status["configured"] is True
     assert status["valid"] is False
     assert status["director"] == "claude"
-    assert "claude" in status["error"]
+    assert "interactive" in status["error"].lower()
+    assert "subscription" in status["error"].lower()
 
 
 def test_local_director_can_start_a_powershell_cli_shim(monkeypatch) -> None:
@@ -503,7 +519,6 @@ def test_local_director_can_start_a_powershell_cli_shim(monkeypatch) -> None:
     ("director", "expected_executable", "expected_args", "prompt_on_stdin"),
     [
         ("codex", "codex.exe", ["exec", "--sandbox", "workspace-write", "--cd"], True),
-        ("claude", "claude.exe", ["-p"], False),
         ("antigravity", "agy.exe", ["-p"], False),
     ],
 )
@@ -576,6 +591,41 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
     ):
         assert credential not in captured["kwargs"]["env"]
     assert source_env["OPENAI_API_KEY"] == "openai-production-key"
+
+
+def test_claude_subscription_is_interactive_only(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda name: "C:/tools/claude.exe" if name in {"claude", "claude.exe"} else None,
+    )
+    monkeypatch.setattr(
+        local_director.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("Backlot must not submit a Claude prompt"),
+    )
+
+    catalog_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "claude"
+    )
+    assert catalog_entry["installed"] is True
+    assert catalog_entry["ready"] is False
+    assert catalog_entry["mode"] == "interactive_only"
+
+    status = agent_launcher.agent_command_status("claude")
+    assert status["valid"] is False
+    assert "subscription" in status["error"].lower()
+
+    result = local_director.run_local_director(
+        "claude",
+        env={
+            "OPENMONTAGE_AGENT_PROMPT": "do not send this",
+            "OPENMONTAGE_PROJECT_DIR": str(tmp_path),
+        },
+    )
+
+    assert result == 2
+    assert "interactive" in capsys.readouterr().err.lower()
 
 
 def test_local_director_requires_project_workspace(monkeypatch) -> None:

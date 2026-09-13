@@ -33,8 +33,8 @@ function applyRunButtonFeedback(button) {
 function renderDirectorSelect() {
   const select = el("select", {
     class: "variant-select",
-    title: "Choose which locally signed-in agent directs this production",
-    "aria-label": "Local production director",
+    title: "Choose which supported local CLI directs this production",
+    "aria-label": "Local automated director",
     onchange: () => {
       if (select.value && select.value !== "configured") {
         localStorage.setItem(DIRECTOR_SELECTION_KEY, select.value);
@@ -53,11 +53,16 @@ function renderDirectorSelect() {
   }
   for (const director of localDirectorCatalog?.directors || []) {
     const selectable = director.installed === true && director.ready !== false;
+    const availability = director.mode === "interactive_only"
+      ? " · interactive only"
+      : director.installed !== true
+        ? " · not installed"
+        : selectable ? "" : " · sign-in needed";
     const option = el("option", {
       value: director.id,
       disabled: !selectable,
       title: String(director.status_note || ""),
-    }, `${director.label}${director.installed !== true ? " · not installed" : selectable ? "" : " · sign-in needed"}`);
+    }, `${director.label}${availability}`);
     select.append(option);
   }
   const preferred = localStorage.getItem(DIRECTOR_SELECTION_KEY) || "";

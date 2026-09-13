@@ -162,7 +162,16 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                                             "ready": True,
                                             "auth_status": "unknown",
                                             "status_note": "Authentication could not be verified.",
-                                        }
+                                        },
+                                        {
+                                            "id": "claude",
+                                            "label": "Claude Code",
+                                            "installed": True,
+                                            "ready": False,
+                                            "mode": "interactive_only",
+                                            "auth_status": "manual",
+                                            "status_note": "Use Claude Code directly in its interactive CLI.",
+                                        },
                                     ],
                                 }
                             ),
@@ -173,9 +182,15 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     expect(activity_panel.locator(".status")).to_have_text("created")
                     expect(activity_panel.locator(".status.run")).to_have_count(0)
                     expect(
-                        page.locator('select[aria-label="Local production director"] option[value="antigravity"]')
+                        page.locator('select[aria-label="Local automated director"] option[value="antigravity"]')
                     ).to_be_enabled()
-                    expect(page.locator('select[aria-label="Local production director"]')).to_have_value(
+                    expect(
+                        page.locator('select[aria-label="Local automated director"] option[value="claude"]')
+                    ).to_be_disabled()
+                    expect(
+                        page.locator('select[aria-label="Local automated director"] option[value="claude"]')
+                    ).to_contain_text("interactive only")
+                    expect(page.locator('select[aria-label="Local automated director"]')).to_have_value(
                         "configured"
                     )
                     run_button = page.get_by_title("Run automated video production")
@@ -197,6 +212,7 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     page.goto(base_url, wait_until="networkidle")
                     page.locator("#createVideoBtn").click()
                     expect(page.locator('#localDirectorSelect option[value="antigravity"]')).to_be_enabled()
+                    expect(page.locator('#localDirectorSelect option[value="claude"]')).to_be_disabled()
                     expect(page.locator("#localDirectorSelect")).to_have_value("configured")
                     openai_provider_option = page.locator(
                         '#voiceProviderSelect option[value="openai"]'

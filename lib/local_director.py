@@ -1,9 +1,11 @@
-"""Run a locally authenticated coding agent as an OpenMontage director.
+"""Run supported local coding agents as OpenMontage directors.
 
 The Backlot launcher owns the handoff and starts this module as a small
 adapter.  Model API keys belong to OpenMontage's production tools, so they are
 removed from the director CLI's environment.  Those tools can still load their
 own production credentials from the ignored project ``.env`` when invoked.
+Claude Code is listed for discovery, but subscription-backed interactive use
+is deliberately not dispatched through this adapter.
 """
 
 from __future__ import annotations
@@ -28,6 +30,12 @@ DIRECTOR_LABELS = {
     "claude": "Claude Code",
     "antigravity": "Antigravity",
 }
+
+CLAUDE_INTERACTIVE_ONLY_NOTE = (
+    "Use Claude Code directly in its interactive CLI. OpenMontage cannot submit "
+    "requests through Claude subscription credentials; Claude's headless mode "
+    "uses a separate Agent SDK allowance."
+)
 
 _CREDENTIAL_ENV_MARKERS = (
     "KEY",
@@ -86,6 +94,8 @@ def find_director_executable(name: str) -> str:
 def director_launcher_command(name: str) -> tuple[str, ...]:
     """Return the trusted adapter command for one installed local CLI."""
     director = normalize_director(name)
+    if director == "claude":
+        raise LocalDirectorError(CLAUDE_INTERACTIVE_ONLY_NOTE)
     executable = find_director_executable(director)
     if director == "codex":
         auth_status = _codex_auth_status(executable)
@@ -112,6 +122,30 @@ def local_director_catalog() -> list[dict[str, str | bool]]:
     """Report local CLI readiness without returning account details or secrets."""
     catalog: list[dict[str, str | bool]] = []
     for director, label in DIRECTOR_LABELS.items():
+        if director == "claude":
+            try:
+                find_director_executable(director)
+            except LocalDirectorError as exc:
+                catalog.append({
+                    "id": director,
+                    "label": label,
+                    "installed": False,
+                    "ready": False,
+                    "mode": "interactive_only",
+                    "auth_status": "manual",
+                    "status_note": f"{exc} {CLAUDE_INTERACTIVE_ONLY_NOTE}",
+                })
+            else:
+                catalog.append({
+                    "id": director,
+                    "label": label,
+                    "installed": True,
+                    "ready": False,
+                    "mode": "interactive_only",
+                    "auth_status": "manual",
+                    "status_note": CLAUDE_INTERACTIVE_ONLY_NOTE,
+                })
+            continue
         try:
             executable = find_director_executable(director)
         except LocalDirectorError as exc:
@@ -240,6 +274,8 @@ def command_for_director(
 ) -> tuple[list[str], str | None]:
     """Build a shell-free command and optional stdin prompt for one CLI."""
     director = normalize_director(name)
+    if director == "claude":
+        raise LocalDirectorError(CLAUDE_INTERACTIVE_ONLY_NOTE)
     executable_argv = _executable_argv(executable)
     if director == "codex":
         return (
@@ -292,12 +328,16 @@ def run_local_director(name: str, *, env: Mapping[str, str] | None = None) -> in
             file=sys.stderr,
         )
         return 2
-    argv, stdin_prompt = command_for_director(
-        director,
-        executable,
-        prompt,
-        working_directory=working_directory,
-    )
+    try:
+        argv, stdin_prompt = command_for_director(
+            director,
+            executable,
+            prompt,
+            working_directory=working_directory,
+        )
+    except LocalDirectorError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     try:
         result = subprocess.run(
             argv,

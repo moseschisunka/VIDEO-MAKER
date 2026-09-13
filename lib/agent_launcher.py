@@ -3,9 +3,9 @@
 OpenMontage owns the durable work order and the creative tools, but it does
 not embed an LLM or pretend that a Python demo runner is a production agent.
 This module is the small process boundary between Backlot and the configured
-agent application (Codex, Claude, or a project-specific worker).
+agent application (Codex CLI, Antigravity, or a project-specific worker).
 
-The command is deliberately configured by the operator.  It is parsed into an
+The command is deliberately configured by the operator. It is parsed into an
 argument vector and launched with ``shell=False``; project and run identity are
 provided through ``OPENMONTAGE_*`` environment variables so the adapter does
 not have to invent a command-line protocol for every agent implementation.
@@ -31,7 +31,6 @@ from lib.local_director import (
     director_launcher_command,
     director_environment,
     director_from_command,
-    find_director_executable,
     normalize_director,
 )
 
@@ -139,7 +138,7 @@ def agent_command_status(director: str | None = None) -> dict[str, Any]:
     director = director_from_command(argv)
     if director:
         try:
-            find_director_executable(director)
+            director_launcher_command(director)
         except LocalDirectorError as exc:
             return {
                 "configured": True,

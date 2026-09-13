@@ -353,11 +353,16 @@ function renderLocalDirectorOptions() {
   }
   for (const director of availableLocalDirectors) {
     const selectable = director.installed === true && director.ready !== false;
+    const availability = director.mode === "interactive_only"
+      ? " · interactive only"
+      : director.installed !== true
+        ? " · not installed"
+        : selectable ? "" : " · sign-in needed";
     localDirectorSelect.append(el("option", {
       value: director.id,
       disabled: !selectable,
       title: String(director.status_note || ""),
-    }, `${director.label}${director.installed !== true ? " · not installed" : selectable ? "" : " · sign-in needed"}`));
+    }, `${director.label}${availability}`));
   }
 
   const preferred = localStorage.getItem(LOCAL_DIRECTOR_SELECTION_KEY) || "";
@@ -389,11 +394,14 @@ function updateLocalDirectorHint() {
   } else if (availableLocalDirectors.some((item) => item.installed && item.ready === false)) {
     const notReady = availableLocalDirectors.find((item) => item.installed && item.ready === false);
     const selectable = availableLocalDirectors.some((item) => item.installed && item.ready !== false);
-    localDirectorHint.textContent = `${notReady.status_note}${selectable ? " Choose another installed director or sign in to this one." : ""}`;
+    const followUp = notReady.mode === "interactive_only"
+      ? " Use Claude Code directly in its interactive terminal."
+      : selectable ? " Choose another installed director or sign in to this one." : "";
+    localDirectorHint.textContent = `${notReady.status_note}${followUp}`;
   } else if (!availableLocalDirectors.some((item) => item.installed) && !configuredRunnerAvailable) {
-    localDirectorHint.textContent = "Install and sign in to Codex, Claude Code, or Antigravity to run a local director. Production media tools use OpenMontage's configured API credentials.";
+    localDirectorHint.textContent = "Install and sign in to Codex CLI or Antigravity to run a local director. Use Claude Code directly in its interactive terminal; Backlot does not submit subscription-backed requests. Production media tools use OpenMontage's configured API credentials.";
   } else {
-    localDirectorHint.textContent = "Choose a locally installed director. Sign in with that CLI's own account; production media tools use OpenMontage's configured API credentials.";
+    localDirectorHint.textContent = "Choose Codex CLI or Antigravity and sign in through its own account. Use Claude Code directly in its interactive terminal. OpenAI API credentials are for production media providers, not local director inference.";
   }
 }
 
