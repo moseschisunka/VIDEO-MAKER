@@ -611,6 +611,7 @@ def test_claude_subscription_is_interactive_only(monkeypatch, tmp_path: Path, ca
     assert catalog_entry["installed"] is True
     assert catalog_entry["ready"] is False
     assert catalog_entry["mode"] == "interactive_only"
+    assert catalog_entry["handoff_agent_id"] == local_director.CLAUDE_INTERACTIVE_AGENT_ID
 
     status = agent_launcher.agent_command_status("claude")
     assert status["valid"] is False
@@ -626,6 +627,40 @@ def test_claude_subscription_is_interactive_only(monkeypatch, tmp_path: Path, ca
 
     assert result == 2
     assert "interactive" in capsys.readouterr().err.lower()
+
+
+def test_claude_manual_handoff_is_prepared_without_dispatching_a_model(client, monkeypatch) -> None:
+    test_client, projects = client
+    monkeypatch.setenv("OPENAI_API_KEY", "production-key-must-not-enter-director-prompt")
+    monkeypatch.setattr(
+        agent_launcher.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail("manual Claude handoff must not launch a process"),
+    )
+    created = test_client.post("/api/project/create", json={"title": "Manual Claude director"})
+    assert created.status_code == 200, created.text
+    project_id = created.json()["project_id"]
+
+    response = test_client.post(
+        f"/api/project/{project_id}/run?agent_id={local_director.CLAUDE_INTERACTIVE_AGENT_ID}"
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    manual = payload["manual_handoff"]
+    assert payload["agent_launch"]["status"] == "handoff"
+    assert manual["mode"] == "interactive_manual_handoff"
+    assert manual["agent_id"] == local_director.CLAUDE_INTERACTIVE_AGENT_ID
+    assert manual["project_id"] == project_id
+    assert manual["run_id"] == payload["work_order"]["run_id"]
+    assert manual["stage"] == "idea"
+    assert "submit this prompt manually" in manual["prompt"].lower()
+    assert "did not send it to claude" in manual["prompt"].lower()
+    assert "do not read or print .env" in manual["prompt"].lower()
+    assert "production-key-must-not-enter-director-prompt" not in manual["prompt"]
+    assert Path(manual["handoff_path"]).is_file()
+    assert Path(manual["prompt_path"]).read_text(encoding="utf-8").strip() == manual["prompt"]
+    assert not (projects / project_id / "agent_process.json").exists()
 
 
 def test_local_director_requires_project_workspace(monkeypatch) -> None:

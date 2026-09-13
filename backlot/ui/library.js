@@ -352,7 +352,8 @@ function renderLocalDirectorOptions() {
     localDirectorSelect.append(el("option", { value: "configured" }, configuredRunnerLabel));
   }
   for (const director of availableLocalDirectors) {
-    const selectable = director.installed === true && director.ready !== false;
+    const selectable = director.installed === true
+      && (director.ready !== false || director.mode === "interactive_only");
     const availability = director.mode === "interactive_only"
       ? " · interactive only"
       : director.installed !== true
@@ -384,6 +385,10 @@ function updateLocalDirectorHint() {
   if (!localDirectorHint) return;
   const selected = localDirectorSelect?.value || "";
   const director = availableLocalDirectors.find((item) => item.id === selected);
+  if (director?.mode === "interactive_only") {
+    localDirectorHint.textContent = "Claude Code stays in its native interactive terminal. Backlot reserves the work order and copies the handoff; you paste and submit it yourself. OpenAI API credentials are for approved production media tools, not local director inference.";
+    return;
+  }
   if (director?.installed) {
     const status = String(director.status_note || "Sign in through this CLI's own account first.");
     localDirectorHint.textContent = `${director.label}: ${status} Backlot strips credential-like environment variables, but the CLI still runs as your Windows user.`;
@@ -395,13 +400,13 @@ function updateLocalDirectorHint() {
     const notReady = availableLocalDirectors.find((item) => item.installed && item.ready === false);
     const selectable = availableLocalDirectors.some((item) => item.installed && item.ready !== false);
     const followUp = notReady.mode === "interactive_only"
-      ? " Use Claude Code directly in its interactive terminal."
+      ? " Use the interactive Claude Code handoff from the project board."
       : selectable ? " Choose another installed director or sign in to this one." : "";
     localDirectorHint.textContent = `${notReady.status_note}${followUp}`;
   } else if (!availableLocalDirectors.some((item) => item.installed) && !configuredRunnerAvailable) {
-    localDirectorHint.textContent = "Install and sign in to Codex CLI or Antigravity to run a local director. Use Claude Code directly in its interactive terminal; Backlot does not submit subscription-backed requests. Production media tools use OpenMontage's configured API credentials.";
+    localDirectorHint.textContent = "Install and sign in to Codex CLI or Antigravity to run them locally. Claude Code is used in its native interactive terminal through a manual, copyable handoff. Production media APIs are separate from local director inference.";
   } else {
-    localDirectorHint.textContent = "Choose Codex CLI or Antigravity and sign in through its own account. Use Claude Code directly in its interactive terminal. OpenAI API credentials are for production media providers, not local director inference.";
+    localDirectorHint.textContent = "Codex CLI and Antigravity use their own local account sign-ins. Claude Code uses a manual interactive handoff. OpenAI API credentials are for approved production media tools, not local director inference.";
   }
 }
 
@@ -697,37 +702,47 @@ async function handleCreateProject(e) {
     });
     const data = await res.json();
     if (data.ok && data.project_id) {
-      // Trigger background pipeline run immediately
-      let runError = null;
-      try {
-        const directorQuery = selectedDirector && selectedDirector !== "configured"
-          ? `?director=${encodeURIComponent(selectedDirector)}`
-          : "";
-        const runResponse = await fetch(
-          `/api/project/${data.project_id}/run${directorQuery}`,
-          { method: "POST" },
+      const selectedLocalDirector = availableLocalDirectors.find(
+        (item) => item.id === selectedDirector,
+      );
+      const manualHandoff = selectedLocalDirector?.mode === "interactive_only";
+      if (manualHandoff) {
+        alert(
+          "Project created. On its board, click Run Pipeline to reserve the work order "
+          + "and copy the handoff. Then paste it into your interactive Claude Code terminal.",
         );
-        const runData = await runResponse.json().catch(() => ({}));
-        if (!runResponse.ok || runData.ok !== true) {
-          const detail = typeof runData.detail === "string"
-            ? runData.detail
-            : runData.detail?.message || runData.error || `HTTP ${runResponse.status}`;
-          throw new Error(detail);
+      } else {
+        // Automated local directors can start immediately. Interactive-only
+        // directors wait for the user to open the native CLI and paste its handoff.
+        let runError = null;
+        try {
+          const directorQuery = selectedDirector && selectedDirector !== "configured"
+            ? `?director=${encodeURIComponent(selectedDirector)}`
+            : "";
+          const runResponse = await fetch(
+            `/api/project/${data.project_id}/run${directorQuery}`,
+            { method: "POST" },
+          );
+          const runData = await runResponse.json().catch(() => ({}));
+          if (!runResponse.ok || runData.ok !== true) {
+            const detail = typeof runData.detail === "string"
+              ? runData.detail
+              : runData.detail?.message || runData.error || `HTTP ${runResponse.status}`;
+            throw new Error(detail);
+          }
+          // Keep launch state available for a future caller instead of assuming
+          // that a browser redirect itself started production.
+          if (!runData.agent_launch?.status && runData.execution_mode !== "internal_demo") {
+            throw new Error("Run Pipeline returned no agent launch status.");
+          }
+        } catch (runErr) {
+          runError = runErr;
+          console.error("Auto-run trigger failed:", runErr);
         }
-        // The API either started the configured external agent or returned a
-        // durable idempotent handoff. Keep the launch state available for a
-        // future caller instead of assuming a browser redirect itself started
-        // production.
-        if (!runData.agent_launch?.status && runData.execution_mode !== "internal_demo") {
-          throw new Error("Run Pipeline returned no agent launch status.");
+        if (runError) {
+          const detail = String(runError.message || runError).slice(0, 300);
+          alert(`Project created, but automatic run could not start: ${detail}. Open the project to retry.`);
         }
-      } catch (runErr) {
-        runError = runErr;
-        console.error("Auto-run trigger failed:", runErr);
-      }
-      if (runError) {
-        const detail = String(runError.message || runError).slice(0, 300);
-        alert(`Project created, but automatic run could not start: ${detail}. Open the project to retry.`);
       }
       window.location.href = `/p/${data.project_id}`;
     } else {

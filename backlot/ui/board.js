@@ -34,7 +34,7 @@ function renderDirectorSelect() {
   const select = el("select", {
     class: "variant-select",
     title: "Choose which supported local CLI directs this production",
-    "aria-label": "Local automated director",
+    "aria-label": "Local director",
     onchange: () => {
       if (select.value && select.value !== "configured") {
         localStorage.setItem(DIRECTOR_SELECTION_KEY, select.value);
@@ -52,7 +52,8 @@ function renderDirectorSelect() {
     select.append(el("option", { value: "configured" }, "Configured agent"));
   }
   for (const director of localDirectorCatalog?.directors || []) {
-    const selectable = director.installed === true && director.ready !== false;
+    const selectable = director.installed === true
+      && (director.ready !== false || director.mode === "interactive_only");
     const availability = director.mode === "interactive_only"
       ? " · interactive only"
       : director.installed !== true
@@ -88,14 +89,14 @@ function setRunButtonFeedback(label, disabled, resetAfterMs = null) {
   }
   runButtonFeedback = label ? { label, disabled } : null;
   document
-    .querySelectorAll('button[title="Run automated video production"]')
+    .querySelectorAll('button[title="Run or hand off the video pipeline"]')
     .forEach(applyRunButtonFeedback);
   if (label && resetAfterMs !== null) {
     runButtonFeedbackTimer = window.setTimeout(() => {
       runButtonFeedback = null;
       runButtonFeedbackTimer = null;
       document
-        .querySelectorAll('button[title="Run automated video production"]')
+        .querySelectorAll('button[title="Run or hand off the video pipeline"]')
         .forEach(applyRunButtonFeedback);
     }, resetAfterMs);
   }
@@ -242,13 +243,22 @@ function renderSlate(s) {
 
   const runBtn = el("button", {
     class: "btn btn-secondary",
-    title: "Run automated video production",
+    title: "Run or hand off the video pipeline",
     onclick: async () => {
-      setRunButtonFeedback("▶ Launching...", true);
       try {
-        const directorQuery = directorSelect.value && directorSelect.value !== "configured"
-          ? `?director=${encodeURIComponent(directorSelect.value)}`
-          : "";
+        const selectedDirector = (localDirectorCatalog?.directors || []).find(
+          (item) => item.id === directorSelect.value,
+        );
+        const manualHandoff = selectedDirector?.mode === "interactive_only";
+        setRunButtonFeedback(manualHandoff ? "Preparing Claude handoff..." : "▶ Launching...", true);
+        if (manualHandoff && !selectedDirector.handoff_agent_id) {
+          throw new Error("Backlot has no manual handoff route for this local director.");
+        }
+        const directorQuery = manualHandoff
+          ? `?agent_id=${encodeURIComponent(selectedDirector.handoff_agent_id || "")}`
+          : directorSelect.value && directorSelect.value !== "configured"
+            ? `?director=${encodeURIComponent(directorSelect.value)}`
+            : "";
         const response = await fetch(
           `/api/project/${encodedProjectId}/run${directorQuery}`,
           { method: "POST" },
@@ -262,7 +272,33 @@ function renderSlate(s) {
         }
         const launchStatus = data.agent_launch?.status
           || (data.execution_mode === "internal_demo" ? "started" : null);
-        if (launchStatus === "started") {
+        if (manualHandoff) {
+          if (launchStatus === "already_running") {
+            setRunButtonFeedback("✓ Another director is running", true, 4000);
+            alert("This work order is already claimed by another director. Let that run finish or wait for its lease to expire before handing it to Claude Code.");
+            return;
+          }
+          if (launchStatus !== "handoff") {
+            throw new Error("Backlot did not return the interactive Claude handoff.");
+          }
+          const prompt = String(data.manual_handoff?.prompt || "").trim();
+          if (!prompt) throw new Error("Backlot returned no Claude handoff prompt.");
+          const promptPath = String(data.manual_handoff?.prompt_path || "");
+          let copied = false;
+          try {
+            await navigator.clipboard.writeText(prompt);
+            copied = true;
+          } catch {
+            window.prompt("Copy this handoff into your Claude Code interactive terminal:", prompt);
+          }
+          setRunButtonFeedback(copied ? "✓ Claude prompt copied" : "✓ Claude handoff saved", true, 5000);
+          alert(
+            "Open Claude Code yourself in the project workspace and paste the handoff. "
+            + "OpenMontage did not send a request to Claude. The work order is now reserved; "
+            + "if you do not submit it, wait for its five-minute lease to expire before retrying. "
+            + (copied || !promptPath ? "" : `The prompt is saved at ${promptPath}.`),
+          );
+        } else if (launchStatus === "started") {
           setRunButtonFeedback("✓ Agent started", true, 3000);
         } else if (launchStatus === "already_running") {
           setRunButtonFeedback("✓ Agent already running", true, 3000);

@@ -2,6 +2,16 @@
 
 Start here. This is the complete operating guide and agent contract for OpenMontage.
 
+## Local Director and Production API Boundary
+
+Local directing uses the selected local agent's own account: Codex CLI, Claude
+Code, or Antigravity. Do not read, print, copy, or use `.env` credentials for
+director inference. In particular, the OpenAI API key is reserved for approved
+production media calls made through OpenMontage's registered tools; it must not
+be used to power a local director. Claude Code handoffs are user-submitted in
+its native interactive terminal. Backlot may prepare and copy the task, but
+must not submit it through Claude subscription credentials.
+
 For architecture, key files, and conventions see [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md).
 
 ## First Interaction — Onboarding

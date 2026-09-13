@@ -107,9 +107,14 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                 browser = playwright.chromium.launch(headless=True)
                 try:
                     page = browser.new_page(viewport={"width": 1280, "height": 900})
+                    page.add_init_script(
+                        "Object.defineProperty(navigator, 'clipboard', {configurable: true, "
+                        "value: {writeText: async (text) => {window.__lastCopiedPrompt = text;}}});"
+                    )
                     dialogs: list[str] = []
                     catalog_events: list[str] = []
                     browser_project_id = ""
+                    manual_project_id = ""
 
                     def is_catalog_url(url: str) -> bool:
                         return any(
@@ -170,7 +175,8 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                                             "ready": False,
                                             "mode": "interactive_only",
                                             "auth_status": "manual",
-                                            "status_note": "Use Claude Code directly in its interactive CLI.",
+                                            "handoff_agent_id": "openmontage-claude-interactive",
+                                            "status_note": "Paste the handoff into Claude Code's interactive CLI.",
                                         },
                                     ],
                                 }
@@ -182,18 +188,18 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     expect(activity_panel.locator(".status")).to_have_text("created")
                     expect(activity_panel.locator(".status.run")).to_have_count(0)
                     expect(
-                        page.locator('select[aria-label="Local automated director"] option[value="antigravity"]')
+                        page.locator('select[aria-label="Local director"] option[value="antigravity"]')
                     ).to_be_enabled()
                     expect(
-                        page.locator('select[aria-label="Local automated director"] option[value="claude"]')
-                    ).to_be_disabled()
+                        page.locator('select[aria-label="Local director"] option[value="claude"]')
+                    ).to_be_enabled()
                     expect(
-                        page.locator('select[aria-label="Local automated director"] option[value="claude"]')
+                        page.locator('select[aria-label="Local director"] option[value="claude"]')
                     ).to_contain_text("interactive only")
-                    expect(page.locator('select[aria-label="Local automated director"]')).to_have_value(
+                    expect(page.locator('select[aria-label="Local director"]')).to_have_value(
                         "configured"
                     )
-                    run_button = page.get_by_title("Run automated video production")
+                    run_button = page.get_by_title("Run or hand off the video pipeline")
                     expect(run_button).to_contain_text("Run Pipeline")
                     run_url = f"{base_url}/api/project/{project_id}/run"
                     with page.expect_response(
@@ -212,7 +218,7 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     page.goto(base_url, wait_until="networkidle")
                     page.locator("#createVideoBtn").click()
                     expect(page.locator('#localDirectorSelect option[value="antigravity"]')).to_be_enabled()
-                    expect(page.locator('#localDirectorSelect option[value="claude"]')).to_be_disabled()
+                    expect(page.locator('#localDirectorSelect option[value="claude"]')).to_be_enabled()
                     expect(page.locator("#localDirectorSelect")).to_have_value("configured")
                     openai_provider_option = page.locator(
                         '#voiceProviderSelect option[value="openai"]'
@@ -262,6 +268,66 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     )
                     assert browser_project_config["tts_provider"] == "edge_tts"
                     assert browser_project_config["voice"] == "en-US-ChristopherNeural"
+
+                    page.goto(base_url, wait_until="networkidle")
+                    page.locator("#createVideoBtn").click()
+                    manual_wizard_director = page.locator("#localDirectorSelect")
+                    expect(manual_wizard_director.locator('option[value="claude"]')).to_be_enabled()
+                    manual_wizard_director.select_option("claude")
+                    page.locator("#voiceProviderSelect").select_option("edge_tts")
+                    page.locator("#projectTitle").fill("Manual Claude interactive handoff")
+                    page.locator("#projectTopic").fill("Use the local Claude Code session for direction.")
+                    manual_run_requests: list[str] = []
+                    page.on(
+                        "request",
+                        lambda request: manual_run_requests.append(request.url)
+                        if request.method == "POST"
+                        and request.url.split("?", 1)[0].endswith("/run")
+                        else None,
+                    )
+                    manual_create_url = f"{base_url}/api/project/create"
+                    with page.expect_response(
+                        lambda response: response.url == manual_create_url
+                        and response.request.method == "POST",
+                        timeout=10_000,
+                    ) as manual_create_info:
+                        page.locator("#submitCreateBtn").click()
+                    manual_create_response = manual_create_info.value
+                    assert manual_create_response.status == 200, manual_create_response.text()
+                    page.wait_for_url(f"{base_url}/p/**", timeout=10_000)
+                    manual_project_id = page.url.split("/p/", 1)[1].split("?", 1)[0].rstrip("/")
+                    assert not manual_run_requests, "interactive Claude must not auto-run during project creation"
+                    assert len(dialogs) == 1, dialogs
+                    assert "click Run Pipeline" in dialogs[0]
+                    manual_selector = page.locator('select[aria-label="Local director"]')
+                    expect(manual_selector).to_have_value("claude")
+                    manual_selector.select_option("claude")
+                    manual_run_button = page.get_by_title("Run or hand off the video pipeline")
+                    manual_run_url = (
+                        f"{base_url}/api/project/{manual_project_id}/run"
+                        "?agent_id=openmontage-claude-interactive"
+                    )
+                    with page.expect_response(
+                        lambda response: response.url == manual_run_url
+                        and response.request.method == "POST",
+                        timeout=10_000,
+                    ) as manual_response_info:
+                        manual_run_button.click()
+                    manual_response = manual_response_info.value
+                    assert manual_response.status == 200, manual_response.text()
+                    manual_payload = manual_response.json()
+                    assert manual_payload["agent_launch"]["status"] == "handoff"
+                    assert manual_payload["manual_handoff"]["mode"] == "interactive_manual_handoff"
+                    assert page.evaluate("window.__lastCopiedPrompt") == manual_payload["manual_handoff"]["prompt"]
+                    assert len(dialogs) == 2, dialogs
+                    assert "did not send a request to Claude" in dialogs[1]
+                    assert (
+                        projects_dir
+                        / manual_project_id
+                        / ".openmontage"
+                        / "claude_interactive_prompt.txt"
+                    ).is_file()
+                    assert not (projects_dir / manual_project_id / "agent_process.json").exists()
                 finally:
                     browser.close()
 

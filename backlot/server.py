@@ -34,9 +34,15 @@ from lib.agent_launcher import (
     agent_command_status,
     configured_agent_id,
     launch_agent,
+    prepare_manual_agent_handoff,
     read_agent_process,
 )
-from lib.local_director import LocalDirectorError, local_director_catalog, normalize_director
+from lib.local_director import (
+    CLAUDE_INTERACTIVE_AGENT_ID,
+    LocalDirectorError,
+    local_director_catalog,
+    normalize_director,
+)
 from lib.approval_contracts import ApprovalValidationError
 from lib.checkpoint import CheckpointValidationError, init_project, read_checkpoint, write_checkpoint
 from lib.demo_runner import RUNNER_KIND, is_internal_demo_project
@@ -1512,6 +1518,18 @@ def create_app() -> FastAPI:
             }
             if owner != requested_agent_id:
                 response["requested_agent_id"] = requested_agent_id
+            if (
+                not auto_launch
+                and requested_agent_id == CLAUDE_INTERACTIVE_AGENT_ID
+                and owner == requested_agent_id
+            ):
+                response["manual_handoff"] = prepare_manual_agent_handoff(
+                    project_dir,
+                    order,
+                    agent_id=requested_agent_id,
+                    backlot_url=str(request.base_url).rstrip("/"),
+                    execution_context=stage_context,
+                )
             return response
 
         active_replay = bool(
@@ -1613,6 +1631,31 @@ def create_app() -> FastAPI:
                 "message": "Manifest handoff returned to the explicitly named agent.",
             }
             execution_mode = "manifest_agent"
+        manual_handoff = None
+        if requested_agent_id == CLAUDE_INTERACTIVE_AGENT_ID and not auto_launch:
+            try:
+                manual_handoff = await asyncio.to_thread(
+                    prepare_manual_agent_handoff,
+                    project_dir,
+                    order,
+                    agent_id=requested_agent_id,
+                    backlot_url=str(request.base_url).rstrip("/"),
+                    execution_context=context,
+                )
+            except (AgentLaunchError, OSError) as exc:
+                try:
+                    await asyncio.to_thread(
+                        release_work_order,
+                        project_dir,
+                        requested_agent_id,
+                        reset_stage=True,
+                    )
+                except (WorkOrderConflictError, WorkOrderStateError, WorkOrderValidationError):
+                    pass
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Could not prepare the interactive Claude handoff: {exc}",
+                ) from exc
         # Claiming can update the durable state observed by the execution
         # context.  Refresh it before returning so the UI has the same stage
         # and lease view as the work-order payload.
@@ -1625,7 +1668,7 @@ def create_app() -> FastAPI:
             pass
         _invalidate_summary(project_id)
         hub.publish(project_id)
-        return {
+        response = {
             "ok": True,
             "project_id": project_id,
             "execution_mode": execution_mode,
@@ -1637,6 +1680,9 @@ def create_app() -> FastAPI:
             "execution": context.as_dict(),
             "agent_launch": launch_info,
         }
+        if manual_handoff is not None:
+            response["manual_handoff"] = manual_handoff
+        return response
 
     @app.post("/api/project/{project_id}/variant")
     async def create_variant_endpoint(project_id: str, request: CreateVariantRequest) -> dict:

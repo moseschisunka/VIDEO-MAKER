@@ -318,6 +318,73 @@ def _write_agent_handoff(
     return ".openmontage/agent_handoff.json"
 
 
+def prepare_manual_agent_handoff(
+    project_dir: Path | str,
+    order: Mapping[str, Any],
+    *,
+    agent_id: str,
+    backlot_url: str,
+    execution_context: Any | None = None,
+) -> dict[str, str]:
+    """Prepare a copyable handoff without starting or contacting a model CLI."""
+    project_path = Path(project_dir).expanduser().resolve()
+    if not project_path.is_dir():
+        raise AgentLaunchError(f"project directory does not exist: {project_path}")
+    clean_agent_id = str(agent_id or "").strip()
+    run_id = str(order.get("run_id") or "").strip()
+    if not clean_agent_id or not run_id:
+        raise AgentLaunchError("manual handoff needs an agent_id and run_id")
+
+    handoff_relative_path = _write_agent_handoff(
+        project_path,
+        order,
+        execution_context,
+    )
+    execution: Mapping[str, Any] = {}
+    if isinstance(execution_context, Mapping):
+        execution_value = execution_context.get("execution")
+        if isinstance(execution_value, Mapping):
+            execution = execution_value
+    elif execution_context is not None:
+        as_dict = getattr(execution_context, "as_dict", None)
+        if callable(as_dict):
+            execution_value = as_dict()
+            if isinstance(execution_value, Mapping):
+                execution = execution_value
+    stage = str(execution.get("next_stage") or order.get("next_stage") or "")
+    project_id = str(order.get("project_id") or project_path.name)
+    prompt = "\n".join(
+        [
+            "Work as the OpenMontage local pipeline director in this native, interactive Claude Code session.",
+            "The user will submit this prompt manually. Backlot did not send it to Claude and did not call a model API.",
+            f"Project workspace: {project_path}",
+            f"Project id: {project_id}",
+            f"Run id: {run_id}",
+            f"Agent id: {clean_agent_id}",
+            f"Current stage: {stage}",
+            f"Local Backlot API: {backlot_url.rstrip('/')}",
+            f"Handoff file: {project_path / handoff_relative_path}",
+            "Read the bundled AGENT_GUIDE.md, PROJECT_CONTEXT.md, pipeline_manifest.json, and stage_director.md before acting.",
+            "This work order is already claimed by the listed agent id. Do not claim it again. Use that id for Backlot heartbeats and checkpoint/advance calls, and follow all human approval gates.",
+            "Use OpenMontage's registered production tools for approved media generation. Do not read or print .env or credentials, and do not use the OpenAI production API key for director inference.",
+        ]
+    )
+    prompt_path = project_path / ".openmontage" / "claude_interactive_prompt.txt"
+    _atomic_write_text(prompt_path, prompt + "\n")
+    return {
+        "mode": "interactive_manual_handoff",
+        "agent_id": clean_agent_id,
+        "project_id": project_id,
+        "project_dir": str(project_path),
+        "run_id": run_id,
+        "stage": stage,
+        "backlot_url": backlot_url.rstrip("/"),
+        "handoff_path": str(project_path / handoff_relative_path),
+        "prompt_path": str(prompt_path),
+        "prompt": prompt,
+    }
+
+
 def launch_agent(
     project_dir: Path | str,
     order: Mapping[str, Any],

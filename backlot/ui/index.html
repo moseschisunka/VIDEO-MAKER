@@ -173,12 +173,12 @@
 
           <!-- Local account-backed directors are separate from production media providers. -->
           <div class="form-section">
-            <label class="form-label" for="localDirectorSelect">Local automated director</label>
+            <label class="form-label" for="localDirectorSelect">Local director</label>
             <select id="localDirectorSelect" class="form-select">
               <option value="">Choose a local director</option>
             </select>
             <div id="localDirectorHint" class="field-hint" role="status" aria-live="polite">
-              Codex CLI and Antigravity can run here with their own sign-in. Use Claude Code directly in its interactive terminal; Backlot does not submit subscription-backed requests. Production media tools use the configured API credentials.
+              Codex CLI and Antigravity use their own local sign-in. Claude Code uses a manual handoff to its native interactive terminal. Production media tools use configured API credentials.
             </div>
           </div>
 

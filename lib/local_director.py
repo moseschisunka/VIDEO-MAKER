@@ -32,10 +32,12 @@ DIRECTOR_LABELS = {
 }
 
 CLAUDE_INTERACTIVE_ONLY_NOTE = (
-    "Use Claude Code directly in its interactive CLI. OpenMontage cannot submit "
-    "requests through Claude subscription credentials; Claude's headless mode "
+    "Use Claude Code in its native interactive CLI. Backlot can prepare and copy "
+    "a handoff, but you must paste and submit it yourself; it never sends a "
+    "request through Claude subscription credentials. Claude's headless mode "
     "uses a separate Agent SDK allowance."
 )
+CLAUDE_INTERACTIVE_AGENT_ID = "openmontage-claude-interactive"
 
 _CREDENTIAL_ENV_MARKERS = (
     "KEY",
@@ -133,6 +135,7 @@ def local_director_catalog() -> list[dict[str, str | bool]]:
                     "ready": False,
                     "mode": "interactive_only",
                     "auth_status": "manual",
+                    "handoff_agent_id": CLAUDE_INTERACTIVE_AGENT_ID,
                     "status_note": f"{exc} {CLAUDE_INTERACTIVE_ONLY_NOTE}",
                 })
             else:
@@ -143,6 +146,7 @@ def local_director_catalog() -> list[dict[str, str | bool]]:
                     "ready": False,
                     "mode": "interactive_only",
                     "auth_status": "manual",
+                    "handoff_agent_id": CLAUDE_INTERACTIVE_AGENT_ID,
                     "status_note": CLAUDE_INTERACTIVE_ONLY_NOTE,
                 })
             continue
