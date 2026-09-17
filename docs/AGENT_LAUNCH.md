@@ -13,6 +13,9 @@ selection and does not silently become the director.
 The supported local CLI must be installed and signed in to its own account.
 Codex CLI and Antigravity `agy` are separate local directors; the current
 Codex desktop conversation itself cannot be launched as a background process.
+You can still direct work through the current Codex chat in its existing
+workspace session, as we are doing here. Backlot's selector controls the three
+local CLIs; it cannot start or attach work to an already-open chat.
 Claude Code remains available in its native interactive terminal. When selected
 on the board, Backlot claims the work order, writes a local instruction bundle,
 and copies a prompt for the user. The user opens Claude Code and submits that
@@ -38,15 +41,77 @@ This escape hatch is for a trusted, policy-compliant worker. Do not use it to
 re-enable automated Claude subscription requests through `claude -p`.
 
 The adapter uses Codex CLI and Antigravity's supported non-interactive prompt
-modes and does not bypass their normal permission controls. Claude Code uses
-the user-controlled interactive path described above. Configure local CLI
-permissions for the project before unattended runs. Their model use follows
-each account's allowance and limits; OpenMontage cannot promise a daily free quota. OpenAI's
-Codex allowance is shared with other Codex and agentic features on eligible
-ChatGPT plans. Antigravity has account quotas and an optional AI-credit
-overage setting that can be set to **Never** in its own controls. OpenMontage's
-production provider calls continue to use credentials configured for those
-tools; credential-like environment variables are not passed to the director.
+modes. Claude Code uses the user-controlled interactive path described above.
+Each director receives a project-scoped stdio MCP bridge with three operations:
+read the active run and stage context, execute a manifest-listed tool, and submit
+validated stage artifacts. A small background task renews the work-order lease
+while the bridge stays connected. The bridge rechecks the claimed run for each
+call, binds project/run/stage/agent identity itself, limits local file paths to
+the project, and never exposes approval fields. Before touching the work order,
+Backlot validates a random, eight-hour sliding capability against the exact
+project path, project id, run id, agent id, and live lease. The capability
+cannot authorize another project or run, and the operator's global Backlot
+token is not sent to the director.
+Codex receives an ephemeral MCP configuration on its command line. Antigravity
+gets a workspace `.agents/mcp_config.json`; Claude gets a workspace `.mcp.json`
+for the manual handoff. Existing MCP server entries are preserved. Claude may
+ask once before connecting to its project-scoped server.
+
+Codex and Antigravity call OpenMontage tools through a separate local Python
+process. The director CLI process receives no credential-like environment
+variables. The MCP tool process loads configured production credentials from
+the app's runtime `.env` when registry tools need them. Production provider
+calls still pass through the approval kernel; a model-authored value cannot
+approve them. This is process-level separation, not an OS security boundary:
+same-user local processes can still inspect local files. The scoped capability
+is present in the local MCP configuration (and Codex's MCP launch arguments),
+so it protects against identity-value substitution but not a malicious process
+running as the same Windows user. Restarting Backlot invalidates capabilities
+held by existing MCP processes; they fail closed and need a new handoff.
+The current capability registry is also process-local, so Backlot must run as
+one worker until capability state is moved to a shared store.
+
+Antigravity headless mode soft-denies MCP calls unless its permission policy
+allows each tool. Before launching it, Backlot checks for all three exact rules
+below and refuses to start the model if one is missing or an Ask/Deny rule
+overrides it. Merge these entries into the existing user-level
+`~/.gemini/antigravity-cli/settings.json`; preserve its other settings:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp(openmontage-local-director/openmontage_get_context)",
+      "mcp(openmontage-local-director/openmontage_execute_tool)",
+      "mcp(openmontage-local-director/openmontage_submit_stage)"
+    ]
+  }
+}
+```
+
+The permission rules are stored at the Antigravity user level. They approve
+only these named MCP tools; they do not allow terminal commands or bypass
+OpenMontage's separate production-provider approval kernel. Because Antigravity
+stores these rules for the user account, they are not project-scoped; the
+OpenMontage bridge still binds each request to its live project and run.
+Antigravity's
+headless CLI uses cached sign-in and may soft-deny a tool while still exiting
+successfully, so open `agy` interactively and sign in before a run. OpenMontage
+cannot verify the Google account or its quota, and it does not use
+`--dangerously-skip-permissions`. Each director uses its own account allowance;
+OpenMontage cannot promise a daily free quota. OpenAI's Codex allowance is
+shared with other Codex and agentic features on eligible ChatGPT plans. When
+Codex is signed in with ChatGPT, included plan usage is used first; an existing
+Codex credit balance may be used after the included limit. Auto top-up is
+separate, so leave it off to avoid new credit purchases. Check the reset time
+shown in your account; OpenMontage cannot promise that it is daily.
+Antigravity has account quotas and an optional AI-credit overage setting that
+can be set to **Never** in its own controls.
+See Google's [Antigravity permissions](https://antigravity.google/docs/cli/permissions)
+and [headless mode](https://antigravity.google/docs/cli/headless/) guides.
+OpenMontage's production provider calls continue to use credentials configured
+for those tools; credential-like environment variables are not passed to the
+director.
 
 For Codex, use `codex login` and choose ChatGPT sign-in if you want subscription
 usage. Backlot checks that Codex is not signed in with an API key before
@@ -61,9 +126,14 @@ browser cannot copy it. A manual run is already claimed while you switch to the
 terminal; if you do not submit it, its default five-minute lease expires and
 can then be reclaimed. On Windows, use Anthropic's [terminal setup
 guide](https://code.claude.com/docs/en/terminal-guide).
+The official Windows native installer places `claude.exe` at
+`%USERPROFILE%\.local\bin\claude.exe`; Backlot detects it there even when it
+is not on `PATH`. From PowerShell in the project folder, start it with
+`& "$env:USERPROFILE\.local\bin\claude.exe"` if `claude` is not recognized.
 Backlot does not read Claude credentials or submit the task on your behalf.
 If you later want an automated Claude director, it needs a permitted API or
-supported cloud-provider setup, separate from the OpenAI production media key.
+supported cloud-provider setup, separate from the OpenAI production provider
+credential.
 To use your Claude subscription allowance in the native CLI, sign in with your
 Claude Pro/Max account using `/login` and check `/status`; decline any API-credit
 option if you want to wait for the subscription allowance to reset. Anthropic's
@@ -71,9 +141,14 @@ option if you want to wait for the subscription allowance to reset. Anthropic's
 explains the separate subscription and API billing paths.
 
 Antigravity's headless `agy -p` mode uses cached credentials. Open `agy`
-interactively and sign in once before using it as a director. Backlot cannot
-verify the cached Google account or its plan. See the [Antigravity headless
-mode guide](https://antigravity.google/docs/cli/headless/) and [AI credits
+interactively and sign in once before using it as a director. Backlot invokes
+`agy --sandbox -p` so agent-issued terminal commands run with Antigravity's OS
+containment enabled. This does not sandbox the separate OpenMontage MCP bridge
+or stop a same-user process from inspecting other local processes; `SEC-08`
+remains blocked until the complete credential-isolation tests pass. Backlot
+cannot verify the cached Google account or its plan. See Google's [headless mode
+guide](https://antigravity.google/docs/cli/headless/), [sandbox
+guide](https://antigravity.google/docs/cli/sandbox/), and [AI credits
 guide](https://antigravity.google/docs/cli/credits). Set AI Credit Overages to
 **Never** in Antigravity if you want it to stop at the included quota instead
 of using purchased credits.
@@ -84,10 +159,11 @@ paths). The CLI runs with the selected project's directory as its working
 directory. These are defense-in-depth measures, not an OS security boundary:
 the CLI still runs as the same Windows user and may be able to inspect files
 outside the project, including `.env`, or inspect another same-user process.
-The app also does not yet issue a capability token limited to one project/run.
-Credential isolation is therefore not certified for production use until
-process/filesystem isolation and scoped Backlot authorization are implemented
-and verified for each supported CLI and operating system. See
+The short-lived Backlot capability is scoped to one project/run/agent and
+checked against the active lease, but it does not replace OS-level
+process/filesystem isolation. Credential isolation is therefore not certified
+for production use until that isolation and the cross-project denial tests pass
+for each supported CLI and operating system. See
 [`production-readiness/evidence/PR-10G-local-director-boundary.md`](production-readiness/evidence/PR-10G-local-director-boundary.md).
 
 The command is parsed into an argument vector and launched with `shell=False`.
@@ -102,6 +178,7 @@ It receives these environment variables:
 | `OPENMONTAGE_STAGE` | Manifest-derived next stage |
 | `OPENMONTAGE_BACKLOT_URL` | URL of the Backlot API that owns the run |
 | `OPENMONTAGE_AGENT_PROMPT` | Ready-to-forward instruction for an LLM CLI or wrapper |
+| `OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN` | Short-lived MCP run capability passed to the built-in local-director adapter; filtered out of the director CLI's inherited environment |
 
 The child output is appended to `projects/<id>/agent.log`; launch metadata is
 written atomically to `projects/<id>/agent_process.json`. A configured command
@@ -113,15 +190,13 @@ At launch, Backlot also writes an instruction bundle under
 guide, and project context. The CLI prompt points to this bundle so it does not
 have to guess or lose the browser's handoff instructions.
 
-The local director is separate from a production media provider. Codex, Claude
-Code, and Antigravity use their local account allowances; OpenMontage media
-calls such as OpenAI image, video, or TTS generation use the configured
-production API key. Automated local directors launched by Backlot receive no
-credential-like environment variables, and their prompts must not read `.env`
-or use the production API key for inference. Claude Code is opened by the user,
-so it inherits that terminal's environment. This is process-level separation,
-not an OS security boundary: a local CLI runs as the same Windows user and may
-still be able to inspect files outside the project.
+The local director is separate from OpenMontage's production providers. Codex,
+Claude Code, and Antigravity use their local account allowances; production
+operations such as OpenAI text, image, video, or TTS generation use the
+configured production API key through the MCP tool process. Claude Code is
+opened by the user, so its native process inherits that terminal's environment.
+This remains process-level separation: a local CLI runs as the same Windows
+user and may still be able to inspect files outside the project.
 
 When no director is selected and no custom command is configured,
 `/api/project/<id>/run` returns HTTP 503 before claiming a fresh run. An

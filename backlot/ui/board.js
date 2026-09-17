@@ -54,11 +54,13 @@ function renderDirectorSelect() {
   for (const director of localDirectorCatalog?.directors || []) {
     const selectable = director.installed === true
       && (director.ready !== false || director.mode === "interactive_only");
-    const availability = director.mode === "interactive_only"
-      ? " · interactive only"
-      : director.installed !== true
-        ? " · not installed"
-        : selectable ? "" : " · sign-in needed";
+    const availability = director.installed !== true
+      ? " · not installed"
+      : director.mode === "interactive_only"
+        ? " · interactive only"
+        : director.ready === false
+          ? " · sign-in needed"
+          : director.auth_status === "unknown" ? " · sign-in unverified" : "";
     const option = el("option", {
       value: director.id,
       disabled: !selectable,
@@ -239,7 +241,33 @@ function renderSlate(s) {
   actionsGroup.append(variantSelect, variantBtn);
 
   const directorSelect = renderDirectorSelect();
-  actionsGroup.append(directorSelect);
+  const directorHint = el("div", {
+    class: "field-hint director-hint",
+    role: "status",
+    "aria-live": "polite",
+  });
+  const updateDirectorHint = () => {
+    const selected = directorSelect.value;
+    const director = (localDirectorCatalog?.directors || []).find((item) => item.id === selected);
+    if (director?.mode === "interactive_only") {
+      directorHint.textContent = director.installed === true
+        ? "Claude Code stays in its native interactive terminal. Backlot copies the handoff; you open Claude in this project and submit it yourself. The OpenAI API key is reserved for production provider calls."
+        : "Claude Code is not installed. After installing and signing in, use its native interactive terminal; Backlot will prepare a copyable handoff."
+    } else if (director) {
+      const status = String(director.status_note || "Sign in through this CLI's own account first.");
+      const codexUsage = director.id === "codex"
+        ? " Included ChatGPT usage is used first. Any existing Codex credits may then be consumed; turn off Auto top-up to prevent new purchases and check the reset time in your usage settings."
+        : "";
+      directorHint.textContent = `${status} Local inference uses this CLI's account; the OpenAI API key is for production provider calls.${codexUsage}`;
+    } else if (selected === "configured") {
+      directorHint.textContent = "Runs through the configured local agent. Its account use is separate from production provider calls.";
+    } else {
+      directorHint.textContent = "Choose a local director. Its account powers inference; the OpenAI API key is reserved for production provider calls.";
+    }
+  };
+  directorSelect.addEventListener("change", updateDirectorHint);
+  updateDirectorHint();
+  actionsGroup.append(el("div", { class: "director-control" }, directorSelect, directorHint));
 
   const runBtn = el("button", {
     class: "btn btn-secondary",
@@ -929,6 +957,124 @@ function renderApprovalReview(s) {
   );
 }
 
+async function decideProviderRequest(request, decision, button) {
+  const label = decision === "approve" ? "Approve and run this call" : "Reject provider call";
+  if (button) {
+    button.disabled = true;
+    button.textContent = decision === "approve" ? "Approving provider call..." : "Rejecting...";
+  }
+  try {
+    const response = await fetch(
+      `/api/project/${encodedProjectId}/provider-approvals/${encodeURIComponent(request.request_id)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_digest: request.request_digest,
+          decision,
+        }),
+      },
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+    }
+    await refresh();
+  } catch (error) {
+    console.error("Provider approval failed:", error);
+    alert(`Provider approval failed: ${error.message || error}`);
+    if (button) {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+}
+
+function renderProviderApprovals(s) {
+  const approvalState = s.provider_approvals || {};
+  if (approvalState.error) {
+    return el("section", { class: "provider-approval-queue provider-approval-error", role: "alert" },
+      el("div", { class: "approval-eyebrow" }, "PRODUCTION PROVIDER GATE"),
+      el("h2", {}, "Provider approval is unavailable"),
+      el("p", {}, "Production provider calls remain blocked until Backlot can safely read approval state."),
+    );
+  }
+  const requests = Array.isArray(approvalState.requests) ? approvalState.requests : [];
+  if (!requests.length) return null;
+
+  const cards = requests.map((request) => {
+    const pending = request.status === "pending";
+    const estimatedCost = Number(request.estimated_cost_usd);
+    const costText = Number.isFinite(estimatedCost) && estimatedCost > 0
+      ? `Estimated provider cost: ${fmtMoney(estimatedCost)}. Actual charges can vary.`
+      : "No positive cost estimate is available; the provider may still charge for this call.";
+    const model = request.model || "provider-selected model";
+    const expiry = request.expires_at
+      ? `Expires ${new Date(request.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+      : "Short-lived request";
+    const actions = pending
+      ? el("div", { class: "provider-approval-actions" },
+        el("button", {
+          class: "btn btn-primary",
+          type: "button",
+          onclick: (event) => decideProviderRequest(request, "approve", event.currentTarget),
+        }, "Approve and run this call"),
+        el("button", {
+          class: "btn btn-danger",
+          type: "button",
+          onclick: (event) => decideProviderRequest(request, "reject", event.currentTarget),
+        }, "Reject"),
+      )
+      : el("span", { class: "provider-approval-approved" }, "Approved · provider call is starting");
+
+    return el("article", { class: "provider-approval-card", "data-request-id": request.request_id },
+      el("div", { class: "provider-approval-card-head" },
+        el("div", {},
+          el("div", { class: "approval-eyebrow" }, "PRODUCTION PROVIDER REQUEST"),
+          el("h3", {}, `${request.provider || "Provider"} · ${model}`),
+          el("p", {}, `${request.capability || "Production tool"} / ${request.operation || "execute"} · stage ${request.stage || "unknown"}`),
+        ),
+        el("span", { class: `provider-approval-status${pending ? " pending" : " approved"}` }, pending ? "PENDING" : "APPROVED"),
+      ),
+      el("div", { class: "provider-approval-facts" },
+        el("span", {}, `Run attempt ${request.attempt || "?"}`),
+        el("span", {}, expiry),
+        el("span", {}, costText),
+      ),
+      request.external_media_transfer === true
+        ? el("div", { class: "provider-approval-warning" },
+          el("p", {}, "This call sends local project media to the external provider. Review the attached files before approving."),
+          Array.isArray(request.media_preview) && request.media_preview.length
+            ? el("ul", {}, request.media_preview.map((path) => el("li", {}, path)))
+            : el("p", {}, "The bridge could not identify the media paths; do not approve until you have verified the request."),
+        )
+        : null,
+      request.prompt_preview
+        ? el("details", { class: "provider-approval-prompt" },
+          el("summary", {}, request.prompt_preview_truncated ? "Prompt preview · truncated" : "Review the full prompt"),
+          el("p", {}, request.prompt_preview),
+          request.prompt_preview_truncated
+            ? el("p", { class: "provider-approval-preview-note" }, "Only the first 1,200 characters are shown. The approval binds the full request; do not approve unless this preview is sufficient for your review.")
+            : null,
+        )
+        : null,
+      el("p", { class: "provider-approval-account-note" }, "Your local director uses its own signed-in account for reasoning. This approval covers only this production-provider call using OpenMontage's configured provider credentials."),
+      actions,
+    );
+  });
+
+  return el("section", { class: "provider-approval-queue", "aria-label": "Production provider approvals" },
+    el("div", { class: "provider-approval-queue-head" },
+      el("div", {},
+        el("div", { class: "approval-eyebrow" }, "PRODUCTION PROVIDER GATE"),
+        el("h2", {}, "Review each provider call before it runs"),
+      ),
+      el("span", { class: "provider-approval-expiry" }, "Approvals expire automatically"),
+    ),
+    cards,
+  );
+}
+
 function renderQaEvidence(s) {
   const qa = s.qa;
   if (!qa || typeof qa !== "object") return null;
@@ -1568,6 +1714,8 @@ function render() {
   if (noState) app.append(noState);
 
   const main = el("div", { class: "main-col" });
+  const providerApprovals = renderProviderApprovals(s);
+  if (providerApprovals) main.append(providerApprovals);
   const packagingReview = renderPackagingReview(s);
   if (packagingReview) main.append(packagingReview);
   const approvalReview = renderApprovalReview(s);
@@ -1587,7 +1735,7 @@ function render() {
   const renders = renderRenders(s, oldRenders);
   const qa = renderQaEvidence(s);
 
-  if (packagingReview || approvalReview || script || decisions || activity || qa) {
+  if (providerApprovals || packagingReview || approvalReview || script || decisions || activity || qa) {
     for (const section of [storyboard, found, renders, qa]) {
       if (section) main.append(section);
     }
@@ -1622,6 +1770,11 @@ function normalize(s) {
     ...(s.pipeline || {}),
   };
   s.stages = Array.isArray(s.stages) ? s.stages : [];
+  s.provider_approvals = {
+    requests: [],
+    error: null,
+    ...(s.provider_approvals || {}),
+  };
   for (const stage of s.stages) {
     stage.produces = Array.isArray(stage.produces) ? stage.produces : [];
   }

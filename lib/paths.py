@@ -33,6 +33,9 @@ def runtime_root() -> Path:
     installed package uses the caller's working directory so it can write
     projects and load a local ``.env`` without modifying ``site-packages``.
     """
+    configured = os.environ.get("OPENMONTAGE_RUNTIME_ROOT")
+    if configured:
+        return Path(configured).expanduser().resolve()
     if _is_source_checkout():
         return REPO_ROOT
     return Path.cwd().resolve()

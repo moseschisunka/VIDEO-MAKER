@@ -581,6 +581,50 @@ aside .panel:nth-of-type(1) { animation-delay: .32s } aside .panel:nth-of-type(2
 .sample-review-label { display: block; color: var(--amber); font-family: var(--mono); letter-spacing: .06em; font-size: calc(8px * var(--fs-scale)); }
 .sample-review-copy { display: block; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
+.provider-approval-queue {
+  width: 100%; max-width: 1000px; margin: 0 auto 16px; padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--amber) 56%, var(--border-soft));
+  border-radius: 12px; background: var(--surface);
+}
+.provider-approval-queue-head, .provider-approval-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+}
+.provider-approval-queue-head { margin-bottom: 12px; }
+.provider-approval-queue h2 { margin: 4px 0 0; font-size: calc(18px * var(--fs-scale)); }
+.provider-approval-card {
+  padding: 15px; border: 1px solid var(--border-soft); border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2) 74%, transparent);
+}
+.provider-approval-card + .provider-approval-card { margin-top: 10px; }
+.provider-approval-card h3 { margin: 4px 0; color: var(--text); font-size: calc(14px * var(--fs-scale)); overflow-wrap: anywhere; }
+.provider-approval-card-head p, .provider-approval-account-note {
+  margin: 4px 0 0; color: var(--text-3); font-size: calc(10.5px * var(--fs-scale)); line-height: 1.5;
+}
+.provider-approval-status, .provider-approval-expiry {
+  flex: none; padding: 4px 8px; border: 1px solid var(--border); border-radius: 99px;
+  color: var(--text-3); font: calc(8.5px * var(--fs-scale)) var(--mono); letter-spacing: .08em;
+}
+.provider-approval-status.pending { color: var(--amber); border-color: var(--amber); }
+.provider-approval-status.approved, .provider-approval-approved { color: var(--green); }
+.provider-approval-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 0; color: var(--text-2); font-size: calc(10px * var(--fs-scale)); }
+.provider-approval-warning { margin: 10px 0; padding: 9px 10px; border-left: 2px solid var(--red); background: var(--red-dim); color: var(--text-2); font-size: calc(10.5px * var(--fs-scale)); line-height: 1.5; }
+.provider-approval-warning p { margin: 0; }
+.provider-approval-warning p + p { margin-top: 6px; }
+.provider-approval-warning ul { display: grid; gap: 3px; margin: 7px 0 0; padding-left: 18px; }
+.provider-approval-warning li { overflow-wrap: anywhere; }
+.provider-approval-prompt { margin: 10px 0; color: var(--text-2); font-size: calc(10.5px * var(--fs-scale)); }
+.provider-approval-prompt summary { color: var(--amber); cursor: pointer; }
+.provider-approval-prompt p { margin: 7px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.provider-approval-prompt .provider-approval-preview-note { color: var(--amber); }
+.provider-approval-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.provider-approval-actions .btn { min-height: 36px; }
+.provider-approval-actions .btn-danger { color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 58%, var(--border)); background: var(--red-dim); }
+.provider-approval-actions .btn:disabled { opacity: .55; cursor: wait; }
+.provider-approval-approved { display: block; margin-top: 12px; font-size: calc(10px * var(--fs-scale)); }
+.provider-approval-error { border-color: color-mix(in srgb, var(--red) 58%, var(--border)); }
+.provider-approval-error h2 { color: var(--red); }
+.provider-approval-error p { margin: 8px 0 0; color: var(--text-2); font-size: calc(11px * var(--fs-scale)); line-height: 1.5; }
+
 .approval-review {
   width: 100%; max-width: 1000px; margin: 0 auto;
   border: 1px solid color-mix(in srgb, var(--amber) 52%, var(--border-soft));
@@ -1105,6 +1149,7 @@ body:not(.first) .approval-review, body:not(.first) .packaging-review { animatio
   .section-title .meta { margin-left: 0; }
   .approval-review-head { flex-wrap: wrap; gap: 12px; }
   .packaging-review-head { flex-wrap: wrap; gap: 12px; }
+  .provider-approval-queue-head, .provider-approval-card-head { flex-wrap: wrap; gap: 10px; }
   .thumbnail-concepts { grid-template-columns: 1fr; }
 }
 
@@ -1141,6 +1186,9 @@ body:not(.first) .approval-review, body:not(.first) .packaging-review { animatio
   .drawer pre { font-size: calc(10.5px * var(--fs-scale)); }
   .scene-card { max-width: calc(100vw - 42px); }
   .approval-review-head, .approval-artifacts, .approval-review-foot { padding-left: 16px; padding-right: 16px; }
+  .provider-approval-queue { padding: 14px; }
+  .provider-approval-card { padding: 12px; }
+  .provider-approval-expiry, .provider-approval-status { white-space: normal; }
   .approval-review-note { margin-left: 16px; margin-right: 16px; }
   .approval-review-foot { align-items: flex-start; flex-direction: column; }
   .approval-review-foot button { width: 100%; }
@@ -1302,6 +1350,19 @@ body:not(.first) .approval-review, body:not(.first) .packaging-review { animatio
   gap: 10px;
   margin-right: 12px;
   flex-wrap: wrap;
+}
+
+.director-control {
+  display: flex;
+  flex: 0 1 250px;
+  flex-direction: column;
+  min-width: 170px;
+}
+
+.director-hint {
+  margin-top: 4px;
+  max-width: 250px;
+  font-size: 0.68rem;
 }
 
 /* ---- Action Buttons -------------------------------------- */

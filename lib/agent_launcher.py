@@ -17,6 +17,7 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -26,7 +27,12 @@ from typing import Any
 
 from lib.paths import REPO_ROOT, resource_path, runtime_root
 from lib.secrets import redact_text
+from lib.local_director_capabilities import (
+    issue_local_director_capability,
+    revoke_local_director_capability,
+)
 from lib.local_director import (
+    LOCAL_MCP_SERVER_NAME,
     LocalDirectorError,
     director_launcher_command,
     director_environment,
@@ -226,6 +232,123 @@ def _atomic_write_text(destination: Path, content: str) -> None:
                 pass
 
 
+def _issue_local_capability(
+    project_path: Path,
+    project_id: str,
+    run_id: str,
+    agent_id: str,
+) -> dict[str, str]:
+    try:
+        return issue_local_director_capability(
+            project_path,
+            project_id,
+            run_id,
+            agent_id,
+        )
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise AgentLaunchError("could not issue the local director run capability") from exc
+
+
+def _ignore_local_director_config(project_path: Path, destination: Path) -> None:
+    """Keep the per-run MCP bearer out of any project Git history."""
+    ignore_file = project_path / ".gitignore"
+    if ignore_file.is_symlink():
+        raise AgentLaunchError("project .gitignore must not be a symlink")
+    relative_config = "/" + destination.relative_to(project_path).as_posix()
+    try:
+        existing = ignore_file.read_text(encoding="utf-8") if ignore_file.exists() else ""
+    except (OSError, UnicodeError) as exc:
+        raise AgentLaunchError(f"could not safely update project .gitignore: {exc}") from exc
+    if relative_config in {line.strip() for line in existing.splitlines()}:
+        return
+    if not existing:
+        separator = ""
+    elif existing.endswith(("\n", "\r")):
+        separator = "\n"
+    else:
+        separator = "\n\n"
+    addition = f"{separator}# OpenMontage per-run director capability\n{relative_config}\n"
+    _atomic_write_text(ignore_file, existing + addition)
+
+
+def _local_mcp_server_config(
+    project_path: Path,
+    order: Mapping[str, Any],
+    *,
+    agent_id: str,
+    backlot_url: str,
+    capability_token: str,
+) -> dict[str, Any]:
+    """Build an MCP config with only this run's scoped capability."""
+    return {
+        "command": sys.executable,
+        "args": ["-m", "lib.agent_mcp"],
+        "cwd": str(runtime_root()),
+        "env": {
+            "OPENMONTAGE_PROJECT_DIR": str(project_path),
+            "OPENMONTAGE_PROJECT_ID": str(order.get("project_id") or project_path.name),
+            "OPENMONTAGE_RUN_ID": str(order.get("run_id") or ""),
+            "OPENMONTAGE_AGENT_ID": str(agent_id),
+            "OPENMONTAGE_BACKLOT_URL": str(backlot_url).rstrip("/"),
+            "OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN": str(capability_token),
+            "OPENMONTAGE_RUNTIME_ROOT": str(runtime_root()),
+            "OPENMONTAGE_PROJECTS_DIR": str(project_path.parent),
+        },
+    }
+
+
+def _write_workspace_mcp_config(
+    project_path: Path,
+    order: Mapping[str, Any],
+    *,
+    agent_id: str,
+    director: str,
+    backlot_url: str,
+    capability_token: str,
+) -> str:
+    """Merge the current run's stdio MCP server into a director workspace file."""
+    normalized = normalize_director(director)
+    if normalized == "antigravity":
+        parent = project_path / ".agents"
+        destination = parent / "mcp_config.json"
+    elif normalized == "claude":
+        parent = project_path
+        destination = parent / ".mcp.json"
+    else:
+        raise AgentLaunchError(f"workspace MCP config is not used for {normalized!r}")
+
+    if parent.is_symlink():
+        raise AgentLaunchError(f"{parent.name} MCP config directory must not be a symlink")
+    parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise AgentLaunchError(f"{destination.name} MCP config must not be a symlink")
+    if destination.exists():
+        try:
+            payload = json.loads(destination.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise AgentLaunchError(f"could not safely merge {destination.name}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise AgentLaunchError(f"{destination.name} must contain a JSON object")
+    else:
+        payload = {}
+    servers = payload.setdefault("mcpServers", {})
+    if not isinstance(servers, dict):
+        raise AgentLaunchError(f"{destination.name} mcpServers must be a JSON object")
+    servers[LOCAL_MCP_SERVER_NAME] = _local_mcp_server_config(
+        project_path,
+        order,
+        agent_id=agent_id,
+        backlot_url=backlot_url,
+        capability_token=capability_token,
+    )
+    _ignore_local_director_config(project_path, destination)
+    _atomic_write_text(
+        destination,
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+    )
+    return str(destination)
+
+
 def _read_instruction_resource(relative_path: str) -> str:
     """Read a tracked instruction file using a safe repository-relative path."""
     relative = Path(relative_path)
@@ -334,11 +457,26 @@ def prepare_manual_agent_handoff(
     run_id = str(order.get("run_id") or "").strip()
     if not clean_agent_id or not run_id:
         raise AgentLaunchError("manual handoff needs an agent_id and run_id")
+    project_id = str(order.get("project_id") or project_path.name)
+    capability = _issue_local_capability(
+        project_path,
+        project_id,
+        run_id,
+        clean_agent_id,
+    )
 
     handoff_relative_path = _write_agent_handoff(
         project_path,
         order,
         execution_context,
+    )
+    mcp_config_path = _write_workspace_mcp_config(
+        project_path,
+        order,
+        agent_id=clean_agent_id,
+        director="claude",
+        backlot_url=backlot_url,
+        capability_token=capability["token"],
     )
     execution: Mapping[str, Any] = {}
     if isinstance(execution_context, Mapping):
@@ -352,7 +490,6 @@ def prepare_manual_agent_handoff(
             if isinstance(execution_value, Mapping):
                 execution = execution_value
     stage = str(execution.get("next_stage") or order.get("next_stage") or "")
-    project_id = str(order.get("project_id") or project_path.name)
     prompt = "\n".join(
         [
             "Work as the OpenMontage local pipeline director in this native, interactive Claude Code session.",
@@ -364,9 +501,10 @@ def prepare_manual_agent_handoff(
             f"Current stage: {stage}",
             f"Local Backlot API: {backlot_url.rstrip('/')}",
             f"Handoff file: {project_path / handoff_relative_path}",
+            f"OpenMontage MCP config: {mcp_config_path}",
             "Read the bundled AGENT_GUIDE.md, PROJECT_CONTEXT.md, pipeline_manifest.json, and stage_director.md before acting.",
-            "This work order is already claimed by the listed agent id. Do not claim it again. Use that id for Backlot heartbeats and checkpoint/advance calls, and follow all human approval gates.",
-            "Use OpenMontage's registered production tools for approved media generation. Do not read or print .env or credentials, and do not use the OpenAI production API key for director inference.",
+            "This work order is already claimed by the listed agent id. Do not claim it again. Use openmontage_get_context, openmontage_execute_tool, and openmontage_submit_stage for the current manifest stage. The local bridge renews the lease while connected. Follow all human approval gates.",
+            "Claude Code remains a native interactive session. Approve the project-scoped OpenMontage MCP server if Claude asks. Do not read or print .env or credentials, and do not use the OpenAI production API key for director inference.",
         ]
     )
     prompt_path = project_path / ".openmontage" / "claude_interactive_prompt.txt"
@@ -381,6 +519,7 @@ def prepare_manual_agent_handoff(
         "backlot_url": backlot_url.rstrip("/"),
         "handoff_path": str(project_path / handoff_relative_path),
         "prompt_path": str(prompt_path),
+        "mcp_config_path": mcp_config_path,
         "prompt": prompt,
     }
 
@@ -412,6 +551,7 @@ def launch_agent(
         raise AgentConfigurationError(
             f"{AGENT_COMMAND_ENV} is not configured; set it to the trusted agent command"
         )
+    selected_director = normalize_director(director) if director is not None else director_from_command(argv)
     clean_agent_id = str(agent_id or "").strip()
     if not clean_agent_id:
         raise AgentConfigurationError("agent_id is required for an automatic launch")
@@ -427,6 +567,34 @@ def launch_agent(
         order,
         execution_context,
     )
+    project_id = str(order.get("project_id") or project_path.name)
+    capability: dict[str, str] | None = None
+    if selected_director in {"codex", "antigravity"}:
+        capability = _issue_local_capability(
+            project_path,
+            project_id,
+            run_id,
+            clean_agent_id,
+        )
+    try:
+        if selected_director == "antigravity":
+            _write_workspace_mcp_config(
+                project_path,
+                order,
+                agent_id=clean_agent_id,
+                director=selected_director,
+                backlot_url=backlot_url,
+                capability_token=capability["token"],
+            )
+    except Exception:
+        if capability is not None:
+            revoke_local_director_capability(
+                project_path,
+                project_id,
+                run_id,
+                clean_agent_id,
+            )
+        raise
     log_path = project_path / PROCESS_LOG_NAME
     # External directors are untrusted with respect to production provider
     # credentials. Keep their run context, but never inherit credential-like
@@ -441,18 +609,34 @@ def launch_agent(
             "OPENMONTAGE_STAGE": str(order.get("next_stage") or ""),
             "OPENMONTAGE_BACKLOT_URL": str(backlot_url or ""),
             "OPENMONTAGE_AGENT_HANDOFF": str(project_path / handoff_relative_path),
+            "OPENMONTAGE_RUNTIME_ROOT": str(runtime_root()),
+            "OPENMONTAGE_PROJECTS_DIR": str(project_path.parent),
         }
     )
-    env["OPENMONTAGE_AGENT_PROMPT"] = (
-        "Drive the OpenMontage production in "
+    if capability is not None:
+        env["OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN"] = capability["token"]
+    prompt_lines = [
+        "Direct the OpenMontage production in "
         f"{env['OPENMONTAGE_PROJECT_DIR']}. Read "
         ".openmontage/AGENT_GUIDE.md, .openmontage/PROJECT_CONTEXT.md, "
         ".openmontage/pipeline_manifest.json, and "
         ".openmontage/stage_director.md from the bundled handoff; begin at "
-        f"stage {env['OPENMONTAGE_STAGE']!r} for run "
-        f"{run_id!r}. Use agent id {clean_agent_id!r} for Backlot heartbeats "
-        "and checkpoints, and pause for required human approvals."
-    )
+        f"stage {env['OPENMONTAGE_STAGE']!r} for run {run_id!r}.",
+    ]
+    if selected_director in {"codex", "antigravity"}:
+        prompt_lines.append(
+            "Use the OpenMontage MCP tools: start with openmontage_get_context, "
+            "use openmontage_execute_tool only for tools listed for the current "
+            "stage, and submit artifacts with openmontage_submit_stage. The "
+            "bridge renews this agent's lease. Stop at human gates and never "
+            "supply provider approval controls."
+        )
+    else:
+        prompt_lines.append(
+            f"Use agent id {clean_agent_id!r} for the Backlot heartbeat and "
+            "checkpoint calls, and pause for required human approvals."
+        )
+    env["OPENMONTAGE_AGENT_PROMPT"] = " ".join(prompt_lines)
     # Make source-checkout helpers importable for commands that run the local
     # package with ``python -m ...``. Installed environments already expose the
     # package through site-packages, so preserve any existing PYTHONPATH.
@@ -476,6 +660,13 @@ def launch_agent(
                 shell=False,
             )
     except (OSError, ValueError) as exc:
+        if capability is not None:
+            revoke_local_director_capability(
+                project_path,
+                project_id,
+                run_id,
+                clean_agent_id,
+            )
         raise AgentLaunchError(
             f"could not start configured agent executable {argv[0]!r}: {exc}"
         ) from exc

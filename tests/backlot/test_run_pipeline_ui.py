@@ -13,6 +13,8 @@ from pathlib import Path
 from urllib.error import URLError
 
 import pytest
+from lib.provider_approvals import create_provider_approval_request
+from lib.providers.contracts import ProviderRequest
 
 playwright_api = pytest.importorskip("playwright.sync_api")
 expect = playwright_api.expect
@@ -214,6 +216,47 @@ def test_run_pipeline_button_launches_agent_and_delivers_handoff(tmp_path: Path)
                     assert run_payload["agent_launch"]["status"] == "started"
                     expect(run_button).to_contain_text("Agent started", timeout=1500)
                     assert not dialogs, dialogs
+
+                    work_order_response = urllib.request.urlopen(
+                        f"{base_url}/api/project/{project_id}/work-order",
+                        timeout=5,
+                    )
+                    work_order = json.loads(work_order_response.read())["work_order"]
+                    provider_request = ProviderRequest(
+                        capability="text_generation",
+                        operation="generate",
+                        provider="openai",
+                        model="test-production-model",
+                        payload={"prompt": "Draft a short introduction for the approved production."},
+                        idempotency_key="ui-provider-approval-smoke",
+                        project_id=project_id,
+                        pipeline_type=work_order["pipeline_type"],
+                        run_id=work_order["run_id"],
+                        attempt=work_order["attempt"],
+                        stage=work_order["current_stage"],
+                        estimated_cost_usd=0.0,
+                        metadata={"tool": "test_openai_text", "runtime": "api"},
+                    )
+                    ticket = create_provider_approval_request(
+                        projects_dir / project_id,
+                        provider_request,
+                        agent_id="ui-smoke-agent",
+                        store_dir=projects_dir.parent / ".backlot" / "provider-approvals",
+                    )
+                    page.reload(wait_until="networkidle")
+                    approval_card = page.locator(".provider-approval-card")
+                    expect(approval_card).to_contain_text("openai · test-production-model")
+                    expect(approval_card).to_contain_text("may still charge")
+                    expect(approval_card).to_contain_text("Draft a short introduction")
+                    with page.expect_response(
+                        lambda response: response.url.endswith(
+                            f"/api/project/{project_id}/provider-approvals/{ticket['request_id']}"
+                        ) and response.request.method == "POST",
+                        timeout=10_000,
+                    ) as approval_response_info:
+                        page.get_by_role("button", name="Approve and run this call").click()
+                    assert approval_response_info.value.status == 200
+                    expect(approval_card).to_contain_text("Approved · provider call is starting")
 
                     page.goto(base_url, wait_until="networkidle")
                     page.locator("#createVideoBtn").click()

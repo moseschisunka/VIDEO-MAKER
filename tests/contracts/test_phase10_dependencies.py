@@ -56,6 +56,7 @@ def test_pyproject_is_the_only_python_dependency_source() -> None:
         "uvicorn",
         "watchfiles",
         "edge-tts",
+        "mcp",
     }
     assert expected_runtime <= deps
 

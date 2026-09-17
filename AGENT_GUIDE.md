@@ -7,10 +7,18 @@ Start here. This is the complete operating guide and agent contract for OpenMont
 Local directing uses the selected local agent's own account: Codex CLI, Claude
 Code, or Antigravity. Do not read, print, copy, or use `.env` credentials for
 director inference. In particular, the OpenAI API key is reserved for approved
-production media calls made through OpenMontage's registered tools; it must not
-be used to power a local director. Claude Code handoffs are user-submitted in
+production provider calls made through OpenMontage's registered tools; it must
+not be used to power a local director. Claude Code handoffs are user-submitted in
 its native interactive terminal. Backlot may prepare and copy the task, but
 must not submit it through Claude subscription credentials.
+
+The current Codex chat can work in its existing shared workspace session, but
+Backlot cannot launch or assign work to that already-open conversation. Its
+selector launches Codex CLI or Antigravity and prepares a user-submitted Claude
+Code handoff. The built-in MCP bridge requires a short-lived capability bound
+to the active project path, run, agent, and work-order lease. This narrows
+Backlot tool access but is not an OS sandbox: all local directors still run as
+the signed-in Windows user.
 
 For architecture, key files, and conventions see [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md).
 
@@ -634,6 +642,8 @@ Tool rules:
 - Every production tool must inherit from `BaseTool`.
 - Tool discovery flows through the registry, not ad hoc imports.
 - Support-envelope reporting is the source of truth for capability, status, and resource requirements.
+- When Backlot starts a local director, use its OpenMontage MCP bridge: call `openmontage_get_context`, execute only the tools listed for the active stage through `openmontage_execute_tool`, and submit artifacts with `openmontage_submit_stage`. The bridge binds run identity, validates schemas and project paths, and renews the lease while connected.
+- Never supply approval controls to the bridge. Provider charges and external-media transfers remain subject to the production approval kernel; a human-gated stage must pause for Backlot review.
 
 ## Style Playbooks
 

@@ -68,7 +68,20 @@ def _probe_env() -> dict[str, str]:
     env = dict(os.environ)
     env.pop("OPENMONTAGE_PROJECTS_DIR", None)
     env.pop("OPENMONTAGE_RESOURCE_ROOT", None)
+    env.pop("OPENMONTAGE_RUNTIME_ROOT", None)
     return env
+
+
+def test_probe_environment_clears_runtime_path_overrides(monkeypatch) -> None:
+    overrides = {
+        "OPENMONTAGE_PROJECTS_DIR",
+        "OPENMONTAGE_RESOURCE_ROOT",
+        "OPENMONTAGE_RUNTIME_ROOT",
+    }
+    for name in overrides:
+        monkeypatch.setenv(name, "external-test-root")
+
+    assert overrides.isdisjoint(_probe_env())
 
 
 def _dependency_paths() -> list[str]:

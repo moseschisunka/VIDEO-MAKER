@@ -18,8 +18,11 @@ from lib import local_director
 from lib.agent_launcher import (
     AgentLaunch,
     AgentLaunchError,
+    _write_workspace_mcp_config,
     configured_agent_command,
 )
+from lib.local_director_capabilities import issue_local_director_capability
+from lib.local_director_capabilities import validate_local_director_capability
 
 
 @pytest.fixture
@@ -205,6 +208,80 @@ def test_selected_local_director_launches_without_command_env(client, monkeypatc
     assert order["claim"]["claimed_by"] == "openmontage-antigravity"
 
 
+def test_local_director_capability_endpoint_is_run_scoped_and_needs_no_global_token(
+    client,
+    monkeypatch,
+) -> None:
+    test_client, projects = client
+    created = test_client.post("/api/project/create", json={"title": "Capability scope"})
+    assert created.status_code == 200, created.text
+    project_id = created.json()["project_id"]
+    handoff = test_client.post(
+        f"/api/project/{project_id}/run",
+        params={"agent_id": "codex-test"},
+    )
+    assert handoff.status_code == 200, handoff.text
+    order = handoff.json()["work_order"]
+    project_dir = projects / project_id
+    issued = issue_local_director_capability(
+        project_dir,
+        project_id,
+        order["run_id"],
+        "codex-test",
+    )
+    headers = {"Authorization": f"Bearer {issued['token']}"}
+    payload = {
+        "project_dir": str(project_dir.resolve()),
+        "project_id": project_id,
+        "run_id": order["run_id"],
+        "agent_id": "codex-test",
+    }
+
+    # A remote Backlot deployment normally requires its global token. The
+    # local bridge route accepts only this narrower, live-run capability.
+    monkeypatch.setenv("BACKLOT_HOST", "0.0.0.0")
+    monkeypatch.setenv("BACKLOT_AUTH_TOKEN", "global-operator-token")
+    valid = test_client.post(
+        "/api/local-director/capability/validate",
+        headers=headers,
+        json=payload,
+    )
+    assert valid.status_code == 200, valid.text
+    assert valid.json()["agent_id"] == "codex-test"
+    assert valid.headers["cache-control"] == "no-store"
+
+    wrong_run = test_client.post(
+        "/api/local-director/capability/validate",
+        headers=headers,
+        json={**payload, "run_id": "another-run"},
+    )
+    assert wrong_run.status_code == 401
+
+    wrong_path = test_client.post(
+        "/api/local-director/capability/validate",
+        headers=headers,
+        json={**payload, "project_dir": str((projects / "elsewhere").resolve())},
+    )
+    assert wrong_path.status_code == 401
+
+    order_path = project_dir / "work_order.json"
+    stale_order = json.loads(order_path.read_text(encoding="utf-8"))
+    stale_order["claim"]["lease_expires_at"] = "2000-01-01T00:00:00+00:00"
+    order_path.write_text(json.dumps(stale_order), encoding="utf-8")
+    stale_lease = test_client.post(
+        "/api/local-director/capability/validate",
+        headers=headers,
+        json=payload,
+    )
+    assert stale_lease.status_code == 401
+
+    no_capability = test_client.post(
+        "/api/local-director/capability/validate",
+        json=payload,
+    )
+    assert no_capability.status_code == 401
+
+
 def test_codex_director_rejects_api_key_sign_in(monkeypatch) -> None:
     monkeypatch.setattr(
         local_director.shutil,
@@ -254,6 +331,144 @@ def test_codex_director_allows_confirmed_chatgpt_sign_in(monkeypatch) -> None:
     assert status["configured"] is True
     assert status["valid"] is True
     assert status["director"] == "codex"
+
+
+def test_antigravity_catalog_requires_scoped_mcp_permissions(monkeypatch, tmp_path: Path) -> None:
+    settings_file = tmp_path / "settings.json"
+    monkeypatch.setattr(
+        local_director,
+        "antigravity_settings_path",
+        lambda: settings_file,
+    )
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda name: "C:/tools/agy.exe" if name in {"agy.exe", "agy"} else None,
+    )
+
+    catalog_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "antigravity"
+    )
+    assert catalog_entry["installed"] is True
+    assert catalog_entry["ready"] is False
+    assert "three exact OpenMontage MCP allow rules" in catalog_entry["status_note"]
+    preflight = agent_launcher.agent_command_status("antigravity")
+    assert preflight["valid"] is False
+    assert "no model was started" in preflight["error"]
+
+    settings_file.write_text(
+        json.dumps({
+            "permissions": {
+                "allow": list(local_director.ANTIGRAVITY_MCP_ALLOW_RULES),
+            }
+        }),
+        encoding="utf-8",
+    )
+    ready_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "antigravity"
+    )
+    assert ready_entry["ready"] is True
+    assert ready_entry["auth_status"] == "unknown"
+    assert "sign-in and account quota cannot be verified" in ready_entry["status_note"]
+
+    settings_file.write_text(
+        json.dumps({
+            "permissions": {
+                "allow": list(local_director.ANTIGRAVITY_MCP_ALLOW_RULES),
+                "ask": ["mcp(openmontage-local-director/*)"],
+            }
+        }),
+        encoding="utf-8",
+    )
+    blocked_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "antigravity"
+    )
+    assert blocked_entry["ready"] is False
+    assert "Ask or Deny rule overrides" in blocked_entry["status_note"]
+
+    settings_file.write_text(
+        json.dumps({
+            "permissions": {
+                "allow": list(local_director.ANTIGRAVITY_MCP_ALLOW_RULES),
+                "deny": ["mcp(*)"],
+            }
+        }),
+        encoding="utf-8",
+    )
+    globally_blocked_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "antigravity"
+    )
+    assert globally_blocked_entry["ready"] is False
+    assert "Ask or Deny rule overrides" in globally_blocked_entry["status_note"]
+
+
+def test_antigravity_adapter_does_not_start_a_model_without_permissions(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        local_director,
+        "antigravity_settings_path",
+        lambda: tmp_path / "missing-settings.json",
+    )
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda name: "C:/tools/agy.exe" if name in {"agy.exe", "agy"} else None,
+    )
+    monkeypatch.setattr(
+        local_director.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("Antigravity must not start without MCP permission"),
+    )
+
+    result = local_director.run_local_director(
+        "antigravity",
+        env={
+            "OPENMONTAGE_AGENT_PROMPT": "do not send this",
+            "OPENMONTAGE_PROJECT_DIR": str(tmp_path),
+        },
+    )
+
+    assert result == 2
+    assert "no model was started" in capsys.readouterr().err
+
+
+def test_antigravity_permission_failure_does_not_claim_a_fresh_run(
+    client,
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    test_client, projects = client
+    monkeypatch.delenv("OPENMONTAGE_AGENT_COMMAND", raising=False)
+    monkeypatch.setattr(
+        local_director.shutil,
+        "which",
+        lambda name: "C:/tools/agy.exe" if name in {"agy.exe", "agy"} else None,
+    )
+    monkeypatch.setattr(
+        local_director,
+        "antigravity_settings_path",
+        lambda: tmp_path / "missing-settings.json",
+    )
+    monkeypatch.setattr(
+        server_mod,
+        "launch_agent",
+        lambda *_args, **_kwargs: pytest.fail("preflight must block before launch"),
+    )
+    created = test_client.post("/api/project/create", json={"title": "Antigravity preflight"})
+    assert created.status_code == 200, created.text
+    project_id = created.json()["project_id"]
+
+    response = test_client.post(f"/api/project/{project_id}/run?director=antigravity")
+
+    assert response.status_code == 503
+    assert "no model was started" in response.json()["detail"]
+    order = json.loads((projects / project_id / "work_order.json").read_text(encoding="utf-8"))
+    assert order["status"] == "queued"
+    assert order["claim"]["claimed_by"] is None
+    assert order["stages"][0]["status"] == "ready"
 
 
 def test_concurrent_run_requests_launch_one_agent(client, monkeypatch) -> None:
@@ -400,6 +615,53 @@ def test_launcher_uses_shell_free_argv_and_persists_record(tmp_path: Path, monke
     assert record["command"] == ["python", "-m", "my_agent"]
 
 
+def test_codex_launch_receives_only_a_live_run_capability(tmp_path: Path, monkeypatch) -> None:
+    captured = {}
+
+    class FakeProcess:
+        pid = 7744
+
+    monkeypatch.setattr(
+        agent_launcher,
+        "director_launcher_command",
+        lambda director: (sys.executable, "-m", "lib.local_director", director),
+    )
+    monkeypatch.setattr(
+        agent_launcher.subprocess,
+        "Popen",
+        lambda argv, **kwargs: (captured.update(argv=argv, kwargs=kwargs) or FakeProcess()),
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "production-key")
+    monkeypatch.setenv("BACKLOT_AUTH_TOKEN", "global-backlot-token")
+    order = {
+        "project_id": "codex-capability",
+        "run_id": "8f6b4b7b-2c1f-4c1d-9d3e-7d6b6f6c8e1a",
+        "next_stage": "idea",
+    }
+
+    agent_launcher.launch_agent(
+        tmp_path,
+        order,
+        agent_id="openmontage-codex",
+        director="codex",
+        backlot_url="http://127.0.0.1:4750",
+    )
+
+    env = captured["kwargs"]["env"]
+    token = env["OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN"]
+    assert env["OPENMONTAGE_BACKLOT_URL"] == "http://127.0.0.1:4750"
+    assert "OPENAI_API_KEY" not in env
+    assert "BACKLOT_AUTH_TOKEN" not in env
+    assert "OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN" not in local_director.director_environment(env)
+    assert validate_local_director_capability(
+        token,
+        tmp_path,
+        order["project_id"],
+        order["run_id"],
+        "openmontage-codex",
+    )["agent_id"] == "openmontage-codex"
+
+
 def test_launcher_bundles_manifest_and_stage_instructions_for_local_director(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -464,6 +726,46 @@ def test_launcher_rejects_symlinked_handoff_directory(tmp_path: Path, monkeypatc
         )
 
 
+@pytest.mark.parametrize(
+    ("director", "relative_config"),
+    [
+        ("antigravity", Path(".agents") / "mcp_config.json"),
+        ("claude", Path(".mcp.json")),
+    ],
+)
+def test_workspace_director_mcp_config_preserves_existing_servers(
+    tmp_path: Path,
+    director: str,
+    relative_config: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    config_path = project / relative_config
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps({
+        "mcpServers": {"existing": {"command": "existing-mcp"}},
+    }), encoding="utf-8")
+
+    result = _write_workspace_mcp_config(
+        project,
+        {"project_id": "workspace-mcp", "run_id": "8f6b4b7b-2c1f-4c1d-9d3e-7d6b6f6c8e1a"},
+        agent_id="agent-a",
+        director=director,
+        backlot_url="http://127.0.0.1:8000",
+        capability_token="test-scoped-capability",
+    )
+
+    payload = json.loads(Path(result).read_text(encoding="utf-8"))
+    servers = payload["mcpServers"]
+    assert servers["existing"] == {"command": "existing-mcp"}
+    server = servers["openmontage-local-director"]
+    assert server["args"] == ["-m", "lib.agent_mcp"]
+    assert server["env"]["OPENMONTAGE_AGENT_ID"] == "agent-a"
+    assert server["env"]["OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN"] == "test-scoped-capability"
+    assert not any("API_KEY" in name for name in server["env"])
+    assert f"/{relative_config.as_posix()}" in (project / ".gitignore").read_text(encoding="utf-8")
+
+
 def test_local_director_command_status_blocks_claude_subscription_dispatch(monkeypatch) -> None:
     monkeypatch.setenv("OPENMONTAGE_AGENT_COMMAND", "python -m lib.local_director claude")
     monkeypatch.setattr(
@@ -519,7 +821,7 @@ def test_local_director_can_start_a_powershell_cli_shim(monkeypatch) -> None:
     ("director", "expected_executable", "expected_args", "prompt_on_stdin"),
     [
         ("codex", "codex.exe", ["exec", "--sandbox", "workspace-write", "--cd"], True),
-        ("antigravity", "agy.exe", ["-p"], False),
+        ("antigravity", "agy.exe", ["--sandbox", "-p"], False),
     ],
 )
 def test_local_director_uses_account_sign_in_and_receives_prompt(
@@ -571,8 +873,9 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
         assert captured["argv"][5] == str(tmp_path.resolve())
         assert captured["argv"][6] == "-"
     else:
-        assert captured["argv"][1:2] == expected_args
-        assert captured["argv"][2] == source_env["OPENMONTAGE_AGENT_PROMPT"]
+        command_end = 1 + len(expected_args)
+        assert captured["argv"][1:command_end] == expected_args
+        assert captured["argv"][command_end] == source_env["OPENMONTAGE_AGENT_PROMPT"]
     assert captured["kwargs"]["input"] == (
         source_env["OPENMONTAGE_AGENT_PROMPT"] if prompt_on_stdin else None
     )
@@ -591,6 +894,24 @@ def test_local_director_uses_account_sign_in_and_receives_prompt(
     ):
         assert credential not in captured["kwargs"]["env"]
     assert source_env["OPENAI_API_KEY"] == "openai-production-key"
+
+
+def test_claude_native_user_install_is_discovered_outside_path(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    executable = tmp_path / ".local" / "bin" / "claude.exe"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"native cli placeholder")
+    monkeypatch.setattr(local_director.Path, "home", classmethod(lambda _cls: tmp_path))
+    monkeypatch.setattr(local_director.shutil, "which", lambda _name: None)
+
+    assert local_director.find_director_executable("claude") == str(executable)
+    catalog_entry = next(
+        item for item in local_director.local_director_catalog() if item["id"] == "claude"
+    )
+    assert catalog_entry["installed"] is True
+    assert catalog_entry["mode"] == "interactive_only"
 
 
 def test_claude_subscription_is_interactive_only(monkeypatch, tmp_path: Path, capsys) -> None:

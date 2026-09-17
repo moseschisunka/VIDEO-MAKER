@@ -10,6 +10,7 @@ is deliberately not dispatched through this adapter.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -26,10 +27,21 @@ DIRECTOR_EXECUTABLES = {
 }
 
 DIRECTOR_LABELS = {
-    "codex": "Codex",
+    "codex": "Codex CLI",
     "claude": "Claude Code",
     "antigravity": "Antigravity",
 }
+
+LOCAL_MCP_SERVER_NAME = "openmontage-local-director"
+LOCAL_MCP_TOOL_NAMES = (
+    "openmontage_get_context",
+    "openmontage_execute_tool",
+    "openmontage_submit_stage",
+)
+ANTIGRAVITY_MCP_ALLOW_RULES = tuple(
+    f"mcp({LOCAL_MCP_SERVER_NAME}/{tool_name})"
+    for tool_name in LOCAL_MCP_TOOL_NAMES
+)
 
 CLAUDE_INTERACTIVE_ONLY_NOTE = (
     "Use Claude Code in its native interactive CLI. Backlot can prepare and copy "
@@ -53,6 +65,92 @@ class LocalDirectorError(ValueError):
     """Raised when a local director is unknown or unavailable."""
 
 
+def antigravity_settings_path() -> Path:
+    """Return Antigravity CLI's user-level settings path without reading it."""
+    return Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
+
+
+def _permission_entries(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(entry for entry in value if isinstance(entry, str))
+
+
+def _mcp_permission_matches(rule: str, tool_name: str) -> bool:
+    if not rule.startswith("mcp(") or not rule.endswith(")"):
+        return False
+    target = rule[4:-1]
+    if target == "*":
+        return True
+    server, separator, target_tool = target.partition("/")
+    if not separator:
+        return False
+    return server in {"*", LOCAL_MCP_SERVER_NAME} and target_tool in {"*", tool_name}
+
+
+def antigravity_mcp_permission_status(
+    settings_file: Path | str | None = None,
+) -> tuple[bool, str]:
+    """Check headless MCP permissions without returning unrelated settings."""
+    path = Path(settings_file) if settings_file is not None else antigravity_settings_path()
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        settings = {}
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return (
+            False,
+            "Could not read Antigravity's CLI settings. Check "
+            "`~/.gemini/antigravity-cli/settings.json`; no model was started.",
+        )
+    if not isinstance(settings, dict):
+        settings = {}
+    permissions = settings.get("permissions")
+    if permissions is None:
+        permissions = {}
+    if not isinstance(permissions, dict):
+        return (
+            False,
+            "Antigravity's CLI `permissions` setting must be an object; "
+            "no model was started.",
+        )
+
+    allow = _permission_entries(permissions.get("allow"))
+    ask = _permission_entries(permissions.get("ask"))
+    deny = _permission_entries(permissions.get("deny"))
+    if any(
+        _mcp_permission_matches(rule, tool_name)
+        for rule in (*deny, *ask)
+        for tool_name in LOCAL_MCP_TOOL_NAMES
+    ):
+        return (
+            False,
+            "An existing Antigravity Ask or Deny rule overrides OpenMontage's "
+            "headless MCP access. Review its `permissions.ask` and "
+            "`permissions.deny` rules; no model was started.",
+        )
+
+    if any(rule not in allow for rule in ANTIGRAVITY_MCP_ALLOW_RULES):
+        return (
+            False,
+            "Antigravity headless mode needs the three exact OpenMontage MCP "
+            "allow rules in `~/.gemini/antigravity-cli/settings.json` before "
+            "it can direct a pipeline. See `docs/AGENT_LAUNCH.md`; no model was started.",
+        )
+    return (
+        True,
+        "OpenMontage's three exact MCP permissions are configured. "
+        "Antigravity sign-in and account quota cannot be verified here; "
+        "sign in through an interactive `agy` session first.",
+    )
+
+
+def _require_antigravity_mcp_permissions() -> None:
+    ready, status_note = antigravity_mcp_permission_status()
+    if not ready:
+        raise LocalDirectorError(status_note)
+
+
 def normalize_director(name: str) -> str:
     """Return a supported director name or raise a useful configuration error."""
     director = str(name or "").strip().lower()
@@ -68,6 +166,11 @@ def find_director_executable(name: str) -> str:
     """Resolve the installed CLI without starting a model session."""
     director = normalize_director(name)
     cli = DIRECTOR_EXECUTABLES[director]
+    if director == "claude":
+        for filename in ("claude.exe", "claude"):
+            native_install = Path.home() / ".local" / "bin" / filename
+            if native_install.is_file():
+                return str(native_install)
     # On Windows prefer a native executable when one exists. Python can use a
     # PowerShell shim through an explicit -File invocation, but CreateProcess
     # cannot execute .bat/.cmd shims directly and those require shell parsing.
@@ -117,6 +220,8 @@ def director_launcher_command(name: str) -> tuple[str, ...]:
                 "'codex login status'; local director runs require confirmed ChatGPT "
                 "sign-in so they do not fall back to API-key billing."
             )
+    elif director == "antigravity":
+        _require_antigravity_mcp_permissions()
     return (sys.executable, "-m", "lib.local_director", director)
 
 
@@ -163,7 +268,7 @@ def local_director_catalog() -> list[dict[str, str | bool]]:
             })
         else:
             auth_status = _codex_auth_status(executable) if director == "codex" else "unknown"
-            ready = auth_status == "chatgpt" if director == "codex" else True
+            ready = auth_status == "chatgpt" if director == "codex" else False
             if auth_status == "not_signed_in":
                 status_note = "Not signed in. Run 'codex login' and choose ChatGPT sign-in."
             elif auth_status == "api_key":
@@ -175,16 +280,13 @@ def local_director_catalog() -> list[dict[str, str | bool]]:
                     "Could not confirm ChatGPT sign-in. Run 'codex login status', then "
                     "sign in with ChatGPT before running locally."
                 )
-            elif director == "claude":
-                status_note = (
-                    "Billing mode cannot be verified here. Sign in with a Claude "
-                    "subscription; Claude Console sign-in uses API billing."
-                )
             elif director == "antigravity":
-                status_note = (
-                    "Installed. Sign in through an interactive 'agy' session first; "
-                    "Backlot cannot verify this account's plan."
-                )
+                ready, status_note = antigravity_mcp_permission_status()
+                if ready:
+                    status_note += (
+                        " Set Use AI Credits (useG1Credits) to false if it should "
+                        "stop at the included quota."
+                    )
             else:
                 status_note = "Installed. Sign in with this CLI's own account before running it."
             catalog.append({
@@ -275,6 +377,7 @@ def command_for_director(
     prompt: str,
     *,
     working_directory: Path | str,
+    mcp_environment: Mapping[str, str] | None = None,
 ) -> tuple[list[str], str | None]:
     """Build a shell-free command and optional stdin prompt for one CLI."""
     director = normalize_director(name)
@@ -282,10 +385,54 @@ def command_for_director(
         raise LocalDirectorError(CLAUDE_INTERACTIVE_ONLY_NOTE)
     executable_argv = _executable_argv(executable)
     if director == "codex":
+        args = [*executable_argv, "exec"]
+        if mcp_environment:
+            selected_env = {
+                key: str(mcp_environment[key])
+                for key in (
+                    "OPENMONTAGE_PROJECT_DIR",
+                    "OPENMONTAGE_PROJECT_ID",
+                    "OPENMONTAGE_RUN_ID",
+                    "OPENMONTAGE_AGENT_ID",
+                    "OPENMONTAGE_BACKLOT_URL",
+                    "OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN",
+                    "OPENMONTAGE_RUNTIME_ROOT",
+                    "OPENMONTAGE_PROJECTS_DIR",
+                )
+                if str(mcp_environment.get(key) or "").strip()
+            }
+            required_mcp_keys = {
+                "OPENMONTAGE_PROJECT_DIR",
+                "OPENMONTAGE_PROJECT_ID",
+                "OPENMONTAGE_RUN_ID",
+                "OPENMONTAGE_AGENT_ID",
+                "OPENMONTAGE_BACKLOT_URL",
+                "OPENMONTAGE_DIRECTOR_CAPABILITY_TOKEN",
+                "OPENMONTAGE_RUNTIME_ROOT",
+                "OPENMONTAGE_PROJECTS_DIR",
+            }
+            if required_mcp_keys.issubset(selected_env):
+                toml_string = lambda value: json.dumps(str(value), ensure_ascii=True)
+                toml_array = lambda values: "[" + ", ".join(toml_string(value) for value in values) + "]"
+                toml_env = "{ " + ", ".join(
+                    f"{toml_string(key)} = {toml_string(value)}"
+                    for key, value in sorted(selected_env.items())
+                ) + " }"
+                config = [
+                    ("command", toml_string(sys.executable)),
+                    ("args", toml_array(["-m", "lib.agent_mcp"])),
+                    ("cwd", toml_string(selected_env["OPENMONTAGE_RUNTIME_ROOT"])),
+                    ("env", toml_env),
+                    ("enabled_tools", toml_array(LOCAL_MCP_TOOL_NAMES)),
+                    ("default_tools_approval_mode", toml_string("auto")),
+                    ("startup_timeout_sec", "20"),
+                    ("tool_timeout_sec", "600"),
+                ]
+                for key, value in config:
+                    args.extend(["-c", f"mcp_servers.openmontage.{key}={value}"])
         return (
             [
-                *executable_argv,
-                "exec",
+                *args,
                 "--sandbox",
                 "workspace-write",
                 "--cd",
@@ -294,6 +441,11 @@ def command_for_director(
             ],
             prompt,
         )
+    if director == "antigravity":
+        # Headless shell tools otherwise run without Antigravity's native OS
+        # containment. The project-scoped MCP bridge remains the only granted
+        # production-tool route; --sandbox limits agent-issued shell commands.
+        return [*executable_argv, "--sandbox", "-p", prompt], None
     return [*executable_argv, "-p", prompt], None
 
 
@@ -316,6 +468,12 @@ def run_local_director(name: str, *, env: Mapping[str, str] | None = None) -> in
     except LocalDirectorError as exc:
         print(str(exc), file=sys.stderr)
         return 127
+    if director == "antigravity":
+        try:
+            _require_antigravity_mcp_permissions()
+        except LocalDirectorError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     project_directory = str(source_env.get("OPENMONTAGE_PROJECT_DIR") or "").strip()
     if not project_directory:
@@ -338,6 +496,7 @@ def run_local_director(name: str, *, env: Mapping[str, str] | None = None) -> in
             executable,
             prompt,
             working_directory=working_directory,
+            mcp_environment=source_env,
         )
     except LocalDirectorError as exc:
         print(str(exc), file=sys.stderr)

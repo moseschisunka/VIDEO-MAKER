@@ -21,12 +21,12 @@ import uuid
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
 from lib.agent_launcher import (
     AgentConfigurationError,
@@ -43,11 +43,21 @@ from lib.local_director import (
     local_director_catalog,
     normalize_director,
 )
+from lib.local_director_capabilities import (
+    LocalDirectorCapabilityError,
+    validate_local_director_capability,
+)
 from lib.approval_contracts import ApprovalValidationError
-from lib.checkpoint import CheckpointValidationError, init_project, read_checkpoint, write_checkpoint
+from lib.checkpoint import CheckpointValidationError, init_project, read_checkpoint
 from lib.demo_runner import RUNNER_KIND, is_internal_demo_project
 from lib.env_loader import load_env
 from lib.pipeline_release import pipeline_release_metadata, studio_release_status
+from lib.provider_approvals import (
+    ProviderApprovalError,
+    decide_provider_approval_request,
+    expire_provider_approval_request,
+    get_provider_approval_request,
+)
 from lib.project_identity import validate_project_identity
 from lib.voice_contracts import canonical_voice_provider
 from lib.manifest_executor import (
@@ -74,7 +84,7 @@ from lib.work_order import (
     resume_work_order,
     write_work_order,
 )
-from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
+from backlot.state import PROJECTS_DIR, REPO_ROOT, load_board_state, summarize_project
 
 
 _logger = logging.getLogger("openmontage.backlot")
@@ -119,6 +129,22 @@ class ApproveStageRequest(BaseModel):
     approver_id: str = "backlot-user"
     notes: str | None = None
     decision: str = "approve"
+
+
+class ProviderApprovalDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    request_digest: StrictStr
+    decision: Literal["approve", "reject"]
+
+
+class LocalDirectorCapabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    project_dir: StrictStr
+    project_id: StrictStr
+    run_id: StrictStr
+    agent_id: StrictStr
 
 
 class ClaimWorkOrderRequest(BaseModel):
@@ -208,6 +234,33 @@ def _auth_required() -> bool:
 
 def _configured_auth_token() -> str:
     return _os.getenv("BACKLOT_AUTH_TOKEN", "").strip()
+
+
+def _local_backlot_url(request: Request) -> str:
+    """Build a same-device Backlot URL without trusting the HTTP Host header."""
+    scheme = str(request.scope.get("scheme") or "http").lower()
+    if scheme not in {"http", "https"}:
+        scheme = "http"
+    server_address = request.scope.get("server")
+    port = None
+    bound_host = ""
+    if isinstance(server_address, (tuple, list)) and len(server_address) > 1:
+        bound_host = str(server_address[0] or "").strip().lower().strip("[]")
+        try:
+            port = int(server_address[1])
+        except (TypeError, ValueError):
+            port = None
+    if port is None:
+        try:
+            port = request.url.port
+        except ValueError:
+            port = None
+    if port is None:
+        port = 443 if scheme == "https" else 80
+    default_port = 443 if scheme == "https" else 80
+    port_suffix = "" if port == default_port else f":{port}"
+    host = "[::1]" if bound_host in {"::", "::1"} else "127.0.0.1"
+    return f"{scheme}://{host}{port_suffix}"
 
 
 def _record_auth_failure(reason: str) -> None:
@@ -813,7 +866,11 @@ def create_app() -> FastAPI:
         control plane; a missing or incorrect token returns a standards-style
         401 challenge without echoing any credential material.
         """
-        if _auth_required():
+        # This one local MCP route uses an eight-hour, run-scoped bearer in
+        # place of the operator's global Backlot token. The route validates
+        # every identity field and the live work-order lease before replying.
+        capability_route = request.url.path == "/api/local-director/capability/validate"
+        if _auth_required() and not capability_route:
             configured = _configured_auth_token()
             if not configured:
                 _record_auth_failure("missing_config")
@@ -844,6 +901,79 @@ def create_app() -> FastAPI:
     async def health() -> dict:
         return {"ok": True, "app": "backlot"}
 
+    @app.post("/api/local-director/capability/validate")
+    async def validate_local_director_capability_endpoint(
+        request: Request,
+        validation: LocalDirectorCapabilityRequest,
+        response: Response,
+    ) -> dict:
+        """Confirm that one MCP bridge still owns its live project/run lease."""
+        response.headers["Cache-Control"] = "no-store"
+        scheme, _, bearer = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() != "bearer" or not bearer.strip():
+            raise HTTPException(status_code=401, detail="local director capability is required")
+        try:
+            project_path = Path(validation.project_dir).expanduser().resolve()
+            capability = await asyncio.to_thread(
+                validate_local_director_capability,
+                bearer.strip(),
+                project_path,
+                validation.project_id,
+                validation.run_id,
+                validation.agent_id,
+                slide_expiry=False,
+            )
+            safe_project_dir = _safe_project_dir(validation.project_id)
+            submitted_path = Path(validation.project_dir).expanduser().resolve(strict=True)
+            actual_path = safe_project_dir.resolve(strict=True)
+            if _os.path.normcase(str(submitted_path)) != _os.path.normcase(str(actual_path)):
+                raise LocalDirectorCapabilityError("project path does not match Backlot project")
+            order = await asyncio.to_thread(read_work_order, safe_project_dir)
+            claim = order.get("claim") or {}
+            if (
+                str(order.get("project_id") or "") != validation.project_id
+                or str(order.get("run_id") or "") != validation.run_id
+                or str(claim.get("claimed_by") or "") != validation.agent_id
+                or order.get("status") in {"completed", "cancelled"}
+            ):
+                raise LocalDirectorCapabilityError("the active work-order claim changed")
+            expires_raw = claim.get("lease_expires_at")
+            expires = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if expires <= datetime.now(timezone.utc):
+                raise LocalDirectorCapabilityError("the active work-order lease expired")
+            capability = await asyncio.to_thread(
+                validate_local_director_capability,
+                bearer.strip(),
+                actual_path,
+                validation.project_id,
+                validation.run_id,
+                validation.agent_id,
+            )
+        except (
+            HTTPException,
+            LocalDirectorCapabilityError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            WorkOrderStateError,
+            WorkOrderValidationError,
+        ) as exc:
+            raise HTTPException(
+                status_code=401,
+                detail="local director capability is invalid, expired, or no longer active",
+                headers={"Cache-Control": "no-store"},
+            ) from exc
+        return {
+            "ok": True,
+            "project_id": capability["project_id"],
+            "run_id": capability["run_id"],
+            "agent_id": capability["agent_id"],
+            "expires_at": capability["expires_at"],
+        }
+
     @app.get("/api/metrics")
     async def metrics_endpoint() -> dict:
         """Return bounded in-process metrics for operators and CI probes."""
@@ -868,9 +998,63 @@ def create_app() -> FastAPI:
         return await asyncio.to_thread(_cached_summaries)
 
     @app.get("/api/project/{project_id}/state")
-    async def project_state(project_id: str) -> dict:
+    async def project_state(project_id: str, response: Response) -> dict:
         project_dir = _safe_project_dir(project_id)
+        response.headers["Cache-Control"] = "no-store"
         return await asyncio.to_thread(load_board_state, project_dir)
+
+    @app.post("/api/project/{project_id}/provider-approvals/{request_id}")
+    async def decide_provider_call_endpoint(
+        project_id: str,
+        request_id: str,
+        decision_request: ProviderApprovalDecisionRequest,
+    ) -> dict:
+        """Approve or reject exactly one live production-provider request."""
+        project_dir = _safe_project_dir(project_id)
+        store_dir = PROJECTS_DIR.parent / ".backlot" / "provider-approvals"
+        try:
+            ticket = await asyncio.to_thread(
+                get_provider_approval_request,
+                project_dir,
+                request_id,
+                store_dir=store_dir,
+            )
+        except ProviderApprovalError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="provider approval request was not found")
+        if ticket.get("request_digest") != decision_request.request_digest:
+            raise HTTPException(status_code=409, detail="provider request changed; reload the board")
+        if not await asyncio.to_thread(_provider_request_matches_active_run, project_dir, ticket):
+            try:
+                await asyncio.to_thread(
+                    expire_provider_approval_request,
+                    project_dir,
+                    request_id,
+                    decision_request.request_digest,
+                    store_dir=store_dir,
+                )
+            except ProviderApprovalError:
+                pass
+            raise HTTPException(
+                status_code=409,
+                detail="provider request no longer belongs to the running stage",
+            )
+        try:
+            decided = await asyncio.to_thread(
+                decide_provider_approval_request,
+                project_dir,
+                request_id,
+                decision_request.request_digest,
+                decision=decision_request.decision,
+                approver_id="backlot-user",
+                store_dir=store_dir,
+            )
+        except ProviderApprovalError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        _invalidate_summary(project_id)
+        hub.publish(project_id)
+        return {"ok": True, "provider_approval": decided}
 
     @app.get("/api/project/{project_id}/qa")
     async def project_qa(project_id: str) -> dict:
@@ -1527,7 +1711,7 @@ def create_app() -> FastAPI:
                     project_dir,
                     order,
                     agent_id=requested_agent_id,
-                    backlot_url=str(request.base_url).rstrip("/"),
+                    backlot_url=_local_backlot_url(request),
                     execution_context=stage_context,
                 )
             return response
@@ -1591,7 +1775,7 @@ def create_app() -> FastAPI:
             try:
                 launch_kwargs = {
                     "agent_id": requested_agent_id,
-                    "backlot_url": str(request.base_url).rstrip("/"),
+                    "backlot_url": _local_backlot_url(request),
                     "execution_context": context,
                 }
                 if selected_director is not None:
@@ -1639,7 +1823,7 @@ def create_app() -> FastAPI:
                     project_dir,
                     order,
                     agent_id=requested_agent_id,
-                    backlot_url=str(request.base_url).rstrip("/"),
+                    backlot_url=_local_backlot_url(request),
                     execution_context=context,
                 )
             except (AgentLaunchError, OSError) as exc:
@@ -2102,6 +2286,39 @@ def _safe_project_dir(project_id: str) -> Path:
     if not resolved.is_dir():
         raise HTTPException(status_code=404, detail=f"unknown project: {project_id}")
     return resolved
+
+
+def _provider_request_matches_active_run(project_dir: Path, ticket: dict[str, Any]) -> bool:
+    """Refuse a provider approval after its run, stage, or director lease changed."""
+    try:
+        order = read_work_order(project_dir)
+        context = load_manifest_stage_context(project_dir)
+        claim = order.get("claim") or {}
+        expires_raw = claim.get("lease_expires_at")
+        expires = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+    except (ManifestExecutionError, WorkOrderStateError, WorkOrderValidationError, OSError, TypeError, ValueError):
+        return False
+    stage_name = str(ticket.get("stage") or "")
+    stage = next(
+        (item for item in order.get("stages", []) if item.get("name") == stage_name),
+        None,
+    )
+    return bool(
+        is_certified_executor_order(order)
+        and order.get("status") == "running"
+        and str(order.get("project_id") or "") == Path(project_dir).name
+        and str(order.get("pipeline_type") or "") == str(ticket.get("pipeline_type") or "")
+        and str(order.get("run_id") or "") == str(ticket.get("run_id") or "")
+        and order.get("attempt") == ticket.get("attempt")
+        and str(order.get("current_stage") or "") == stage_name
+        and str(context.stage or "") == stage_name
+        and stage is not None
+        and stage.get("status") == "running"
+        and str(claim.get("claimed_by") or "") == str(ticket.get("agent_id") or "")
+        and expires > datetime.now(timezone.utc)
+    )
 
 
 def _sse(payload: dict) -> str:

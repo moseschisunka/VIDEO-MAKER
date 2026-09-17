@@ -15,6 +15,7 @@ from typing import Any, Mapping, Optional
 from lib.events import read_events
 from lib.paths import PROJECTS_DIR, REPO_ROOT  # single source of truth (env-overridable)
 from lib.pipeline_release import pipeline_release_metadata, studio_release_status
+from lib.provider_approvals import list_provider_approval_requests
 from lib.project_identity import validate_project_identity
 
 MEDIA_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
@@ -732,6 +733,10 @@ def load_board_state(project_dir: Path) -> dict[str, Any]:
     meta_json = _read_json(project_dir / "meta.json") or {}
     project_config = _read_json(project_dir / "artifacts" / "project_config.json") or {}
     work_order = _read_json(project_dir / "work_order.json")
+    provider_approvals = list_provider_approval_requests(
+        project_dir,
+        store_dir=PROJECTS_DIR.parent / ".backlot" / "provider-approvals",
+    )
     approval_log = _read_json(project_dir / "approval_records.json") or {
         "version": "1.0",
         "project_id": project_id,
@@ -794,6 +799,7 @@ def load_board_state(project_dir: Path) -> dict[str, Any]:
         # artifact. Expose it read-only so Backlot can show queue/resume truth
         # without reconstructing selections from a stale proposal.
         "work_order": work_order,
+        "provider_approvals": provider_approvals,
         "approval_log": approval_log,
         "qa": _qa_evidence(project_dir, artifacts, approval_log),
         "identity": identity,

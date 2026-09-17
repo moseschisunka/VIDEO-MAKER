@@ -354,11 +354,13 @@ function renderLocalDirectorOptions() {
   for (const director of availableLocalDirectors) {
     const selectable = director.installed === true
       && (director.ready !== false || director.mode === "interactive_only");
-    const availability = director.mode === "interactive_only"
-      ? " · interactive only"
-      : director.installed !== true
-        ? " · not installed"
-        : selectable ? "" : " · sign-in needed";
+    const availability = director.installed !== true
+      ? " · not installed"
+      : director.mode === "interactive_only"
+        ? " · interactive only"
+        : director.ready === false
+          ? " · sign-in needed"
+          : director.auth_status === "unknown" ? " · sign-in unverified" : "";
     localDirectorSelect.append(el("option", {
       value: director.id,
       disabled: !selectable,
@@ -386,14 +388,17 @@ function updateLocalDirectorHint() {
   const selected = localDirectorSelect?.value || "";
   const director = availableLocalDirectors.find((item) => item.id === selected);
   if (director?.mode === "interactive_only") {
-    localDirectorHint.textContent = "Claude Code stays in its native interactive terminal. Backlot reserves the work order and copies the handoff; you paste and submit it yourself. OpenAI API credentials are for approved production media tools, not local director inference.";
+    localDirectorHint.textContent = "Claude Code stays in its native interactive terminal. Backlot reserves the work order and copies the handoff; you open Claude in this project and submit it yourself. The OpenAI API key is reserved for production provider calls.";
     return;
   }
   if (director?.installed) {
     const status = String(director.status_note || "Sign in through this CLI's own account first.");
-    localDirectorHint.textContent = `${director.label}: ${status} Backlot strips credential-like environment variables, but the CLI still runs as your Windows user.`;
+    const codexUsage = director.id === "codex"
+      ? " Included ChatGPT usage is used first. Any existing Codex credits may then be consumed; turn off Auto top-up to prevent new purchases and check the reset time in your usage settings."
+      : "";
+    localDirectorHint.textContent = `${director.label}: ${status} Backlot strips credential-like environment variables, but the CLI still runs as your Windows user.${codexUsage}`;
   } else if (selected === "configured") {
-    localDirectorHint.textContent = `Runs through ${configuredRunnerLabel}. Local director account use and production media API calls remain separate.`;
+    localDirectorHint.textContent = `Runs through ${configuredRunnerLabel}. Local director account use and production provider calls remain separate.`;
   } else if (localDirectorOptionsRequest) {
     localDirectorHint.textContent = "Checking installed local directors…";
   } else if (availableLocalDirectors.some((item) => item.installed && item.ready === false)) {
@@ -404,9 +409,9 @@ function updateLocalDirectorHint() {
       : selectable ? " Choose another installed director or sign in to this one." : "";
     localDirectorHint.textContent = `${notReady.status_note}${followUp}`;
   } else if (!availableLocalDirectors.some((item) => item.installed) && !configuredRunnerAvailable) {
-    localDirectorHint.textContent = "Install and sign in to Codex CLI or Antigravity to run them locally. Claude Code is used in its native interactive terminal through a manual, copyable handoff. Production media APIs are separate from local director inference.";
+    localDirectorHint.textContent = "Install and sign in to Codex CLI or Antigravity to run them locally. Claude Code is used in its native interactive terminal through a manual, copyable handoff. Production provider APIs are separate from local director inference.";
   } else {
-    localDirectorHint.textContent = "Codex CLI and Antigravity use their own local account sign-ins. Claude Code uses a manual interactive handoff. OpenAI API credentials are for approved production media tools, not local director inference.";
+    localDirectorHint.textContent = "Codex CLI and Antigravity use their own local account sign-ins. Claude Code uses a manual interactive handoff. OpenAI API credentials are for approved production provider calls, not local director inference.";
   }
 }
 
