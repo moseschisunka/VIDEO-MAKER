@@ -21,6 +21,7 @@ import {
 } from "./components/CaptionOverlay";
 import { CollageBurst, CollageBurstProps } from "./CollageBurst";
 import { LyricOverlay, LyricOverlayProps } from "./LyricOverlay";
+import { NewtonsLawsChalkboard } from "./NewtonsLawsChalkboard";
 
 // ---------------------------------------------------------------------------
 // Theme System — prevents every video from looking like dark fintech
@@ -346,6 +347,14 @@ export const Root: React.FC = () => {
           fadeOutSeconds: 1.5,
           overlay: true,
         } as EndTagProps}
+      />
+      <Composition
+        id="NewtonsLawsShort"
+        component={NewtonsLawsChalkboard}
+        durationInFrames={2300}
+        fps={30}
+        width={1080}
+        height={1920}
       />
     </>
   );

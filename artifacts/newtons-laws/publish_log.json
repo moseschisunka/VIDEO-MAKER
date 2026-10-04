@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "entries": [
+    {
+      "platform": "youtube_shorts",
+      "status": "exported",
+      "export_path": "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\artifacts\\newtons-laws\\newtons_laws_explainer.mp4",
+      "timestamp": "2026-10-04T18:47:58.873705+00:00",
+      "metadata_used": {
+        "title": "Why Everything You Know About Motion is WRONG! #physics #science #shorts",
+        "description": "Newton's 3 Laws of Motion explained in 75 seconds on a chalkboard! Discover why moving things stop (hint: it's friction, not running out of push), how mass resists acceleration (F=ma), and the real secret to action and reaction forces.\n\nSubscribe for more visual physics made simple!",
+        "hashtags": [
+          "#physics",
+          "#science",
+          "#newtonslaws",
+          "#shorts",
+          "#education",
+          "#stem"
+        ],
+        "chapters": [
+          {
+            "time": "0:00",
+            "title": "The Friction Illusion"
+          },
+          {
+            "time": "0:12",
+            "title": "Law 1: Inertia in Deep Space"
+          },
+          {
+            "time": "0:26",
+            "title": "Law 2: F = ma (Mass vs Acceleration)"
+          },
+          {
+            "time": "0:43",
+            "title": "Law 3: Action & Reaction Rocket"
+          },
+          {
+            "time": "1:01",
+            "title": "The Golden Rule of Mechanics"
+          },
+          {
+            "time": "1:09",
+            "title": "Everyday Car Inertia"
+          }
+        ]
+      }
+    }
+  ]
+}

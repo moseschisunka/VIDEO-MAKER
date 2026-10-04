@@ -13,12 +13,12 @@
         "name": { "type": "string" },
         "category": {
           "type": "string",
-          "enum": ["motion-graphics", "whiteboard", "cinematic", "minimalist", "retro", "custom"]
+          "enum": ["motion-graphics", "whiteboard", "cinematic", "minimalist", "retro", "custom", "anime-illustration"]
         },
         "mood": { "type": "string" },
         "pace": {
           "type": "string",
-          "enum": ["slow", "deliberate", "moderate", "fast", "rapid"]
+          "enum": ["slow", "deliberate", "moderate", "fast", "rapid", "gentle"]
         },
         "best_for": { "type": "string" }
       },
@@ -38,7 +38,7 @@
             "text": { "type": "string" },
             "muted": { "type": "string" }
           },
-          "additionalProperties": false
+          "additionalProperties": { "type": "string" }
         },
         "composition": { "type": "string" },
         "texture": { "type": "string" }
@@ -141,7 +141,14 @@
           "type": "array",
           "items": { "type": "string" },
           "minItems": 1
-        }
+        },
+        "scene_type": { "type": "string" },
+        "default_particles": { "type": "string" },
+        "default_particle_color": { "type": "string" },
+        "default_vignette": { "type": "boolean" },
+        "multi_image_per_scene": { "type": "boolean" },
+        "images_per_scene": { "type": "integer" },
+        "image_variation_guidance": { "type": "string" }
       },
       "additionalProperties": false
     },
@@ -150,9 +157,10 @@
       "properties": {
         "stat_card": { "$ref": "#/$defs/overlay_style" },
         "key_term": { "$ref": "#/$defs/overlay_style" },
-        "code_block": { "$ref": "#/$defs/overlay_style" }
+        "code_block": { "$ref": "#/$defs/overlay_style" },
+        "section_title": { "$ref": "#/$defs/overlay_style" }
       },
-      "additionalProperties": false
+      "additionalProperties": { "$ref": "#/$defs/overlay_style" }
     },
     "quality_rules": {
       "type": "array",
@@ -236,7 +244,8 @@
         "text": { "type": "string" },
         "radius": { "type": "number" },
         "shadow": { "type": "string" },
-        "highlight": { "type": "string" }
+        "highlight": { "type": "string" },
+        "accent": { "type": "string" }
       },
       "additionalProperties": false
     },

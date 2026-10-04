@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "output_path": "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\artifacts\\newtons-laws\\newtons_laws_explainer.mp4",
+  "project_id": "newtons-laws-explainer",
+  "pipeline_type": "animated-explainer",
+  "output_profile": "youtube_shorts",
+  "status": "pass",
+  "checks": {
+    "technical_probe": {
+      "valid_container": true,
+      "duration_seconds": 76.67,
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "has_audio": true,
+      "codec": "h264",
+      "file_size_bytes": 9657940,
+      "stream_count": 2,
+      "audio_channels": 2,
+      "audio_channel_layout": "stereo",
+      "issues": []
+    },
+    "visual_spotcheck": {
+      "frames_sampled": 4,
+      "frame_paths": [
+        "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\remotion-composer\\out\\frame_100.png",
+        "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\remotion-composer\\out\\frame_500.png",
+        "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\remotion-composer\\out\\frame_1000.png",
+        "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\remotion-composer\\out\\frame_1500.png"
+      ],
+      "black_frames_detected": false,
+      "broken_overlays": false,
+      "missing_assets": false,
+      "unreadable_text": false,
+      "issues": []
+    },
+    "audio_spotcheck": {
+      "narration_audible": true,
+      "distortion_detected": false,
+      "clipping_detected": false,
+      "silence_gaps_exceeded": false,
+      "issues": []
+    },
+    "promise_preservation": {
+      "promise_type": "teacher_explainer",
+      "fulfilled": true,
+      "drift_detected": false,
+      "issues": []
+    },
+    "subtitle_check": {
+      "subtitles_present": true,
+      "readable": true,
+      "sync_accurate": true,
+      "issues": []
+    }
+  }
+}

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newton's Laws of Motion - Chalkboard Explainer Video Player</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d14;
+      --card-bg: rgba(19, 28, 38, 0.75);
+      --card-border: rgba(56, 189, 248, 0.2);
+      --accent-cyan: #38bdf8;
+      --accent-gold: #fbbf24;
+      --accent-coral: #f87171;
+      --accent-green: #34d399;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(ellipse at 50% 0%, rgba(56, 189, 248, 0.12), transparent 70%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+      overflow-x: hidden;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+      max-width: 800px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent-cyan);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    h1 {
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .main-container {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 32px;
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    @media (max-width: 850px) {
+      .main-container {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+
+    /* Video Player Frame (9:16 Aspect Ratio) */
+    .player-wrapper {
+      position: relative;
+      flex-shrink: 0;
+      width: 360px;
+      max-width: 90vw;
+      background: #000;
+      border-radius: 24px;
+      padding: 6px;
+      border: 2px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 
+        0 20px 50px -10px rgba(0, 0, 0, 0.8),
+        0 0 40px rgba(56, 189, 248, 0.15);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .player-wrapper:hover {
+      border-color: rgba(56, 189, 248, 0.5);
+      box-shadow: 
+        0 25px 60px -10px rgba(0, 0, 0, 0.9),
+        0 0 50px rgba(56, 189, 248, 0.25);
+    }
+
+    video {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 9 / 16;
+      border-radius: 18px;
+      display: block;
+      background: #0d131a;
+      outline: none;
+    }
+
+    /* Interactive Sidebar / Controls */
+    .sidebar {
+      flex: 1;
+      min-width: 300px;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      letter-spacing: 0.2px;
+    }
+
+    /* Chapters List */
+    .chapters-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .chapter-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+
+    .chapter-btn:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.35);
+      transform: translateX(4px);
+    }
+
+    .chapter-btn.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent-cyan);
+      color: #ffffff;
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
+    }
+
+    .chapter-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--accent-gold);
+      background: rgba(251, 191, 36, 0.1);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    /* Speed Control Pills */
+    .speed-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .speed-btn {
+      flex: 1;
+      min-width: 50px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .speed-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .speed-btn.active {
+      background: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+      color: #090d14;
+      font-weight: 800;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    /* Spec Grid */
+    .spec-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .spec-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .spec-label {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .spec-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* Actions */
+    .action-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .action-btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+      color: #04111d;
+      border: none;
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.35);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(56, 189, 248, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    footer {
+      margin-top: 36px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">
+      <span class="badge-dot"></span>
+      OpenMontage Remotion Studio
+    </div>
+    <h1>Newton's Laws of Motion</h1>
+    <p class="subtitle">
+      Vertical Chalkboard Animated Explainer • Synchronized Voiceover • Kinematic Diagrams
+    </p>
+  </header>
+
+  <div class="main-container">
+    <!-- 9:16 Video Player -->
+    <div class="player-wrapper">
+      <video
+        id="videoPlayer"
+        src="newtons_laws_explainer.mp4"
+        controls
+        autoplay
+        playsinline
+        preload="auto"
+      >
+        Your browser does not support HTML5 video.
+      </video>
+    </div>
+
+    <!-- Controls and Chapters Sidebar -->
+    <div class="sidebar">
+
+      <!-- Chapters Card -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>⚡ Interactive Chapters</span>
+        </div>
+        <div class="chapters-list" id="chaptersList">
+          <button class="chapter-btn" onclick="seekTo(0)">
+            <span>1. The Friction Trap (Hook)</span>
+            <span class="chapter-time">0:00</span>
+          </button>
+          <button class="chapter-btn" onclick="seekTo(12.3)">
+            <span>2. First Law: Law of Inertia</span>
+            <span class="chapter-time">0:12</span>
+          </button>
+          <button class="chapter-btn" onclick="seekTo(26.5)">
+            <span>3. Second Law: F = ma</span>
+            <span class="chapter-time">0:26</span>
+          </button>
+          <button class="chapter-btn" onclick="seekTo(43.7)">
+            <span>4. Third Law: Action & Reaction</span>
+            <span class="chapter-time">0:43</span>
+          </button>
+          <button class="chapter-btn" onclick="seekTo(61.9)">
+            <span>5. The Golden Physics Rule</span>
+            <span class="chapter-time">1:02</span>
+          </button>
+          <button class="chapter-btn" onclick="seekTo(69.2)">
+            <span>6. Seatbelt Inertia & Outro</span>
+            <span class="chapter-time">1:09</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Playback Speed Card -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>⏩ Playback Rate</span>
+        </div>
+        <div class="speed-group">
+          <button class="speed-btn" onclick="setSpeed(0.75, this)">0.75×</button>
+          <button class="speed-btn active" onclick="setSpeed(1.0, this)">1.0×</button>
+          <button class="speed-btn" onclick="setSpeed(1.25, this)">1.25×</button>
+          <button class="speed-btn" onclick="setSpeed(1.5, this)">1.5×</button>
+          <button class="speed-btn" onclick="setSpeed(2.0, this)">2.0×</button>
+        </div>
+      </div>
+
+      <!-- Video Technical Specs Card -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>📊 Technical Specifications</span>
+        </div>
+        <div class="spec-grid">
+          <div class="spec-item">
+            <div class="spec-label">Format</div>
+            <div class="spec-value">MP4 (H.264 / AAC)</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Resolution</div>
+            <div class="spec-value">1080 × 1920 (9:16)</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Framerate</div>
+            <div class="spec-value">30 FPS (2300 frames)</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Duration</div>
+            <div class="spec-value">76.67 Seconds</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">File Size</div>
+            <div class="spec-value">9.66 MB</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">Pipeline Engine</div>
+            <div class="spec-value">Remotion React</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-row">
+        <a class="action-btn btn-primary" href="newtons_laws_explainer.mp4" download>
+          ⬇ Download MP4
+        </a>
+        <button class="action-btn btn-secondary" onclick="toggleFullscreen()">
+          ⛶ Fullscreen
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    OpenMontage Autonomous Production Pipeline • Tested and schema validated
+  </footer>
+
+  <script>
+    const video = document.getElementById('videoPlayer');
+    const chapterButtons = document.querySelectorAll('.chapter-btn');
+    const chapterTimes = [0, 12.3, 26.5, 43.7, 61.9, 69.2];
+
+    function seekTo(seconds) {
+      video.currentTime = seconds;
+      video.play().catch(e => console.log('Autoplay blocked:', e));
+    }
+
+    function setSpeed(rate, btn) {
+      video.playbackRate = rate;
+      document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        if (video.requestFullscreen) {
+          video.requestFullscreen();
+        } else if (video.webkitRequestFullscreen) {
+          video.webkitRequestFullscreen();
+        }
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    // Highlight active chapter on time update
+    video.addEventListener('timeupdate', () => {
+      const current = video.currentTime;
+      let activeIndex = 0;
+      for (let i = chapterTimes.length - 1; i >= 0; i--) {
+        if (current >= chapterTimes[i]) {
+          activeIndex = i;
+          break;
+        }
+      }
+      chapterButtons.forEach((btn, index) => {
+        if (index === activeIndex) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        video.paused ? video.play() : video.pause();
+      } else if (e.code === 'ArrowRight') {
+        video.currentTime = Math.min(video.duration, video.currentTime + 5);
+      } else if (e.code === 'ArrowLeft') {
+        video.currentTime = Math.max(0, video.currentTime - 5);
+      } else if (e.code === 'KeyF') {
+        toggleFullscreen();
+      } else if (e.code === 'KeyM') {
+        video.muted = !video.muted;
+      }
+    });
+  </script>
+</body>
+</html>

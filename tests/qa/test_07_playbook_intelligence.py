@@ -8,6 +8,8 @@ and full accessibility audit across all 3 playbooks.
 
 import sys, os, json
 from pathlib import Path
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from styles.playbook_loader import (

@@ -1,0 +1,176 @@
+{
+  "version": "1.0",
+  "project_id": "newtons-laws-explainer",
+  "pipeline_type": "animated-explainer",
+  "aspect_ratio": "9:16",
+  "output_profile": "youtube_shorts",
+  "target_duration_seconds": 60,
+  "concept_options": [
+    {
+      "id": "c1",
+      "title": "The Physics Chalkboard: Newton's 3 Laws Solved Step-by-Step",
+      "hook": "Why does everything you think about motion feel completely backwards?",
+      "narrative_structure": "tutorial",
+      "visual_approach": "Chalkboard whiteboard walkthrough with animated free-body force vectors and progressive equation reveals.",
+      "suggested_playbook": "clean-professional",
+      "target_audience": "Students and curious learners seeking visual intuition for physics",
+      "target_platform": "youtube",
+      "target_duration_seconds": 60,
+      "key_points": [
+        "Law 1: Motion is the default state; stopping requires an outside force (friction).",
+        "Law 2: F = ma means mass resists acceleration, visually shown via vector scaling.",
+        "Law 3: Action and reaction forces act on separate objects and never cancel out."
+      ],
+      "core_message": "Forces do not cause motion; unbalanced forces cause changes in motion.",
+      "cta": "Next time you brake in a car, remember you're feeling inertia!",
+      "tone": "instructive, clear, engaging, conversational",
+      "grounded_in": [
+        "claim-inertia-misconception",
+        "claim-action-reaction-separate-objects",
+        "claim-f-equals-ma-ratio"
+      ],
+      "why_this_works": "Directly tackles the intuitive impetus misconceptions proven by physics education research using visual proof."
+    },
+    {
+      "id": "c2",
+      "title": "The Truck and the Bug: The Third Law Paradox",
+      "hook": "When a speeding semi-truck hits a tiny mosquito, which one hits harder?",
+      "narrative_structure": "myth_busting",
+      "visual_approach": "Collision diagram breaking down force pairs and dramatic acceleration disparity.",
+      "target_duration_seconds": 45,
+      "key_points": [
+        "The force on the truck equals the force on the bug.",
+        "Different masses create drastically different accelerations (a = F/m)."
+      ],
+      "why_this_works": "Confronts the #1 most failed question in physics education research."
+    },
+    {
+      "id": "c3",
+      "title": "Newton's 3 Laws in 60 Seconds: Visual Exam Prep",
+      "hook": "Master Newton's three laws before your next exam in sixty seconds flat.",
+      "narrative_structure": "problem_solution",
+      "visual_approach": "Split-screen exam question cards with rapid visual solution breakdown.",
+      "target_duration_seconds": 60,
+      "key_points": [
+        "Rule 1: Net force zero = constant velocity.",
+        "Rule 2: Calculate acceleration with a = F/m.",
+        "Rule 3: Identify the interacting body pair."
+      ],
+      "why_this_works": "High-yield revision format with immediate test utility."
+    }
+  ],
+  "selected_concept": {
+    "concept_id": "c1",
+    "rationale": "Directly approved by user for a step-by-step whiteboard walkthrough with force diagrams and misconception traps."
+  },
+  "production_plan": {
+    "pipeline": "animated-explainer",
+    "aspect_ratio": "9:16",
+    "output_profile": "youtube_shorts",
+    "target_duration_seconds": 60,
+    "playbook": "clean-professional",
+    "render_runtime": "remotion",
+    "renderer_family": "explainer-teacher",
+    "composition_mode": "atelier",
+    "art_direction": "Dark chalkboard (#121820) slate canvas, hand-drawn vector physics diagrams, chalk-white text, vibrant cyan and orange force vector arrows, progressive mathematical derivation.",
+    "taste_profile": {
+      "design_read": "Methodical chalkboard tutorial aesthetic with high-precision vector animations and crisp typography.",
+      "visual_variance": 5,
+      "motion_intensity": 6,
+      "information_density": 7
+    },
+    "delivery_promise": {
+      "promise_type": "teacher_explainer",
+      "motion_required": false,
+      "source_required": false,
+      "tone_mode": "educational",
+      "quality_floor": "broadcast",
+      "approved_fallback": null
+    },
+    "music_source": {
+      "source_type": "none",
+      "reason": "Pure educational whiteboard tutorial for maximum speech clarity without background distraction."
+    },
+    "voice_selection": {
+      "provider": "edge_tts",
+      "model": "edge_tts",
+      "voice_id": "en-US-ChristopherNeural",
+      "locale": "en-US",
+      "delivery_style": "clear instructional teacher tone",
+      "pacing_policy": "methodical step-by-step with dramatic pauses at misconception reveals",
+      "sample_approval_required": true,
+      "sample_status": "pending",
+      "estimated_cost_usd": 0.0
+    },
+    "stages": [
+      {
+        "stage": "script",
+        "tools": [],
+        "approach": "Draft 60-second pedagogical script breaking down Inertia, F=ma, and Action-Reaction with clear speech cues."
+      },
+      {
+        "stage": "scene_plan",
+        "tools": [],
+        "approach": "Map 6 cohesive chalkboard scenes (Hook, Law 1, Law 2, Law 3, Common Trap, Summary)."
+      },
+      {
+        "stage": "assets",
+        "tools": [
+          {
+            "tool_name": "tts_selector",
+            "role": "Generate voiceover audio with edge_tts (en-US-ChristopherNeural)",
+            "provider": "edge_tts",
+            "available": true,
+            "estimated_cost_usd": 0.0,
+            "why_this_provider": "High quality neural teacher voice, 100% free and reliable."
+          }
+        ],
+        "approach": "Generate narration clips using EdgeTTS and verify timing and audio clarity."
+      },
+      {
+        "stage": "edit",
+        "tools": [],
+        "approach": "Generate Remotion edit decisions and timing alignment for 60-second timeline."
+      },
+      {
+        "stage": "compose",
+        "tools": [
+          {
+            "tool_name": "video_compose",
+            "role": "Render Remotion composition to 1080x1920 MP4",
+            "provider": "remotion",
+            "available": true,
+            "estimated_cost_usd": 0.0,
+            "why_this_provider": "Full React animation engine installed with Remotion CLI."
+          }
+        ],
+        "approach": "Render final 9:16 vertical MP4 video with high-definition chalkboard graphics."
+      }
+    ]
+  },
+  "cost_estimate": {
+    "total_estimated_usd": 0.0,
+    "line_items": [
+      {
+        "tool": "edge_tts",
+        "operation": "TTS narration generation",
+        "quantity": 1,
+        "estimated_usd": 0.0,
+        "notes": "Free Microsoft Edge neural speech"
+      },
+      {
+        "tool": "video_compose",
+        "operation": "Remotion local rendering",
+        "quantity": 1,
+        "estimated_usd": 0.0,
+        "notes": "Local node/remotion render"
+      }
+    ],
+    "budget_verdict": "within_budget"
+  },
+  "approval": {
+    "status": "approved",
+    "user_notes": "User selected Option A (The Physics Chalkboard), Remotion runtime, and 9:16 vertical aspect ratio.",
+    "approved_budget_usd": 0.0
+  }
+}

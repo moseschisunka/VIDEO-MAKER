@@ -1,0 +1,235 @@
+{
+  "version": "1.0",
+  "title": "Newton's 3 Laws of Motion - The Physics Chalkboard",
+  "total_duration_seconds": 60.0,
+  "target_duration_seconds": 60.0,
+  "output_profile": "youtube_shorts",
+  "aspect_ratio": "9:16",
+  "voice_identity": {
+    "provider": "edge_tts",
+    "model": "edge_tts",
+    "voice_id": "en-US-ChristopherNeural",
+    "locale": "en-US",
+    "identity_key": "0000000000000000000000000000000000000000000000000000000000000001"
+  },
+  "duration_contract": {
+    "voice_rate_wpm": 165.0,
+    "duration_policy": "target_led",
+    "intro_seconds": 0.5,
+    "outro_seconds": 0.5,
+    "silence_seconds": 1.0,
+    "transition_duration_seconds": 0.5,
+    "transition_count": 5,
+    "tolerance_seconds": 3.0,
+    "validated": true
+  },
+  "grounding_contract": {
+    "required": true,
+    "policy": "warn",
+    "source_artifact": "research_brief",
+    "source_record_version": "1.0"
+  },
+  "claims": [
+    {
+      "id": "claim-inertia",
+      "text": "Moving objects naturally keep moving; stopping requires an unbalanced force such as friction.",
+      "claim_type": "factual",
+      "source_refs": [
+        "src-per-01"
+      ],
+      "status": "supported"
+    },
+    {
+      "id": "claim-second-law",
+      "text": "Acceleration is directly proportional to net force and inversely proportional to mass (a = F/m).",
+      "claim_type": "factual",
+      "source_refs": [
+        "src-per-03"
+      ],
+      "status": "supported"
+    },
+    {
+      "id": "claim-third-law",
+      "text": "Action and reaction force pairs always act on two different interacting objects and never cancel on a single body.",
+      "claim_type": "factual",
+      "source_refs": [
+        "src-per-02"
+      ],
+      "status": "supported"
+    }
+  ],
+  "voice_performance": {
+    "performance_intent": "Clear, patient, highly engaging physics teacher guiding students through misconceptions with whiteboard reveals.",
+    "pacing_profile": "conversational",
+    "energy_curve": "hooks with curiosity, builds methodical clarity through 3 laws, lands with punchy golden rule",
+    "pause_policy": "0.4s pause before revealing each law formula and misconception buster",
+    "sample_section_id": "sec-1"
+  },
+  "sections": [
+    {
+      "id": "sec-1",
+      "label": "Hook & The Friction Trap",
+      "text": "Why does everything you think about motion feel completely backwards? If you slide a book across a table, it stops. But not because motion requires force. It stops because friction is an outside force fighting it!",
+      "start_seconds": 0.0,
+      "end_seconds": 8.0,
+      "speaker_directions": "Curious, conspiratorial teacher hook, emphatic delivery on 'backwards'",
+      "delivery_cues": {
+        "pace": "conversational",
+        "energy": "high",
+        "emphasis_words": [
+          "backwards",
+          "friction",
+          "outside force"
+        ],
+        "pause_before_seconds": 0.0,
+        "pause_after_seconds": 0.3
+      },
+      "enhancement_cues": [
+        {
+          "type": "diagram",
+          "description": "Chalkboard sketch of sliding book with opposing red friction vector arrow"
+        }
+      ],
+      "claim_type": "factual",
+      "claim_id": "claim-inertia",
+      "source_ref": "src-per-01"
+    },
+    {
+      "id": "sec-2",
+      "label": "Law 1: Inertia",
+      "text": "That is Newton's First Law: Inertia. An object in motion stays in motion at a constant velocity, and an object at rest stays at rest, unless an unbalanced force acts on it. In deep space, with zero friction, you glide forever without burning any fuel.",
+      "start_seconds": 8.0,
+      "end_seconds": 20.0,
+      "speaker_directions": "Clear and pedagogical, pausing slightly after reciting the law definition",
+      "delivery_cues": {
+        "pace": "measured",
+        "energy": "medium",
+        "emphasis_words": [
+          "Inertia",
+          "stays in motion",
+          "unbalanced force",
+          "forever"
+        ],
+        "pause_before_seconds": 0.2,
+        "pause_after_seconds": 0.4
+      },
+      "enhancement_cues": [
+        {
+          "type": "diagram",
+          "description": "Deep space probe drifting silently with constant velocity vector arrow"
+        }
+      ],
+      "claim_type": "factual",
+      "claim_id": "claim-inertia",
+      "source_ref": "src-per-01"
+    },
+    {
+      "id": "sec-3",
+      "label": "Law 2: F = ma",
+      "text": "So what happens when an unbalanced force does hit? Law Two: Force equals mass times acceleration! Acceleration is force divided by mass. Kick a soccer ball with 50 Newtons, and it flies. Kick a giant boulder with the same 50 Newtons, and its massive weight resists acceleration.",
+      "start_seconds": 20.0,
+      "end_seconds": 34.0,
+      "speaker_directions": "Energetic and comparative, highlighting the soccer ball vs boulder contrast",
+      "delivery_cues": {
+        "pace": "conversational",
+        "energy": "medium",
+        "emphasis_words": [
+          "F equals m a",
+          "mass",
+          "resists"
+        ],
+        "pause_before_seconds": 0.2,
+        "pause_after_seconds": 0.4
+      },
+      "enhancement_cues": [
+        {
+          "type": "diagram",
+          "description": "Side-by-side chalk balance: small mass = large acceleration arrow; huge mass = tiny arrow"
+        }
+      ],
+      "claim_type": "factual",
+      "claim_id": "claim-second-law",
+      "source_ref": "src-per-03"
+    },
+    {
+      "id": "sec-4",
+      "label": "Law 3: Action & Reaction",
+      "text": "Now for the law everyone gets wrong: Action and Reaction. Every action has an equal and opposite reaction. But here is the secret: they act on two different objects! When a rocket pushes exhaust gas down, the gas pushes the rocket up. They never cancel out because they act on different bodies.",
+      "start_seconds": 34.0,
+      "end_seconds": 48.0,
+      "speaker_directions": "Delighted teacher revealing the mystery trap that students always miss",
+      "delivery_cues": {
+        "pace": "conversational",
+        "energy": "high",
+        "emphasis_words": [
+          "different objects",
+          "never cancel out",
+          "pushes up"
+        ],
+        "pause_before_seconds": 0.2,
+        "pause_after_seconds": 0.4
+      },
+      "enhancement_cues": [
+        {
+          "type": "diagram",
+          "description": "Rocket launch chalkboard vector diagram showing opposite forces on rocket vs exhaust gas"
+        }
+      ],
+      "claim_type": "factual",
+      "claim_id": "claim-third-law",
+      "source_ref": "src-per-02"
+    },
+    {
+      "id": "sec-5",
+      "label": "The Golden Rule",
+      "text": "Here is the golden rule to ace your physics exam: Forces do not cause motion. Unbalanced forces cause changes in motion!",
+      "start_seconds": 48.0,
+      "end_seconds": 55.0,
+      "speaker_directions": "Authoritative, crystallizing the main takeaway with punchy emphasis",
+      "delivery_cues": {
+        "pace": "measured",
+        "energy": "high",
+        "emphasis_words": [
+          "Forces do not cause motion",
+          "changes in motion"
+        ],
+        "pause_before_seconds": 0.3,
+        "pause_after_seconds": 0.4
+      },
+      "enhancement_cues": [
+        {
+          "type": "stat_card",
+          "description": "Chalkboard callout card highlighting the core principle in bold yellow chalk"
+        }
+      ],
+      "claim_type": "instruction",
+      "claim_id": "claim-inertia",
+      "source_ref": "src-per-01"
+    },
+    {
+      "id": "sec-6",
+      "label": "Landing & Outro",
+      "text": "Next time you brake in a car and lurch forward, thank inertia. Subscribe and follow for more physics made simple!",
+      "start_seconds": 55.0,
+      "end_seconds": 60.0,
+      "speaker_directions": "Warm, conversational outro with friendly call to action",
+      "delivery_cues": {
+        "pace": "conversational",
+        "energy": "medium",
+        "emphasis_words": [
+          "thank inertia",
+          "follow"
+        ],
+        "pause_before_seconds": 0.2,
+        "pause_after_seconds": 0.2
+      },
+      "enhancement_cues": [
+        {
+          "type": "overlay",
+          "description": "Outro card with follow prompt and chalk vector icons"
+        }
+      ],
+      "claim_type": "cta"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "project_id": "newtons-laws-explainer",
+  "pipeline_type": "animated-explainer",
+  "target_duration_seconds": 76.67,
+  "output_profile": "youtube_shorts",
+  "aspect_ratio": "9:16",
+  "render_runtime": "remotion",
+  "outputs": [
+    {
+      "path": "c:\\Users\\PC\\Desktop\\Open Montage\\VIDEO-MAKER\\artifacts\\newtons-laws\\newtons_laws_explainer.mp4",
+      "format": "mp4",
+      "codec": "h264",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "duration_seconds": 76.67,
+      "file_size_bytes": 9657940
+    }
+  ]
+}

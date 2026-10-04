@@ -789,7 +789,14 @@ class VideoCompose(BaseTool):
                     subtitle_path=subtitle_path,
                     width=target_w,
                     height=target_h,
-                    duration_seconds=max(float(c.get("out_seconds", 0) or 0) for c in cuts),
+                    duration_seconds=max(
+                        sum(
+                            max(0.0, float(c.get("out_seconds", 0) or 0) - float(c.get("in_seconds", 0) or 0)) / float(c.get("speed", 1.0) or 1.0)
+                            for c in cuts
+                        ),
+                        max((float(c.get("timeline_out", 0) or 0) for c in cuts), default=0.0),
+                        max((float(c.get("out_seconds", 0) or 0) for c in cuts), default=0.0),
+                    ),
                     runtime="ffmpeg",
                     mode=caption_mode,
                     style=resolved_sub_style,

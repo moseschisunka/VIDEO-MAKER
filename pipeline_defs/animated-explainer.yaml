@@ -6,6 +6,31 @@ description: >
   with cost estimates, and gets explicit user approval before any assets are generated.
 category: generated
 stability: production
+ui_visible: true
+maturity: beta
+supported_runtimes: [remotion, ffmpeg, hyperframes]
+supported_profiles:
+  - youtube_landscape
+  - youtube_shorts
+  - instagram_reels
+  - instagram_feed
+  - tiktok
+  - linkedin
+  - ilearnzed_long_form
+  - generic_hd
+  - landscape_1080p
+required_capabilities:
+  - tts
+  - image_gen
+  - audio_mixer
+  - video_compose
+required_artifacts:
+  - proposal_packet
+  - script
+  - scene_plan
+  - asset_manifest
+  - edit_decisions
+  - render_report
 
 default_checkpoint_policy: guided
 

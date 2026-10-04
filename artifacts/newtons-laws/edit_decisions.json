@@ -1,0 +1,105 @@
+{
+  "version": "1.0",
+  "project_id": "newtons-laws-explainer",
+  "aspect_ratio": "9:16",
+  "target_duration_seconds": 76.66,
+  "render_runtime": "remotion",
+  "cuts": [
+    {
+      "id": "cut-scene-1",
+      "source": "audio/newtons-laws/sec-1.mp3",
+      "type": "teacher_slide",
+      "in_seconds": 0.0,
+      "out_seconds": 12.26,
+      "teacher_slide": {
+        "title": "Hook: The Everyday Illusion (Friction)",
+        "section": "PART 1",
+        "bullets": [
+          "Section: Hook: The Everyday Illusion (Friction)",
+          "Narration: 12.3s"
+        ],
+        "diagram": "analytical"
+      }
+    },
+    {
+      "id": "cut-scene-2",
+      "source": "audio/newtons-laws/sec-2.mp3",
+      "type": "teacher_slide",
+      "in_seconds": 12.26,
+      "out_seconds": 26.47,
+      "teacher_slide": {
+        "title": "Law 1: Law of Inertia (Deep Space Probe)",
+        "section": "PART 2",
+        "bullets": [
+          "Section: Law 1: Law of Inertia (Deep Space Probe)",
+          "Narration: 14.2s"
+        ],
+        "diagram": "analytical"
+      }
+    },
+    {
+      "id": "cut-scene-3",
+      "source": "audio/newtons-laws/sec-3.mp3",
+      "type": "teacher_slide",
+      "in_seconds": 26.47,
+      "out_seconds": 43.61,
+      "teacher_slide": {
+        "title": "Law 2: Force = Mass x Acceleration (Soccer Ball vs Boulder)",
+        "section": "PART 3",
+        "bullets": [
+          "Section: Law 2: Force = Mass x Acceleration (Soccer Ball vs Boulder)",
+          "Narration: 17.1s"
+        ],
+        "diagram": "analytical"
+      }
+    },
+    {
+      "id": "cut-scene-4",
+      "source": "audio/newtons-laws/sec-4.mp3",
+      "type": "teacher_slide",
+      "in_seconds": 43.61,
+      "out_seconds": 61.83,
+      "teacher_slide": {
+        "title": "Law 3: Action & Reaction (Rocket Propulsion)",
+        "section": "PART 4",
+        "bullets": [
+          "Section: Law 3: Action & Reaction (Rocket Propulsion)",
+          "Narration: 18.2s"
+        ],
+        "diagram": "analytical"
+      }
+    },
+    {
+      "id": "cut-scene-5",
+      "source": "audio/newtons-laws/sec-5.mp3",
+      "type": "teacher_slide",
+      "in_seconds": 61.83,
+      "out_seconds": 69.17,
+      "teacher_slide": {
+        "title": "The Golden Rule: Net Unbalanced Forces",
+        "section": "PART 5",
+        "bullets": [
+          "Section: The Golden Rule: Net Unbalanced Forces",
+          "Narration: 7.3s"
+        ],
+        "diagram": "analytical"
+      }
+    },
+    {
+      "id": "cut-scene-6",
+      "source": "audio/newtons-laws/sec-6.mp3",
+      "type": "teacher_slide",
+      "in_seconds": 69.17,
+      "out_seconds": 76.66,
+      "teacher_slide": {
+        "title": "Landing: Real-world Inertia & Outro",
+        "section": "PART 6",
+        "bullets": [
+          "Section: Landing: Real-world Inertia & Outro",
+          "Narration: 7.5s"
+        ],
+        "diagram": "analytical"
+      }
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "version": "1.0",
+  "topic": "Newton's Laws of Motion - Chalkboard Whiteboard Explainer",
+  "research_date": "2026-10-04",
+  "landscape": {
+    "existing_content": [
+      {
+        "title": "Newton's Laws of Motion Explained",
+        "source": "youtube",
+        "angle": "standard textbook lecture",
+        "what_it_covers": "Reciting Newton's 3 laws with formal textbook definitions",
+        "what_it_misses": "Directly tackling the persistent student misconceptions and friction traps",
+        "engagement_signal": "High views, but passive student comprehension"
+      },
+      {
+        "title": "Common Misconceptions in Mechanics",
+        "source": "blog",
+        "angle": "physics education research",
+        "what_it_covers": "Documenting why students believe motion requires continuous force (impetus theory)",
+        "what_it_misses": "Engaging visual step-by-step whiteboard animation for short-form mobile video"
+      },
+      {
+        "title": "ECZ Mathematics Paper 2 Walkthrough (Reference Video)",
+        "source": "youtube",
+        "angle": "exam tutorial problem-solving",
+        "what_it_covers": "Step-by-step whiteboard deduction of Venn diagram problem with teacher guidance",
+        "what_it_misses": "Covers mathematics exam rather than physics laws"
+      }
+    ],
+    "saturated_angles": [
+      "Boring reciting of formal definitions without visual intuition",
+      "Apple falling on Newton's head cartoon trope"
+    ],
+    "underserved_gaps": [
+      "Confronting the everyday 'common sense' trap: why do moving things stop?",
+      "Visualizing force pairs on DIFFERENT objects for the Third Law"
+    ]
+  },
+  "data_points": [
+    {
+      "id": "src-per-01",
+      "claim": "Over 70% of introductory physics students enter class believing a continuous force is necessary to maintain constant velocity.",
+      "source_url": "https://www.compadre.org/per/",
+      "source_name": "Physics Education Research Resource Letter",
+      "claim_ids": [
+        "claim-inertia-misconception"
+      ],
+      "credibility": "primary_source",
+      "surprise_factor": "counterintuitive",
+      "usable_as": "hook"
+    },
+    {
+      "id": "src-per-02",
+      "claim": "Newton's Third Law force pairs act on two separate interacting objects and never cancel each other out on a single object.",
+      "source_url": "https://www.physicsclassroom.com/class/newtlaws/Lesson-4/Newton-s-Third-Law",
+      "source_name": "The Physics Classroom - Newton's Third Law Analysis",
+      "claim_ids": [
+        "claim-action-reaction-separate-objects"
+      ],
+      "credibility": "secondary_source",
+      "surprise_factor": "notable",
+      "usable_as": "script_anchor"
+    },
+    {
+      "id": "src-per-03",
+      "claim": "Acceleration is inversely proportional to mass; doubling the mass of an object halves its acceleration under the same net force (a = F/m).",
+      "source_url": "https://openstax.org/books/college-physics-2e/pages/4-3-newtons-second-law-of-motion-concept-of-a-system",
+      "source_name": "OpenStax College Physics",
+      "claim_ids": [
+        "claim-f-equals-ma-ratio"
+      ],
+      "credibility": "primary_source",
+      "surprise_factor": "expected",
+      "usable_as": "stat_card"
+    }
+  ],
+  "audience_insights": {
+    "common_questions": [
+      "Why does a book stop sliding across a table if no one touches it?",
+      "If every action has an equal opposite reaction, how does anything ever accelerate?",
+      "What is the difference between velocity and acceleration in F=ma?"
+    ],
+    "misconceptions": [
+      {
+        "myth": "Objects naturally slow down because their force runs out.",
+        "reality": "Objects slow down only because an external unbalanced force (friction/air resistance) acts on them. In deep space, motion continues forever without engine thrust.",
+        "source": "Halloun & Hestenes Force Concept Inventory"
+      },
+      {
+        "myth": "In a collision between a truck and a bug, the truck exerts a bigger force on the bug than the bug exerts on the truck.",
+        "reality": "Both exert the exact same magnitude of force on each other; the bug experiences massive acceleration due to its microscopic mass (a = F/m).",
+        "source": "AAPT Physics Education Research"
+      }
+    ],
+    "knowledge_level": "High-school / early college physics students who know the names of Newton's laws but struggle with applying them to free-body diagrams."
+  },
+  "angles_discovered": [
+    {
+      "name": "The Physics Chalkboard: Newton's 3 Laws Solved Step-by-Step",
+      "hook": "Why does everything you think about motion feel completely backwards?",
+      "type": "evergreen",
+      "why_now": "Whiteboard and chalkboard explainer formats demystify complex formulas by visualizing invisible force vectors.",
+      "grounded_in": [
+        "claim-inertia-misconception",
+        "claim-action-reaction-separate-objects"
+      ]
+    },
+    {
+      "name": "The Truck and the Bug: The Third Law Paradox",
+      "hook": "When a truck hits a mosquito, which one hits harder?",
+      "type": "contrarian",
+      "why_now": "Directly confronts the most failed question on high school physics exams.",
+      "grounded_in": [
+        "claim-action-reaction-separate-objects",
+        "claim-f-equals-ma-ratio"
+      ]
+    },
+    {
+      "name": "Newton's 3 Laws in 60 Seconds: Visual Exam Prep",
+      "hook": "Master Newton's three laws before your next physics exam in under one minute.",
+      "type": "data_driven",
+      "why_now": "Students revising for STEM exams need high-density, visual summary cards.",
+      "grounded_in": [
+        "claim-inertia-misconception",
+        "claim-f-equals-ma-ratio"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "src-per-01",
+      "url": "https://www.compadre.org/per/",
+      "title": "Physics Education Research Resource Letter on Mechanics",
+      "used_for": "data_points and audience_insights",
+      "accessed_at": "2026-10-04",
+      "excerpt_or_note": "Documenting student misconceptions regarding force and inertia.",
+      "license": "Academic fair use",
+      "usage_constraints": "Factual reference only",
+      "claim_ids": [
+        "claim-inertia-misconception"
+      ],
+      "reliability": "primary"
+    },
+    {
+      "id": "src-per-02",
+      "url": "https://www.physicsclassroom.com/class/newtlaws/Lesson-4/Newton-s-Third-Law",
+      "title": "The Physics Classroom: Newton's Third Law",
+      "used_for": "data_points and misconceptions",
+      "accessed_at": "2026-10-04",
+      "excerpt_or_note": "Explaining action-reaction pairs acting on different bodies.",
+      "license": "Educational fair use",
+      "usage_constraints": "Educational reference",
+      "claim_ids": [
+        "claim-action-reaction-separate-objects"
+      ],
+      "reliability": "secondary"
+    },
+    {
+      "id": "src-per-03",
+      "url": "https://openstax.org/books/college-physics-2e/pages/4-3-newtons-second-law-of-motion-concept-of-a-system",
+      "title": "OpenStax College Physics - Newton's Second Law",
+      "used_for": "data_points and formulas",
+      "accessed_at": "2026-10-04",
+      "excerpt_or_note": "Mathematical formulation F_net = m * a and vector relationships.",
+      "license": "CC BY 4.0",
+      "usage_constraints": "Open educational attribution",
+      "claim_ids": [
+        "claim-f-equals-ma-ratio"
+      ],
+      "reliability": "primary"
+    },
+    {
+      "id": "src-ref-04",
+      "url": "https://youtu.be/hplHhR4vANM?si=E473gtaivjzPihcj",
+      "title": "ECZ 2023 Mathematics Paper 2 Whiteboard Walkthrough",
+      "used_for": "landscape and visual_structure",
+      "accessed_at": "2026-10-04",
+      "excerpt_or_note": "Pedagogical teacher style, progressive diagrammatic reveals, conversational walkthrough.",
+      "license": "Reference analysis",
+      "usage_constraints": "Inspirational reference only",
+      "claim_ids": [
+        "claim-whiteboard-pedagogy"
+      ],
+      "reliability": "secondary"
+    },
+    {
+      "id": "src-fci-05",
+      "url": "https://aapt.scitation.org/doi/10.1119/1.17081",
+      "title": "Force Concept Inventory - Hestenes, Wells, Swackhamer",
+      "used_for": "audience_insights and common_questions",
+      "accessed_at": "2026-10-04",
+      "excerpt_or_note": "Foundational inventory of common sense beliefs vs Newtonian physics.",
+      "license": "Scholarly citation",
+      "usage_constraints": "Conceptual citation",
+      "claim_ids": [
+        "claim-fci-mechanics"
+      ],
+      "reliability": "primary"
+    }
+  ],
+  "research_summary": "Newton's laws of motion are often taught as dry formulas, but students struggle because their everyday experience of friction conflicts with the laws of inertia and action-reaction. A whiteboard-style explainer that visually exposes the 'hidden force of friction' and diagrams vector pairs on separate bodies bridges intuitive misconceptions with rigorous physics."
+}

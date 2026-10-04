@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "project_id": "newtons-laws-explainer",
+  "pipeline_type": "animated-explainer",
+  "decisions": [
+    {
+      "decision_id": "d-001",
+      "stage": "proposal",
+      "category": "concept_selection",
+      "subject": "Creative concept selection",
+      "options_considered": [
+        {
+          "option_id": "c1",
+          "label": "The Physics Chalkboard: Step-by-step whiteboard walkthrough with force diagrams",
+          "score": 0.95,
+          "reason": "Directly matches the user's selected direction and the reference video's pedagogical whiteboard style."
+        },
+        {
+          "option_id": "c2",
+          "label": "The Truck and the Bug: Third Law Paradox",
+          "score": 0.8,
+          "reason": "Focuses on a single misconception rather than all three laws.",
+          "rejected_because": "User selected the comprehensive 3-laws chalkboard walkthrough."
+        },
+        {
+          "option_id": "c3",
+          "label": "Newton's 3 Laws in 60 Seconds: Visual Exam Prep",
+          "score": 0.85,
+          "reason": "Rapid-fire revision format.",
+          "rejected_because": "User selected Option A for deeper step-by-step visual proofs."
+        }
+      ],
+      "selected": "c1",
+      "reason": "User selected Option A via interactive prompt."
+    },
+    {
+      "decision_id": "d-002",
+      "stage": "proposal",
+      "category": "render_runtime_selection",
+      "subject": "Composition render runtime",
+      "options_considered": [
+        {
+          "option_id": "remotion",
+          "label": "Remotion (React-based)",
+          "score": 0.95,
+          "reason": "Excellent for animated SVG math vectors, spring physics, and precise timeline synchronization."
+        },
+        {
+          "option_id": "hyperframes",
+          "label": "HyperFrames (HTML/GSAP)",
+          "score": 0.9,
+          "reason": "Lightweight HTML/CSS/GSAP composition runtime.",
+          "rejected_because": "User explicitly selected Remotion."
+        }
+      ],
+      "selected": "remotion",
+      "reason": "User explicitly selected Remotion for composition engine."
+    },
+    {
+      "decision_id": "d-003",
+      "stage": "proposal",
+      "category": "voice_selection",
+      "subject": "Narration TTS provider and voice",
+      "options_considered": [
+        {
+          "option_id": "edge-tts-christopher",
+          "label": "EdgeTTS en-US-ChristopherNeural",
+          "score": 0.95,
+          "reason": "Warm, authoritative, patient tutor voice, completely free and offline/local."
+        }
+      ],
+      "selected": "edge-tts-christopher",
+      "reason": "Best available free neural teacher voice for STEM walkthrough."
+    },
+    {
+      "decision_id": "d-004",
+      "stage": "proposal",
+      "category": "composition_mode",
+      "subject": "Authoring mode for composition",
+      "options_considered": [
+        {
+          "option_id": "atelier",
+          "label": "Atelier (hand-crafted project-local React composition)",
+          "score": 0.95,
+          "reason": "Bespoke chalkboard drawing aesthetics, vector force arrows, and custom 9:16 layout."
+        },
+        {
+          "option_id": "templated",
+          "label": "Templated standard explainer scenes",
+          "score": 0.7,
+          "reason": "Standard cards lack the specific chalkboard chalk-stroke and free-body diagramming needs.",
+          "rejected_because": "Whiteboard tutorial requires tailored animated physics diagrams."
+        }
+      ],
+      "selected": "atelier",
+      "reason": "Atelier authoring mode ensures the bespoke chalkboard look and feel."
+    }
+  ]
+}

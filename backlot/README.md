@@ -50,4 +50,4 @@ python scripts/backlot_simulate_run.py          # live demo run (~1 min)
 python -m backlot open backlot-demo-run
 ```
 
-Design doc: `internal/design/LIVING_STORYBOARD.md`.
+Design doc: [`docs/LIVING_STORYBOARD.md`](../docs/LIVING_STORYBOARD.md).

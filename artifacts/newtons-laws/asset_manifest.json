@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "assets": [
+    {
+      "id": "asset-narration-sec-1",
+      "type": "narration",
+      "path": "audio/newtons-laws/sec-1.mp3",
+      "source_tool": "edge_tts",
+      "scene_id": "scene-1",
+      "duration_seconds": 12.264,
+      "format": "mp3",
+      "generation_summary": "EdgeTTS narration for sec-1 using en-US-ChristopherNeural"
+    },
+    {
+      "id": "asset-narration-sec-2",
+      "type": "narration",
+      "path": "audio/newtons-laws/sec-2.mp3",
+      "source_tool": "edge_tts",
+      "scene_id": "scene-2",
+      "duration_seconds": 14.208,
+      "format": "mp3",
+      "generation_summary": "EdgeTTS narration for sec-2 using en-US-ChristopherNeural"
+    },
+    {
+      "id": "asset-narration-sec-3",
+      "type": "narration",
+      "path": "audio/newtons-laws/sec-3.mp3",
+      "source_tool": "edge_tts",
+      "scene_id": "scene-3",
+      "duration_seconds": 17.136,
+      "format": "mp3",
+      "generation_summary": "EdgeTTS narration for sec-3 using en-US-ChristopherNeural"
+    },
+    {
+      "id": "asset-narration-sec-4",
+      "type": "narration",
+      "path": "audio/newtons-laws/sec-4.mp3",
+      "source_tool": "edge_tts",
+      "scene_id": "scene-4",
+      "duration_seconds": 18.216,
+      "format": "mp3",
+      "generation_summary": "EdgeTTS narration for sec-4 using en-US-ChristopherNeural"
+    },
+    {
+      "id": "asset-narration-sec-5",
+      "type": "narration",
+      "path": "audio/newtons-laws/sec-5.mp3",
+      "source_tool": "edge_tts",
+      "scene_id": "scene-5",
+      "duration_seconds": 7.344,
+      "format": "mp3",
+      "generation_summary": "EdgeTTS narration for sec-5 using en-US-ChristopherNeural"
+    },
+    {
+      "id": "asset-narration-sec-6",
+      "type": "narration",
+      "path": "audio/newtons-laws/sec-6.mp3",
+      "source_tool": "edge_tts",
+      "scene_id": "scene-6",
+      "duration_seconds": 7.488,
+      "format": "mp3",
+      "generation_summary": "EdgeTTS narration for sec-6 using en-US-ChristopherNeural"
+    }
+  ]
+}

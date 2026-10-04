@@ -12,6 +12,7 @@ build/
 
 # Test/IDE
 .pytest_cache/
+.pytest_temp/
 .mypy_cache/
 .ruff_cache/
 htmlcov/

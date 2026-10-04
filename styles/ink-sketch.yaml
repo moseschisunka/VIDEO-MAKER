@@ -1,0 +1,106 @@
+identity:
+  name: "Ink Sketch"
+  category: whiteboard
+  mood: deadpan, minimalist, playful, conceptual, mechanical
+  pace: moderate
+  best_for: "Hand-drawn ink-on-white doodle animation, mascot contraptions, abstract concepts explained with physical metaphors, kinetic storytelling"
+
+visual_language:
+  color_palette:
+    primary: ["#1A1A1A", "#333333"]
+    accent: ["#FF6B35", "#E63946", "#2A9D8F"]
+    background: "#FFFFFF"
+    text: "#1A1A1A"
+    muted: "#71717A"
+  composition: centered, minimum 35% negative space, subject 40-60%, single continuous canvas with push and pan framing
+  texture: hand-drawn black ink on white paper, paper grain, subtle line boil
+
+typography:
+  headings:
+    font: "Patrick Hand"
+    weight: 700
+    tracking: "-0.01em"
+  body:
+    font: "Patrick Hand"
+    weight: 400
+    line_height: 1.5
+  code:
+    font: "JetBrains Mono"
+    weight: 400
+  stat_card:
+    font: "Patrick Hand"
+    weight: 700
+    size_multiplier: 2.8
+  scale_system: "major_third"
+  weight_matrix:
+    title: 700
+    heading: 700
+    body: 400
+    caption: 400
+
+motion:
+  transitions: [pan, push, fade, dissolve]
+  animation_style: "closed-form springs, ease.settle, ease.overshoot, ease.bounce, self-drawing reveals"
+  pacing_rules:
+    min_scene_hold_seconds: 2.0
+    max_scene_hold_seconds: 10.0
+    text_card_hold_seconds: 3.0
+    stat_card_hold_seconds: 2.5
+    transition_duration_seconds: 0.5
+  entrance: "inkPath self-drawing stroke animation with subtle line boil"
+  exit: "camera pan-off or gentle dissolve"
+
+audio:
+  voice_style: "deadpan, clear, measured, dry wit, educational narrator"
+  music_mood: "minimalist acoustic, subtle percussion, light piano or double bass, playful mechanical ambience"
+  music_volume: 0.08
+  sfx_style: "paper rustle, pencil scratch, mechanical clicks, pops, slide whistles, crank squeaks"
+  ducking_threshold_db: -3
+
+asset_generation:
+  image_prompt_prefix: "minimalist black ink line art on pure white paper, clean vector sketch, thick ink outlines, Xiaohei style, doodle illustration, "
+  image_negative_prompt: "color fill, 3d, photorealistic, shading, gradient, messy sketch, dark background, watermark, text"
+  diagram_style: "hand-drawn ink diagrams with arrows, gears, funnels, levers, and physical metaphors"
+  consistency_anchors:
+    - "Solid black ink (#1A1A1A) for all mascot and structural elements"
+    - "Pure white background (#FFFFFF) with at least 35% negative space"
+    - "Orange (#FF6B35) strictly for directional flow, arrows, and transfer"
+    - "Red (#E63946) strictly for problems, warnings, and friction"
+    - "Blue (#2A9D8F) strictly for resolution, output, and target state"
+
+overlays:
+  stat_card:
+    bg: "#FFFFFF"
+    border: "#1A1A1A"
+    text: "#1A1A1A"
+    radius: 4
+    shadow: "none"
+  key_term:
+    bg: "#FFF4ED"
+    border: "#FF6B35"
+    text: "#1A1A1A"
+    radius: 4
+  code_block:
+    bg: "#1A1A1A"
+    text: "#FFFFFF"
+    highlight: "#FF6B35"
+    radius: 4
+
+quality_rules:
+  - "Minimum contrast ratio 4.5:1 for all text"
+  - "No arbitrary colors: black for structures, orange for flow, red for problems, blue for solutions"
+  - "Maintain at least 35% negative whitespace on every screen"
+  - "Embed full fonts in Truetype format for HTML overlay divs"
+  - "Never hand-tune character walk/dance motion; use mocap catalog choreographies"
+
+chart_palette:
+  - "#1A1A1A"
+  - "#FF6B35"
+  - "#2A9D8F"
+  - "#E63946"
+  - "#71717A"
+
+color_rules:
+  harmony_type: "split-complementary"
+  contrast_validation: true
+  colorblind_safe: true

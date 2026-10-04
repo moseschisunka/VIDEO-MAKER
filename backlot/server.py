@@ -1977,13 +1977,10 @@ def create_app() -> FastAPI:
 
     @app.get("/p/{project_id}")
     async def board_page(project_id: str) -> HTMLResponse:
-        _safe_project_dir(project_id)
         return await asyncio.to_thread(_ui_html, "board.html", ("board.css", "board.js"))
 
     @app.get("/p/{project_path:path}")
     async def board_page_path(project_path: str) -> HTMLResponse:
-        project_id = project_path.split("/", 1)[0]
-        _safe_project_dir(project_id)
         return await asyncio.to_thread(_ui_html, "board.html", ("board.css", "board.js"))
 
     @app.get("/")

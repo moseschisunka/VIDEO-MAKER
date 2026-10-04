@@ -151,9 +151,12 @@ function renderProjectCard(p) {
     el("span", { class: "meta-time" }, fmtAgo(p.last_activity))
   );
 
+  const isStatic = new URLSearchParams(location.search).has("static");
+  const cardHref = `/p/${p.project_id}${isStatic ? "?static=1" : ""}`;
+
   const cardLink = el("a", { 
-    class: `studio-card${p.live ? " card-live" : ""}`, 
-    href: `/p/${p.project_id}`,
+    class: `studio-card lib-card${p.live ? " card-live live-card" : ""}`, 
+    href: cardHref,
   },
     poster,
     progressRail,

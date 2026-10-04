@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "style_playbook": "clean-professional",
+  "target_duration_seconds": 60.0,
+  "output_profile": "youtube_shorts",
+  "aspect_ratio": "9:16",
+  "scenes": [
+    {
+      "id": "scene-1",
+      "type": "diagram",
+      "description": "Chalkboard opening: 'Newton's Laws of Motion' header. A sliding block on a rough plane decelerates as an opposing red vector arrow labeled 'Friction' flashes into view.",
+      "start_seconds": 0.0,
+      "end_seconds": 8.0,
+      "script_section_id": "sec-1",
+      "framing": "medium",
+      "movement": "static",
+      "overlay_notes": "Title card at top, animated friction vector diagram in center",
+      "shot_intent": "Hook viewer curiosity by challenging their intuitive assumption that motion requires continuous push",
+      "narrative_role": "introduce_subject",
+      "information_role": "Introduce the hidden enemy of motion: friction"
+    },
+    {
+      "id": "scene-2",
+      "type": "diagram",
+      "description": "First Law (Inertia): Deep slate cosmos canvas with stars. A golden Voyager-style space probe glides smoothly across the screen. Floating formula: 'Net Force = 0 -> Velocity = Constant'.",
+      "start_seconds": 8.0,
+      "end_seconds": 20.0,
+      "script_section_id": "sec-2",
+      "framing": "medium_wide",
+      "movement": "pan_right",
+      "overlay_notes": "Law 1 Header with floating mathematical vector equation",
+      "shot_intent": "Visually demonstrate that without friction, motion continues indefinitely",
+      "narrative_role": "evidence",
+      "information_role": "Define Newton's First Law and Inertia"
+    },
+    {
+      "id": "scene-3",
+      "type": "diagram",
+      "description": "Second Law (F = ma): Interactive chalk balance diagram. On left: Soccer ball (0.4 kg) hit with 50N force launches with large velocity vector. On right: Boulder (400 kg) hit with same 50N barely nudges. Formula highlights: 'a = F / m'.",
+      "start_seconds": 20.0,
+      "end_seconds": 34.0,
+      "script_section_id": "sec-3",
+      "framing": "medium",
+      "movement": "static",
+      "overlay_notes": "Split comparison illustrating mass resistance to acceleration",
+      "shot_intent": "Give tangible intuition for F=ma as mass resisting acceleration",
+      "narrative_role": "comparison",
+      "information_role": "Teach calculation and ratio of Force, Mass, and Acceleration"
+    },
+    {
+      "id": "scene-4",
+      "type": "diagram",
+      "description": "Third Law (Action-Reaction): Rocket propulsion diagram on chalkboard. Exhaust gas fires downward (Orange arrow: Force on gas). Rocket accelerates upward (Cyan arrow: Force on rocket). Highlighting text box: 'Forces act on DIFFERENT bodies!'.",
+      "start_seconds": 34.0,
+      "end_seconds": 48.0,
+      "script_section_id": "sec-4",
+      "framing": "medium_close",
+      "movement": "tilt_up",
+      "overlay_notes": "Opposing vector arrows with colored caller tags",
+      "shot_intent": "Dismantle the myth that action-reaction forces cancel out",
+      "narrative_role": "deliver_payload",
+      "information_role": "Explain Third Law interaction pairs"
+    },
+    {
+      "id": "scene-5",
+      "type": "text_card",
+      "description": "The Golden Rule Card: Bold dark chalkboard card with radiant chalk border. Big typography: 'Forces do NOT cause motion. Unbalanced forces cause CHANGE in motion.' Checkmarks next to key concepts.",
+      "start_seconds": 48.0,
+      "end_seconds": 55.0,
+      "script_section_id": "sec-5",
+      "framing": "close_up",
+      "movement": "zoom_in",
+      "overlay_notes": "High contrast typography card with particle chalk dust",
+      "shot_intent": "Deliver the core takeaway rule for exam mastery",
+      "narrative_role": "resolution",
+      "information_role": "Reinforce the single most critical physics takeaway"
+    },
+    {
+      "id": "scene-6",
+      "type": "text_card",
+      "description": "Outro & Practical Connection: Passenger in a braking car showing inertia vector towards seatbelt. Final chalkboard slate: 'Thank Inertia! Follow for More Physics Made Simple'.",
+      "start_seconds": 55.0,
+      "end_seconds": 60.0,
+      "script_section_id": "sec-6",
+      "framing": "medium",
+      "movement": "static",
+      "overlay_notes": "Animated subscribe icon and seatbelt safety callout",
+      "shot_intent": "Connect theory to real-world experience and invite channel follow",
+      "narrative_role": "call_to_action",
+      "information_role": "Drive engagement and retention"
+    }
+  ]
+}
